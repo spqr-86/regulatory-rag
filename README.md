@@ -28,6 +28,7 @@
 *   ✅ 📄 **Универсальная загрузка**: PDF/DOCX через Docling → chunking → OpenAI embeddings → ChromaDB.
 *   ✅ 📖 **Доменный глоссарий**: детерминированное расширение запросов — "программа А" → официальный термин перед retrieval.
 *   ✅ 📊 **Eval framework**: golden-датасет + LLM-as-judge метрики (faithfulness, correctness, answer relevance) через `eval/run_v7_eval.py`.
+*   ✅ 📚 **ГОСТ RAG**: 108 нормативных документов (ГОСТы, СНиПы) проиндексированы отдельно (9 344 чанка, ChromaDB `wta_gosts`). API эндпоинт `POST /query/gosts` для поиска по нормативной базе.
 
 ---
 
@@ -174,7 +175,8 @@ flowchart TD
 | **Язык** | Python 3.11+ |
 | **UI** | Streamlit |
 | **LLM Framework** | LangChain, LangGraph |
-| **LLM Providers** | OpenAI (GPT-4o), Google Gemini 3 |
+| **LLM Providers** | Google Gemini 2.5 Flash (generation), DeepSeek V3 (GOST RAG) |
+| **Embeddings** | OpenAI text-embedding-3-small |
 | **Vector Store** | ChromaDB |
 | **ETL** | Docling |
 | **Reranking** | FlashRank |
@@ -196,6 +198,7 @@ flowchart TD
 *   ✅ Regex noise cleanup (`_clean_noise`): URL-watermarks, page markers, timestamps — PIPELINE_VERSION v2.3-noise-clean — 2026-05-16
 *   ✅ FlashRank score inflation fix: `vector_score` сохраняется отдельно, MMR и threshold gates используют его — 2026-05-16
 *   ✅ Eval correctness **7.9/10** (цель 7.5 достигнута) — 2026-05-16
+*   ✅ **ГОСТ RAG**: 108 документов → 9 344 чанка, коллекция `wta_gosts`, API `POST /query/gosts`, генерация через DeepSeek — 2026-05-17
 *   🔄 Расширение тестового датасета
 
 ---
