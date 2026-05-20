@@ -30,7 +30,7 @@ CLI: `--limit N` (ограничить число вопросов), `--output P
 | :--- | :--- | :--- |
 | **faithfulness** | Обоснованность — стоит ли ответ на retrieved-контексте (LLM-судья, 0-1) | > 0.85 |
 | **answer_relevance** | Соответствует ли ответ вопросу (LLM-судья, 0-1) | > 0.85 |
-| **correctness_mean** | Соответствие эталону (LLM-судья, 0-10) | > 7.5 |
+| **correctness_mean** | Соответствие эталону (LLM-судья, 0-10) | > 7.5 (достигнуто: 7.9) |
 | **false_sufficiency_rate** | Доля simple-path ответов с correctness < 5.0 | < 10% |
 | **complex_path_rate** | Доля вопросов, ушедших на complex-путь | — |
 | **mean_elapsed_sec** | Средняя задержка ответа | — |

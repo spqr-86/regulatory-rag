@@ -136,9 +136,11 @@ streamlit run app.py     # Запуск UI
 | `agents/` | Логика мульти-агентных систем: `multiagent_rag.py` (ReAct-агенты с LangGraph). |
 | `prompts/` | Централизованное хранилище промптов (Jinja2) и реестр версий (`registry.yaml`). |
 | `src/` | Ядро RAG-логики: цепочки (`final_chain.py`), работа с векторной БД (`vector_store.py`), фабрики LLM (`llm_factory.py`). |
-| `src/v7/` | **Основной** V7 pipeline: детерминированный граф (intent_gate → rag_simple → rag_complex → evaluate_complex → generate_answer). |
+| `src/v7/` | **Основной** V7 pipeline: детерминированный граф (intent_gate → router → rag_simple → evaluate_triage → rag_complex → generate_answer). |
+| `src/gosts_pipeline.py` | GOST RAG: ChromaDB `wta_gosts` (108 DOCX, 9344 чанков) → FlashRank → DeepSeek V3. |
+| `api.py` | FastAPI (порт 8503): `POST /query`, `POST /query/gosts`, `GET /health`. |
 | `config/` | Настройки приложения (`settings.py`) и доменный глоссарий (`term_glossary.yaml`). |
-| `eval/` | Скрипты для оценки качества ответов (DeepEval, Ragas). |
+| `eval/` | Скрипты для оценки качества ответов (LLM-as-judge, Gemini-судья). |
 | `tests/` | Юнит и интеграционные тесты. |
 | `analysis/` | Отчеты об ошибках и логи работы. |
 
@@ -210,7 +212,8 @@ flowchart TD
 - [x] Retry при Gemini 503 — tenacity (3 попытки, 2→4→8 сек), fallback в stub только после всех ретраев.
 - [x] evaluate_complex: merge top 24 — полные ответы по составным вопросам.
 - [x] Доменный глоссарий (`src/glossary.py`) подключён к V7-роутеру.
-- [x] `max_output_tokens` масштабируется с `thinking_budget` (gemini-3 считает reasoning внутри лимита).
+- [x] `max_output_tokens` масштабируется с `thinking_budget` (Gemini считает reasoning внутри лимита).
+- [x] GOST RAG (`src/gosts_pipeline.py`): отдельная ChromaDB-коллекция `wta_gosts`, 108 DOCX, 9344 чанков. LLM: DeepSeek V3 (`deepseek-chat`, openai SDK). Эндпоинт: `POST /query/gosts` на порту 8503.
 
 ### Prompt Management System
 
