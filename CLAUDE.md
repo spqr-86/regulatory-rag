@@ -54,7 +54,7 @@ python scripts/trace_v7.py "вопрос"             # E2E smoke test с тра
 
 ## Architecture
 
-### Multi-Agent RAG (`agents/multiagent_rag.py`) — primary
+### Multi-Agent RAG (`agents/multiagent_rag.py`) — legacy fallback (V7 Graph — основной)
 
 ```
 glossary expansion → regex filter → rag_agent (ReAct) → verifier → format_final
@@ -159,7 +159,7 @@ python scripts/trace_v7.py --no-chroma "привет как дела"   # stub m
 
 - **Сделано:**
   - **GOST RAG** (`index_gosts.py`): проиндексировано 108 DOCX ГОСТов/СНиПов ЕРС из Google Drive. Баг: word/_rels/document.xml.rels использует абсолютные пути (`Target="word/settings.xml"`) → python-docx падает. Фикс: `_fix_docx_rels()` патчит ZIP в памяти через `re.sub`. Итог: **9344 чанков** в `chroma_db_gosts/` (коллекция `wta_gosts`).
-  - **`src/gosts_pipeline.py`**: retrieve (ChromaDB wta_gosts, top_k=15) → FlashRank rerank (top_n=8) → Gemini (gemini-3-flash-preview, thinking_budget=0) generate. `_load_store()` через `lru_cache`.
+  - **`src/gosts_pipeline.py`**: retrieve (ChromaDB wta_gosts, top_k=15) → FlashRank rerank (top_n=8) → DeepSeek (`deepseek-chat`, openai SDK, temperature=0) generate. `_load_store()` через `lru_cache`. *(Переключён с Gemini на DeepSeek в сессии 24)*
   - **`api.py`**: новый эндпоинт `POST /query/gosts`. В lifespan: `_gosts_load()` (non-fatal — 503 если не готово). SIA API запущен как `nohup uvicorn api:app --port 8503` (PID 929502, не в tmux — не переживёт рестарт).
   - **`eval/gosts_gold_v1.json`**: gold dataset 5 QA-пар (насосы ГОСТ 32601, трубопроводы ГОСТ 32569, фланцы DN100 ГОСТ 33259, ЗСО СП 30, степень защиты IP ГОСТ 14254).
 - **Решения:** Для WTA-ГОСТов отдельная ChromaDB-коллекция вместо второго экземпляра SIA; GOST pipeline — Gemini (не переключали на DeepSeek).
