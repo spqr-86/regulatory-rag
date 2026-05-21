@@ -44,6 +44,14 @@ python scripts/validate_prompts.py               # validate after prompt changes
 python scripts/trace_v7.py "вопрос"             # E2E smoke test с трассировкой
 ```
 
+## Eval Datasets
+
+- **`tests/dataset_original.csv`** — 50 вопросов + ground_truth. Основной золотой датасет для оценки качества RAG. Формат: `question, ground_truth`.
+- **`tests/dataset_clean.csv`** — 38 вопросов (очищенная версия).
+- **`eval/gosts_gold_v1.json`** — 5 вопросов по ГОСТ с источниками (id, question, gold_answer, sources).
+- **`eval/gosts_gold_v2.json`** — 5 вопросов по ГОСТ с chunk_hint (question, gold_answer, source, chunk_hint).
+- **`benchmarks/`** — результаты прогонов eval (JSONL) + история метрик (`results_history.jsonl`).
+
 ## Code Style
 
 - **Line length**: 88 (Black/Ruff, see `pyproject.toml`)
