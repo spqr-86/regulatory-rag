@@ -42,6 +42,7 @@ pytest -v                                        # tests (-m unit / integration 
 black . && ruff check . --fix                    # lint (run before commits)
 python scripts/validate_prompts.py               # validate after prompt changes
 python scripts/trace_v7.py "вопрос"             # E2E smoke test с трассировкой
+python scripts/measure_cps.py --n 10             # Cost-per-sample замер (token usage + $$)
 ```
 
 ## Eval Datasets
@@ -51,6 +52,7 @@ python scripts/trace_v7.py "вопрос"             # E2E smoke test с тра
 - **`eval/gosts_gold_v1.json`** — 5 вопросов по ГОСТ с источниками (id, question, gold_answer, sources).
 - **`eval/gosts_gold_v2.json`** — 5 вопросов по ГОСТ с chunk_hint (question, gold_answer, source, chunk_hint).
 - **`benchmarks/`** — результаты прогонов eval (JSONL) + история метрик (`results_history.jsonl`).
+- **`benchmarks/cps_YYYY-MM-DD.json`** — Cost-Per-Sample замеры (token usage + $$ per query). Baseline 2026-05-22: $0.0102/query на N=10.
 
 ## Code Style
 
@@ -154,6 +156,12 @@ python scripts/trace_v7.py --no-chroma "привет как дела"   # stub m
 ---
 
 ## Session Log
+
+### 2026-05-22 (сессия 37)
+
+- **Сделано:** CPS baseline для V7 pipeline. Создан `scripts/measure_cps.py` (инструментация через `langchain_core.callbacks.UsageMetadataCallbackHandler`). Прогон на 10 вопросах из `dataset_original.csv`: **$0.0102/query, $10.21/1k**, avg 8 416 токенов (4 920 in + 3 495 out incl. thinking), avg latency 21.9 сек. Сырые цифры — `benchmarks/cps_2026-05-22.json` (gitignored). README дополнен секцией "Экономика (CPS baseline)". Разбор для интервью GenAI Lab — `~/career/shad/notes/sia_cps_baseline.md`.
+- **Решения:** Pricing assumption — Gemini 2.5 Flash ($0.30/M in, $2.50/M out) как прокси для preview-модели (тот же tier). N=10 принято как достаточно для интервью; conditional пути (verifier/rewriter) не покрыты — отмечено в ограничениях.
+- **Наблюдения:** На 10 sampled queries verifier/rewriter не сработали — все пошли по simple path (1 LLM call/query). Разброс стоимости ×5 ($0.004–$0.022) — главный драйвер output длина + thinking tokens. Главный рычаг оптимизации — Model Router.
 
 ### 2026-05-22 (сессия 36)
 

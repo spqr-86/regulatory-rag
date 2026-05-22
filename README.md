@@ -75,6 +75,19 @@ flowchart LR
 | **Answer Relevance** | > 0.85 | Соответствие ответа вопросу |
 | **False-sufficiency** | < 10% | Доля simple-path ответов с низкой correctness |
 
+### 💰 Экономика (CPS baseline, 2026-05-22)
+
+Замер на 10 вопросах из `tests/dataset_original.csv`, скрипт `scripts/measure_cps.py`:
+
+| Метрика | Значение |
+| :--- | :--- |
+| **Cost per query** | **$0.0102** (~$10.21 / 1 000 запросов) |
+| Avg input tokens | 4 920 |
+| Avg output tokens (incl. thinking) | 3 495 |
+| Avg latency | 21.9 сек |
+
+Pricing: Gemini 2.5 Flash ($0.30/M input, $2.50/M output). Сырые данные — `benchmarks/cps_2026-05-22.json`.
+
 ---
 
 ## 🚀 Как быстро запустить?
