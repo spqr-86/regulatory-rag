@@ -37,13 +37,22 @@
 
 Модульный детерминированный граф без LLM-роутинга:
 
-```
-query → intent_gate → router → rag_simple → evaluate_triage ─┬─ sufficient ──→ generate_answer
-                                    ↑                        ├─ borderline ──→ llm_verifier ─┬─→ generate_answer
-                                    └──── rewriter ←──────────┘                              ├─→ rewriter
-                                                              └─ clearly_bad ─→ rag_complex ←┘
-                                                  rag_complex → evaluate_complex ─┬─ pass → generate_answer
-                                                                                  └─ fail → abstain
+```mermaid
+flowchart LR
+    A([query]) --> B[intent_gate]
+    B -->|noise| Z([END])
+    B --> C[router]
+    C --> D[rag_simple\nfast path]
+    D --> E[evaluate_triage]
+    E -->|sufficient| G([generate_answer])
+    E -->|borderline| F[llm_verifier]
+    F --> G
+    F --> H[rewriter]
+    H --> D
+    E -->|clearly_bad| I[rag_complex\nslow path]
+    I --> J[evaluate_complex]
+    J -->|pass| G
+    J -->|fail| K([abstain])
 ```
 
 1.  **`intent_gate`**: regex-классификация noise/domain (+ опциональный domain gate). noise → END.
