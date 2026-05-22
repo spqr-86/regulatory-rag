@@ -22,9 +22,10 @@
 
 **Ключевые возможности:**
 
-*   ✅ 🔎 **Гибридный поиск**: комбинация семантического поиска (векторы) и BM25, FlashRank reranking.
+*   ✅ 🔎 **Гибридный поиск**: комбинация семантического поиска (векторы) и BM25. Two-Stage Retrieval: Stage 1 — быстрый широкий поиск (top-60 кандидатов), Stage 2 — FlashRank Cross-Encoder реранкинг (оценивает каждую пару Query+Document → отбирает лучшие).
 *   ✅ 🧠 **V7 LangGraph Pipeline**: модульный граф rag_simple → rag_complex → evaluate_complex → generate_answer с детерминированными hard gates.
 *   ✅ ⚖️ **Нормативная точность**: строгая фильтрация — ответ только по подтверждённым фрагментам, abstain при недостаточной уверенности.
+*   ✅ 🛡️ **Guardrails**: `intent_gate` (input filter — отсекает шум и OOS до retrieval) + детерминированные hard gates (output validation — score-пороги без LLM) + abstain при низкой уверенности. Нормативный вывод = высокая цена ошибки.
 *   ✅ 📄 **Универсальная загрузка**: PDF/DOCX через Docling → chunking → OpenAI embeddings → ChromaDB.
 *   ✅ 📖 **Доменный глоссарий**: детерминированное расширение запросов — "программа А" → официальный термин перед retrieval.
 *   ✅ 📊 **Eval framework**: golden-датасет + LLM-as-judge метрики (faithfulness, correctness, answer relevance) через `eval/run_v7_eval.py`.
