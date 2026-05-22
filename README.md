@@ -50,9 +50,9 @@ query → intent_gate → router → rag_simple → evaluate_triage ─┬─ su
 
 1.  **`intent_gate`**: regex-классификация noise/domain (+ опциональный domain gate). noise → END.
 2.  **`router`**: классификация запроса, построение `plan`, расширение `active_query` через глоссарий.
-3.  **`rag_simple`**: быстрый путь — hybrid retrieval (`SIMPLE_TOP_K=12`) + FlashRank rerank.
+3.  **`rag_simple`** (fast path — быстрый путь): hybrid retrieval (`SIMPLE_TOP_K=12`) + FlashRank rerank. Обрабатывает большинство запросов за минимальное время.
 4.  **`evaluate_triage`**: детерминированные hard gates → sufficient / borderline (→ `llm_verifier`) / clearly_bad (→ `rag_complex`).
-5.  **`rag_complex`**: глубокий поиск (`COMPLEX_TOP_K=60`) + rerank + MMR, merge всех попыток (top 24).
+5.  **`rag_complex`** (slow path — глубокий путь): расширенный поиск (`COMPLEX_TOP_K=60`) + rerank + MMR-диверсификация, merge всех попыток (top 24). Запускается только когда fast path не нашёл достаточно данных.
 6.  **`evaluate_complex`**: hard gates по score-порогам, без LLM-вердиктов.
 7.  **`generate_answer`**: синтез ответа через Gemini (thinking_budget=4096). Retry при 503, fallback — сырые чанки.
 8.  **Доменный глоссарий** (`src/glossary.py` + `config/term_glossary.yaml`): расширение запросов в ноде `router`.
