@@ -155,6 +155,12 @@ python scripts/trace_v7.py --no-chroma "привет как дела"   # stub m
 
 ## Session Log
 
+### 2026-05-22 (сессия 36)
+
+- **Сделано:** README переработан — добавлены Two-Stage Retrieval с Cross-Encoder, отдельный пункт Guardrails (intent_gate + hard gates + abstain), расшифровка fast path / slow path для rag_simple/rag_complex. Вводные разделы переписаны в технический стиль (убран рекламный тон + перечисление "охрана труда, пожарная безопасность"). ASCII-диаграмма пайплайна заменена на Mermaid flowchart.
+- **Решения:** README позиционирует SIA как Regulatory Compliance Q&A, не привязанный к ОТ. Mermaid вместо ASCII — рендерится на десктоп-GitHub, на мобильном остаётся как код (приемлемо).
+- **Наблюдения:** Создан внешний документ ~/career/shad/notes/project_sia_deep_dive.md с подробным разбором архитектуры (все 10 нод, ссылки на конкретные файлы GitHub) — для интервью и портфолио.
+
 ### 2026-05-17 (сессия 24)
 
 - **Сделано:**
