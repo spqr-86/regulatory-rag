@@ -116,6 +116,50 @@ API endpoint: `POST /query/gosts`. Generation: DeepSeek V3.
 
 ---
 
+## REST API
+
+Run the FastAPI backend alongside Streamlit:
+
+```bash
+uvicorn api:app --port 8503
+```
+
+**`POST /query`** — main RAG pipeline
+
+```bash
+curl -X POST http://localhost:8503/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How often must repeated safety briefings be conducted?"}'
+```
+
+```json
+{
+  "answer": "Repeated briefings must be conducted at least once every 6 months...",
+  "passages": [{"text": "...", "source": "doc.pdf", "score": 0.91}],
+  "path": "rag_simple",
+  "elapsed_sec": 4.2
+}
+```
+
+**`POST /query/gosts`** — search GOST/SNiP corpus (separate index, DeepSeek V3)
+
+```bash
+curl -X POST http://localhost:8503/query/gosts \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Степень защиты IP55 — что означает?"}'
+```
+
+**`GET /health`** — readiness check
+
+```bash
+curl http://localhost:8503/health
+# {"status": "ok", "pipeline_ready": true, "gosts_ready": true}
+```
+
+Interactive docs: `http://localhost:8503/docs`
+
+---
+
 ## Stack
 
 | Layer | Technology |
