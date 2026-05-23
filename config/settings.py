@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     )
 
     # Параметры для LLM и векторного хранилища
-    LLM_PROVIDER: str = "openai"
+    LLM_PROVIDER: str = "gemini"  # supported: gemini | openai
     MODEL_NAME: str = "gpt-4o-mini"  # для OpenAI
     TEMPERATURE: float = 0.0
 
