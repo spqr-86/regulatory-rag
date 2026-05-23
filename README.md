@@ -175,6 +175,20 @@ Interactive docs: `http://localhost:8503/docs`
 
 ---
 
+## Backend abstraction
+
+LLM and vector store are accessed through factory layers (`src/llm_factory.py`, `src/backends/`), making it straightforward to add new providers without touching pipeline code. Currently shipped:
+
+| Layer | Provider | Configurable via |
+|-------|----------|------------------|
+| LLM   | Gemini   | `LLM_PROVIDER` (gemini · openai) |
+| Vector store | Chroma | `VECTOR_STORE` (chroma) |
+| Embeddings | OpenAI · local · hf_api | `EMBEDDING_PROVIDER` |
+
+Roadmap (`docs/plans/`): Anthropic · DeepSeek for main pipeline · Qdrant · pgvector.
+
+---
+
 ## Project status
 
 - ✅ V7 LangGraph pipeline — all nodes, deterministic routing

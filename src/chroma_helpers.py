@@ -30,6 +30,10 @@ def query_chunks_by_range(vs, source: str, start: int, end: int) -> List[Documen
     """Query Chroma for chunks in [start, end] range for a given source.
 
     Returns Documents sorted by chunk_id. Returns [] on error.
+
+    TODO: When a non-Chroma backend lands, refactor to use
+    `backend.get_by_filter({"source": source, "chunk_id": {"$gte": ..., "$lte": ...}})`
+    — see src/backends/vector_store.py protocol.
     """
     try:
         result = vs.get(
