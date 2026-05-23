@@ -210,3 +210,7 @@ static/visuals/
 .flashrank_cache/
 semantic_cache.json
 CLAUDE.md
+AGENTS.md
+GEMINI.md
+eval_log*.txt
+eval_log*.txt~
