@@ -6,7 +6,7 @@
 [![Test](https://github.com/spqr-86/safety-incident-analyzer/actions/workflows/evaluation.yml/badge.svg)](https://github.com/spqr-86/safety-incident-analyzer/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Correctness: 7.9/10 · Faithfulness: 0.988 · Cost: $0.01/query · 9,344 GOST chunks indexed**
+**Correctness: 7.9/10 · Faithfulness: 0.988 · Cost: $0.01/query**
 
 [Russian README →](./README_RU.md)
 
@@ -111,7 +111,7 @@ flowchart TD
 
 ### GOST corpus (separate index)
 
-108 GOST/SNiP documents → **9,344 chunks** in ChromaDB collection `wta_gosts`.
+108 GOST/SNiP documents → **9,344 chunks** in ChromaDB collection `wta_gosts` (example corpus, not included in repo — bring your own documents).
 API endpoint: `POST /query/gosts`. Generation: DeepSeek V3.
 
 ---
