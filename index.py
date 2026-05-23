@@ -5,8 +5,8 @@ import shutil
 from dotenv import load_dotenv
 
 from config.settings import settings
+from src.backends.vector_store import get_vector_store_backend
 from src.file_handler import DocumentProcessor
-from src.vector_store import create_vector_store
 from utils.logging import logger
 
 load_dotenv()
@@ -54,7 +54,7 @@ def main():
 
     if chunks:
         logger.info(f"Всего будет проиндексировано {len(chunks)} чанков.")
-        create_vector_store(chunks)  # твоя функция сохраняет в Chroma
+        get_vector_store_backend(load_existing=False).create(chunks)
         logger.info("Индексация успешно завершена.")
     else:
         logger.warning("Чанки не получены. Проверьте документы/конвертацию.")

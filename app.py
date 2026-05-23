@@ -168,9 +168,9 @@ def load_resources():
     v7_app = None
     if V7_AVAILABLE and settings.USE_V7_GRAPH:
         try:
-            from src.vector_store import load_vector_store
+            from src.backends.vector_store import get_vector_store_backend
 
-            vector_store = load_vector_store()
+            vector_store = get_vector_store_backend(load_existing=True)
             init_v7_from_chroma(vector_store)
             v7_app = build_v7_graph().compile()
         except Exception as e:

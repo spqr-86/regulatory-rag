@@ -35,10 +35,10 @@ def run(n: int, dataset_path: Path, out_path: Path | None) -> dict[str, Any]:
 
     from src.v7.bridge import init_v7_from_chroma
     from src.v7.graph import build_graph
-    from src.vector_store import load_vector_store
+    from src.backends.vector_store import get_vector_store_backend
 
-    print("[init] loading ChromaDB…", flush=True)
-    vs = load_vector_store()
+    print("[init] loading vector store…", flush=True)
+    vs = get_vector_store_backend(load_existing=True)
     init_v7_from_chroma(vs)
     app = build_graph().compile()
 

@@ -40,8 +40,8 @@ from src.advanced_generation_metrics import (
     evaluate_answer_relevance,
     evaluate_faithfulness,
 )
+from src.backends.vector_store import get_vector_store_backend
 from src.llm_factory import get_gemini_llm
-from src.vector_store import load_vector_store
 from src.v7.bridge import init_v7_from_chroma
 from src.v7.graph import build_graph
 
@@ -131,7 +131,6 @@ def evaluate_correctness(
 JSON:"""
     )
 
-
     chain = prompt | llm | StrOutputParser()
     response = chain.invoke(
         {"question": question, "ground_truth": ground_truth, "answer": answer}
@@ -166,7 +165,7 @@ def run(limit: int | None = None, output: Path = DEFAULT_OUTPUT) -> None:
     print(f"  {len(dataset)} questions")
 
     print("Initializing V7 graph...")
-    vector_store = load_vector_store()
+    vector_store = get_vector_store_backend(load_existing=True)
     init_v7_from_chroma(vector_store)
     graph = build_graph().compile()
     print("  Graph ready.")
@@ -290,7 +289,7 @@ def run(limit: int | None = None, output: Path = DEFAULT_OUTPUT) -> None:
     with open(output, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
-    print(f"\n{'='*55}")
+    print(f"\n{'=' * 55}")
     print(f"Results ({n}/{len(dataset)} valid)")
     print(f"  Faithfulness:          {avg_faith:.3f}  (target >0.85)")
     print(f"  Answer Relevance:      {avg_rel:.3f}  (target >0.85)")

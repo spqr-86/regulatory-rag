@@ -46,9 +46,9 @@ def _color_triage(triage: str) -> str:
 
 
 def print_section(title: str) -> None:
-    print(f"\n{CYAN}{BOLD}{'─'*60}{RESET}")
+    print(f"\n{CYAN}{BOLD}{'─' * 60}{RESET}")
     print(f"{CYAN}{BOLD}  {title}{RESET}")
-    print(f"{CYAN}{'─'*60}{RESET}")
+    print(f"{CYAN}{'─' * 60}{RESET}")
 
 
 def print_plan(plan: dict) -> None:
@@ -87,7 +87,7 @@ def print_attempt(idx: int, attempt: dict) -> None:
             score = _color_score(p.get("score", 0.0))
             doc_id = p.get("metadata", {}).get("doc_id") or p.get("doc_id", "—")
             text = p.get("text", "")[:80].replace("\n", " ")
-            print(f"    [{i+1}] score={score} doc={doc_id}")
+            print(f"    [{i + 1}] score={score} doc={doc_id}")
             print(f"        {DIM}{text}…{RESET}")
 
 
@@ -195,11 +195,11 @@ def trace(query: str, use_chroma: bool = True) -> None:
     from src.v7.graph import build_graph
 
     if use_chroma:
+        from src.backends.vector_store import get_vector_store_backend
         from src.v7.bridge import init_v7_from_chroma
-        from src.vector_store import load_vector_store
 
-        print(f"{DIM}Загружаю ChromaDB…{RESET}", end="", flush=True)
-        vs = load_vector_store()
+        print(f"{DIM}Загружаю vector store…{RESET}", end="", flush=True)
+        vs = get_vector_store_backend(load_existing=True)
         init_v7_from_chroma(vs)
         print(f" {GREEN}готово{RESET}")
     else:
@@ -235,7 +235,7 @@ def trace(query: str, use_chroma: bool = True) -> None:
     print_section("INFERRED PATH")
     print(f"  {BOLD}{infer_path(state)}{RESET}")
 
-    print(f"\n{CYAN}{'─'*60}{RESET}\n")
+    print(f"\n{CYAN}{'─' * 60}{RESET}\n")
 
 
 def main() -> None:

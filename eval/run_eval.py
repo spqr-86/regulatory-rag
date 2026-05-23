@@ -125,11 +125,11 @@ def run_query(graph: Any, question: str) -> dict:
 
 def init_pipeline():
     """Инициализирует V7 граф (requires ChromaDB)."""
-    from src.vector_store import load_vector_store
+    from src.backends.vector_store import get_vector_store_backend
     from src.v7.bridge import init_v7_from_chroma
     from src.v7.graph import build_graph
 
-    vector_store = load_vector_store()
+    vector_store = get_vector_store_backend(load_existing=True)
     init_v7_from_chroma(vector_store)
     return build_graph().compile()
 
