@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     CHROMA_DB_PATH: str = "./chroma_db"
     CHROMA_COLLECTION_NAME: str = "documents"
 
+    # Vector store backend — currently supported: chroma
+    # Future: qdrant, pgvector (see docs/plans/ for roadmap)
+    VECTOR_STORE: str = "chroma"
+
     VECTOR_SEARCH_K: int = 10
     HYBRID_RETRIEVER_WEIGHTS: list[float] = [0.6, 0.4]
 
