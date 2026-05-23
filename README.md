@@ -1,228 +1,147 @@
-# 🛡️ Regulatory Compliance Q&A — RAG / Multi-Agent
+# Regulatory Compliance RAG
+
+**Production RAG pipeline for Russian regulatory documents (GOST, SNiP, Labour Code) — answers questions with citations or explicitly abstains when uncertain.**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![Test](https://github.com/spqr-86/safety-incident-analyzer/actions/workflows/evaluation.yml/badge.svg)](https://github.com/spqr-86/safety-incident-analyzer/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
----
+**Correctness: 7.9/10 · Faithfulness: 0.988 · Cost: $0.01/query · 9,344 GOST chunks indexed**
 
-## Что это?
-
-**Regulatory Compliance Q&A** — RAG-система с агентным пайплайном для ответов на вопросы по нормативной документации (ГОСТ, СНиП, СП, внутренние регламенты).
-
-Пользователь задаёт вопрос на естественном языке → система выполняет гибридный поиск по проиндексированным документам → верифицирует ответ по score-порогам → возвращает цитату с указанием источника или явно отказывается отвечать при недостатке данных.
+[Russian README →](./README_RU.md)
 
 ---
 
-## Зачем?
+## The problem
 
-Нормативная база в регулируемых отраслях — сотни документов с перекрёстными ссылками. Ручной поиск по ним медленный и ошибочный. Галлюцинация в нормативном ответе — это не UX-проблема, а прямой риск. Проект исследует, насколько RAG + guardrails решают задачу надёжного Q&A по нормативам.
+Regulatory documents in industrial domains (workplace safety, water treatment, construction) span hundreds of PDFs with cross-references. Manual lookup is slow and error-prone. A hallucinated answer to a compliance question isn't a UX issue — it's a liability.
 
-**Ключевые возможности:**
-
-*   ✅ 🔎 **Гибридный поиск**: комбинация семантического поиска (векторы) и BM25. Two-Stage Retrieval: Stage 1 — быстрый широкий поиск (top-60 кандидатов), Stage 2 — FlashRank Cross-Encoder реранкинг (оценивает каждую пару Query+Document → отбирает лучшие).
-*   ✅ 🧠 **V7 LangGraph Pipeline**: модульный граф rag_simple → rag_complex → evaluate_complex → generate_answer с детерминированными hard gates.
-*   ✅ ⚖️ **Нормативная точность**: строгая фильтрация — ответ только по подтверждённым фрагментам, abstain при недостаточной уверенности.
-*   ✅ 🛡️ **Guardrails**: `intent_gate` (input filter — отсекает шум и OOS до retrieval) + детерминированные hard gates (output validation — score-пороги без LLM) + abstain при низкой уверенности. Нормативный вывод = высокая цена ошибки.
-*   ✅ 📄 **Универсальная загрузка**: PDF/DOCX через Docling → chunking → OpenAI embeddings → ChromaDB.
-*   ✅ 📖 **Доменный глоссарий**: детерминированное расширение запросов — "программа А" → официальный термин перед retrieval.
-*   ✅ 📊 **Eval framework**: golden-датасет + LLM-as-judge метрики (faithfulness, correctness, answer relevance) через `eval/run_v7_eval.py`.
-*   ✅ 📚 **ГОСТ RAG**: 108 нормативных документов (ГОСТы, СНиПы) проиндексированы отдельно (9 344 чанка, ChromaDB `wta_gosts`). API эндпоинт `POST /query/gosts` для поиска по нормативной базе.
+This project explores how far RAG + deterministic guardrails can go toward reliable Q&A over regulatory corpora.
 
 ---
 
-## 🧠 Ключевые технические решения
+## How it works
 
-### V7 LangGraph Pipeline (основной)
-
-Модульный детерминированный граф без LLM-роутинга:
-
-```mermaid
-flowchart LR
-    A([query]) --> B[intent_gate]
-    B -->|noise| Z([END])
-    B --> C[router]
-    C --> D[rag_simple\nfast path]
-    D --> E[evaluate_triage]
-    E -->|sufficient| G([generate_answer])
-    E -->|borderline| F[llm_verifier]
-    F --> G
-    F --> H[rewriter]
-    H --> D
-    E -->|clearly_bad| I[rag_complex\nslow path]
-    I --> J[evaluate_complex]
-    J -->|pass| G
-    J -->|fail| K([abstain])
+```
+User query
+    ↓
+intent_gate          — regex filter, drops noise before retrieval
+    ↓
+router               — query plan + domain glossary expansion
+    ↓
+rag_simple           — hybrid retrieval (BM25 + vectors, top-12) + FlashRank rerank
+    ↓
+evaluate_triage      — deterministic hard gates (no LLM scoring)
+    ├── sufficient   → generate_answer (Gemini, thinking_budget=4096)
+    ├── borderline   → llm_verifier → rewrite → rag_simple (one retry)
+    └── clearly_bad  → rag_complex (top-60 + MMR) → evaluate_complex
+                            ├── pass  → generate_answer
+                            └── fail  → abstain (explicit refusal)
 ```
 
-1.  **`intent_gate`**: regex-классификация noise/domain (+ опциональный domain gate). noise → END.
-2.  **`router`**: классификация запроса, построение `plan`, расширение `active_query` через глоссарий.
-3.  **`rag_simple`** (fast path — быстрый путь): hybrid retrieval (`SIMPLE_TOP_K=12`) + FlashRank rerank. Обрабатывает большинство запросов за минимальное время.
-4.  **`evaluate_triage`**: детерминированные hard gates → sufficient / borderline (→ `llm_verifier`) / clearly_bad (→ `rag_complex`).
-5.  **`rag_complex`** (slow path — глубокий путь): расширенный поиск (`COMPLEX_TOP_K=60`) + rerank + MMR-диверсификация, merge всех попыток (top 24). Запускается только когда fast path не нашёл достаточно данных.
-6.  **`evaluate_complex`**: hard gates по score-порогам, без LLM-вердиктов.
-7.  **`generate_answer`**: синтез ответа через Gemini (thinking_budget=4096). Retry при 503, fallback — сырые чанки.
-8.  **Доменный глоссарий** (`src/glossary.py` + `config/term_glossary.yaml`): расширение запросов в ноде `router`.
-
-> V7-промпты (генерация, верификация, rewrite) — хардкод-строки в `src/v7/bridge.py`. Jinja2-реестр промптов (`prompts/`) используется только легаси-путём `multiagent_rag`.
-
-### 📊 Целевые метрики
-
-| Метрика | Целевое значение | Описание |
-| :--- | :--- | :--- |
-| **Correctness** | > 7.5/10 | Смысловое соответствие эталону |
-| **Faithfulness** | > 0.85 | Отсутствие галлюцинаций |
-| **Answer Relevance** | > 0.85 | Соответствие ответа вопросу |
-| **False-sufficiency** | < 10% | Доля simple-path ответов с низкой correctness |
-
-### 💰 Экономика (CPS baseline, 2026-05-22)
-
-Замер на 10 вопросах из `tests/dataset_original.csv`, скрипт `scripts/measure_cps.py`:
-
-| Метрика | Значение |
-| :--- | :--- |
-| **Cost per query** | **$0.0102** (~$10.21 / 1 000 запросов) |
-| Avg input tokens | 4 920 |
-| Avg output tokens (incl. thinking) | 3 495 |
-| Avg latency | 21.9 сек |
-
-Pricing: Gemini 2.5 Flash ($0.30/M input, $2.50/M output). Сырые данные — `benchmarks/cps_2026-05-22.json`.
+Key design decisions:
+- **No LLM routing** — all branching decisions use deterministic score thresholds
+- **Abstain > hallucinate** — system refuses to answer when retrieval confidence is low
+- **Two-stage retrieval** — fast path handles most queries; slow path activates only when needed
 
 ---
 
-## 🚀 Как быстро запустить?
+## Metrics
 
-### Локальный запуск
+| Metric | Value | Target |
+|--------|-------|--------|
+| Correctness (LLM-as-judge, 0–10) | **7.9** | > 7.5 |
+| Faithfulness (no hallucinations) | **0.988** | > 0.85 |
+| Answer Relevance | **0.85+** | > 0.85 |
+| False-sufficiency rate | **15%** | < 10% |
+| Cost per query | **$0.0102** | — |
+| Avg latency | 21.9 sec | — |
 
-**Предварительные требования:**
-- Python 3.11+
-- API ключи (OpenAI, Gemini)
+Eval: 50-question golden dataset, `eval/run_v7_eval.py`. LLM judge: Gemini 2.5 Flash.
 
-**1. Клонирование и установка:**
+---
+
+## Quick start
+
 ```bash
 git clone https://github.com/spqr-86/safety-incident-analyzer.git
 cd safety-incident-analyzer
 pip install -r requirements.txt
+cp .env.example .env  # add OPENAI_API_KEY + GEMINI_API_KEY
 ```
 
-**2. Настройка окружения:**
-Создайте файл `.env` в корне проекта (см. `.env.example`):
-```env
-# LLM Provider
-LLM_PROVIDER=openai
-OPENAI_API_KEY=your_key
-GEMINI_API_KEY=your_gemini_key
+Add your PDF/DOCX regulatory documents to `source_docs/`, then:
 
-# Embeddings
-EMBEDDING_PROVIDER=openai # или hf_api, local
-```
-
-**3. Индексация документов:**
-Положите документы (PDF, DOCX, MD) в папку `source_docs/` и запустите:
 ```bash
-python index.py
-```
-
-**4. Запуск приложения:**
-```bash
-streamlit run app.py
+python index.py        # index documents → ChromaDB
+streamlit run app.py   # open http://localhost:8501
 ```
 
 ---
 
-## 📱 Как использовать?
-
-1.  Откройте браузер по адресу `http://localhost:8501`.
-2.  В чате введите ваш вопрос по охране труда (например, "Какие требования к высоте перил?").
-3.  Система выполнит поиск, проверит релевантность и сформирует ответ со ссылками на источники.
-4.  При добавлении новых файлов используйте кнопку "Переиндексировать библиотеку" в боковой панели.
-
----
-
-## 📚 Куда идти дальше?
-
-### 🚀 Для пользователей
-- [**Quick Start**](./docs/guides/quick-start.md) — установка и первый запуск.
-
-### 📊 Для аналитиков
-- [**Система оценки и метрики**](./docs/evaluation/README.md) — Eval Framework (`eval/run_v7_eval.py`).
-- [**Benchmarks и Baseline**](./benchmarks/README.md) — результаты тестирования производительности.
-
-### 🛠 Для разработчиков
-- [**Архитектура и анализ кодовой базы**](./docs/architecture/README.md)
-- [**Data Pipeline (Обработка данных)**](./docs/DATA_PIPELINE.md) — **NEW!** Детальное описание процесса индексации.
-- [**Гайд по тестированию**](./docs/guides/testing.md)
-- [**Управление промптами**](./docs/guides/prompt-management.md) — руководство по работе с системой промптов.
-- [**Как добавлять вопросы в датасет**](./docs/guides/adding-questions.md)
-
----
-
-## 🏗 Архитектура
+## Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion [Индексация]
+    subgraph Ingestion
         Docs[PDF / DOCX] --> Docling[Docling Parser]
-        Docling --> Split[Chunking\n1500 chars / 400 overlap]
+        Docling --> Split[Chunking 1500 chars / 400 overlap]
         Split --> Embed[OpenAI Embeddings]
         Embed --> DB[(ChromaDB)]
     end
 
-    subgraph V7 [V7 LangGraph Pipeline - основной]
-        Q[Вопрос] --> Gate{intent_gate}
-        Gate -->|noise| End[Конец]
-        Gate -->|domain| Router[router\nplan + глоссарий]
-        Router --> Simple[rag_simple\nhybrid SIMPLE_TOP_K=12 + FlashRank]
-        Simple --> Triage{evaluate_triage\nhard gates}
-        Triage -->|sufficient| Gen[generate_answer\nGemini]
+    subgraph V7 [V7 LangGraph Pipeline]
+        Q[Query] --> Gate{intent_gate}
+        Gate -->|noise| End[END]
+        Gate -->|domain| Router[router + glossary]
+        Router --> Simple[rag_simple hybrid top-12 + FlashRank]
+        Simple --> Triage{evaluate_triage hard gates}
+        Triage -->|sufficient| Gen[generate_answer Gemini]
         Triage -->|borderline| Verifier[llm_verifier]
-        Triage -->|clearly_bad| Complex[rag_complex\nCOMPLEX_TOP_K=60 + MMR]
+        Triage -->|clearly_bad| Complex[rag_complex top-60 + MMR]
         Verifier -->|ok| Gen
         Verifier -->|rewrite| Rewriter[rewriter] --> Simple
         Verifier -->|escalate| Complex
-        Complex --> Eval[evaluate_complex\nhard gates]
+        Complex --> Eval[evaluate_complex hard gates]
         Eval -->|pass| Gen
         Eval -->|fail| Abstain[abstain]
-        Gen --> Answer[Ответ + источники]
+        Gen --> Answer[Answer + sources]
     end
 ```
 
----
+### GOST corpus (separate index)
 
-## 🛠 Технологии
-
-| Категория | Технологии |
-| :--- | :--- |
-| **Язык** | Python 3.11+ |
-| **UI** | Streamlit |
-| **LLM Framework** | LangChain, LangGraph |
-| **LLM Providers** | Google Gemini 2.5 Flash (generation), DeepSeek V3 (GOST RAG) |
-| **Embeddings** | OpenAI text-embedding-3-small |
-| **Vector Store** | ChromaDB |
-| **ETL** | Docling |
-| **Reranking** | FlashRank |
-| **Evaluation** | Ragas, Custom metrics |
+108 GOST/SNiP documents → **9,344 chunks** in ChromaDB collection `wta_gosts`.
+API endpoint: `POST /query/gosts`. Generation: DeepSeek V3.
 
 ---
 
-## 📈 Статус проекта
+## Stack
 
-*   ✅ V7 LangGraph Pipeline (intent_gate → router → rag_simple → evaluate_triage → rag_complex → generate_answer)
-*   ✅ Hybrid Retrieval (ChromaDB + BM25, `SIMPLE_TOP_K=12` / `COMPLEX_TOP_K=60`, FlashRank rerank)
-*   ✅ Hard gates с детерминированными score-порогами (без LLM-роутинга)
-*   ✅ Генерация ответов — Gemini (thinking_budget=4096), retry при 503
-*   ✅ Term Glossary — расшифровка доменных аббревиатур, применяется в ноде `router`
-*   ✅ Индексация PDF/DOCX через Docling, **12 нормативных документов** (добавлен полный ТК РФ), **1973 чанка** (v2.3-noise-clean)
-*   ✅ Веб-интерфейс Streamlit, задеплоен на VPS (порт 8502)
-*   ✅ Eval framework — `eval/run_v7_eval.py`, golden-датасет 50 вопросов, LLM-as-judge
-*   ✅ Баг чанкинга исправлен (`MIN_BBOX_HEIGHT` не роняет текст, 830 → 1069 чанков) — 2026-05-15
-*   ✅ Regex noise cleanup (`_clean_noise`): URL-watermarks, page markers, timestamps — PIPELINE_VERSION v2.3-noise-clean — 2026-05-16
-*   ✅ FlashRank score inflation fix: `vector_score` сохраняется отдельно, MMR и threshold gates используют его — 2026-05-16
-*   ✅ Eval correctness **7.9/10** (цель 7.5 достигнута) — 2026-05-16
-*   ✅ **ГОСТ RAG**: 108 документов → 9 344 чанка, коллекция `wta_gosts`, API `POST /query/gosts`, генерация через DeepSeek — 2026-05-17
-*   🔄 Расширение тестового датасета
+| Layer | Technology |
+|-------|-----------|
+| Orchestration | LangGraph (V7 deterministic graph) |
+| LLM | Gemini 2.5 Flash (generation), DeepSeek V3 (GOST) |
+| Embeddings | OpenAI text-embedding-3-small |
+| Vector store | ChromaDB |
+| Reranking | FlashRank Cross-Encoder |
+| ETL | Docling (PDF/DOCX → chunks) |
+| Evaluation | Ragas + custom LLM-as-judge |
+| UI | Streamlit |
 
 ---
 
-**Автор:** Петр Балдаев (AI/ML Engineer)
-[LinkedIn](https://linkedin.com/in/petr-baldaev-b1252b263/) • [GitHub](https://github.com/spqr-86)
+## Project status
+
+- ✅ V7 LangGraph pipeline — all nodes, deterministic routing
+- ✅ Hybrid retrieval — BM25 + semantic, two-stage (simple/complex path)
+- ✅ Hard gate thresholds — score-based, no LLM decisions in routing
+- ✅ Eval framework — 50-question golden dataset, correctness 7.9/10
+- ✅ GOST RAG — 108 docs, 9,344 chunks, separate ChromaDB collection
+- ✅ Deployed on VPS (port 8502, Streamlit)
+- 🔄 Expanding test dataset
+- 🔄 False-sufficiency reduction (target < 10%)
+
+---
+
+**Author:** Petr Baldaev — [LinkedIn](https://linkedin.com/in/petr-baldaev-b1252b263/) · [GitHub](https://github.com/spqr-86)
