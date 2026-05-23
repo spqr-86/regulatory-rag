@@ -1,5 +1,7 @@
 # Pluggable Backends — Refactor Plan (Phase 0)
 
+**Status: ✅ COMPLETED 2026-05-23** — all cards DONE, 7 commits merged to main, 223 unit tests green, E2E smoke test passing.
+
 > **For agentic workers:** Pick one card at a time. Update `Status:` field (`TODO → IN PROGRESS → DONE`). Do not start a card whose `Depends on:` is not `DONE`. Each card is atomic and independently committable.
 
 **Goal:** Remove hardcoded LLM and vector store dependencies. Prepare infrastructure so new providers (Anthropic, OpenAI as main, Qdrant, pgvector) can be added later as one-line changes. **Behavior must not change** — same model (Gemini), same backend (Chroma), same eval score (7.9/10).
@@ -33,7 +35,7 @@ Goal: All main-pipeline LLM creation goes through `get_llm(**kwargs)`. Gemini st
 
 ### CARD-1.1 — `get_llm()` accepts kwargs and routes to Gemini
 
-**Status:** ⬜ TODO
+**Status:** ✅ DONE
 **Depends on:** —
 **Files:** `src/llm_factory.py`, `tests/test_llm_factory_refactor.py` (new)
 
@@ -124,7 +126,7 @@ pytest tests/test_llm_factory_refactor.py -v
 
 ### CARD-1.2 — Route V7 bridge through `get_llm()`
 
-**Status:** ⬜ TODO
+**Status:** ✅ DONE
 **Depends on:** CARD-1.1
 **Files:** `src/v7/bridge.py` (lines 446–458)
 
@@ -172,7 +174,7 @@ Expected: correctness within ±0.1 of 7.9 baseline.
 
 ### CARD-1.3 — Set default `LLM_PROVIDER=gemini` in settings
 
-**Status:** ⬜ TODO
+**Status:** ✅ DONE
 **Depends on:** CARD-1.2
 **Files:** `config/settings.py`, `.env.example`
 
@@ -212,7 +214,7 @@ Goal: All vector store access goes through `VectorStoreBackend` protocol. `Chrom
 
 ### CARD-2.1 — Define protocol and factory
 
-**Status:** ⬜ TODO
+**Status:** ✅ DONE
 **Depends on:** —
 **Files:** `src/backends/__init__.py` (new, empty), `src/backends/vector_store.py` (new), `config/settings.py`
 
@@ -316,7 +318,7 @@ pytest tests/test_vector_store_factory.py -v
 
 ### CARD-2.2 — ChromaBackend implements protocol
 
-**Status:** ⬜ TODO
+**Status:** ✅ DONE
 **Depends on:** CARD-2.1
 **Files:** `src/backends/chroma_backend.py` (new), `tests/test_chroma_backend.py` (new)
 
@@ -447,7 +449,7 @@ pytest tests/test_chroma_backend.py -v
 
 ### CARD-2.3 — V7 bridge accepts both raw Chroma and backend
 
-**Status:** ⬜ TODO
+**Status:** ✅ DONE
 **Depends on:** CARD-2.2
 **Files:** `src/v7/bridge.py` (lines ~412–418)
 
@@ -512,7 +514,7 @@ Both should work — first with stub, second with real Chroma via backend.
 
 ### CARD-2.4 — Route callers through factory
 
-**Status:** ⬜ TODO
+**Status:** ✅ DONE
 **Depends on:** CARD-2.3
 **Files:** `api.py`, `app.py`, `eval/run_eval.py`, `eval/run_v7_eval.py`, `scripts/measure_cps.py`, `scripts/trace_v7.py`, `index.py`
 
@@ -566,7 +568,7 @@ kill %1
 
 ### CARD-2.5 — Adapt `chroma_helpers.query_chunks_by_range` (optional)
 
-**Status:** ⬜ TODO
+**Status:** ✅ DONE
 **Depends on:** CARD-2.4
 **Files:** `src/chroma_helpers.py`
 
@@ -599,7 +601,7 @@ def query_chunks_by_range(vs, source: str, start: int, end: int) -> List[Documen
 
 ### CARD-3.1 — README: architecture-ready note
 
-**Status:** ⬜ TODO
+**Status:** ✅ DONE
 **Depends on:** CARD-1.3, CARD-2.4
 **Files:** `README.md`
 
@@ -627,7 +629,7 @@ Roadmap (see `docs/plans/`): Anthropic, OpenAI for main pipeline, Qdrant, pgvect
 
 ### CARD-3.2 — `.env.example` final pass
 
-**Status:** ⬜ TODO
+**Status:** ✅ DONE
 **Depends on:** CARD-2.1
 **Files:** `.env.example`
 
