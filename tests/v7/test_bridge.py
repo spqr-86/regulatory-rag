@@ -304,7 +304,7 @@ class TestInitV7FromChroma:
         assert corpus[1]["metadata"]["source"] == "b.pdf"
 
     @pytest.mark.unit
-    @patch("src.v7.bridge.get_gemini_llm")
+    @patch("src.v7.bridge.get_llm")
     @patch("src.v7.bridge.generate_answer_mod")
     @patch("src.v7.bridge.llm_verifier_mod")
     @patch("src.v7.bridge.rewriter_mod")
@@ -335,7 +335,7 @@ class TestInitV7FromChroma:
         assert mock_get_llm.call_count == 4
 
     @pytest.mark.unit
-    @patch("src.v7.bridge.get_gemini_llm", side_effect=ImportError("no gemini"))
+    @patch("src.v7.bridge.get_llm", side_effect=ImportError("no gemini"))
     @patch("src.v7.bridge.generate_answer_mod")
     @patch("src.v7.bridge.llm_verifier_mod")
     @patch("src.v7.bridge.rewriter_mod")

@@ -17,7 +17,7 @@ from typing import Callable, List
 from langchain_core.messages import HumanMessage
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from src.llm_factory import get_gemini_llm
+from src.llm_factory import get_llm
 from src.parsers import extract_text, parse_json_from_response
 from src.v7.nlp_core import init_bm25_index
 from src.v7.nodes import generate_answer as generate_answer_mod
@@ -443,18 +443,18 @@ def init_v7_from_chroma(vector_store, llm_provider: str | None = "gemini") -> No
     # Inject LLM-backed verify, rewrite, generate, and expand functions
     if llm_provider:
         try:
-            verifier_llm = get_gemini_llm(
+            verifier_llm = get_llm(
                 thinking_budget=1024, response_mime_type="application/json"
             )
             llm_verifier_mod.set_verify_fn(make_verify_fn(verifier_llm))
 
-            rewriter_llm = get_gemini_llm(thinking_budget=1024)
+            rewriter_llm = get_llm(thinking_budget=1024)
             rewriter_mod.set_rewrite_fn(make_rewrite_fn(rewriter_llm))
 
-            generator_llm = get_gemini_llm(thinking_budget=4096)
+            generator_llm = get_llm(thinking_budget=4096)
             generate_answer_mod.set_generate_fn(make_generate_fn(generator_llm))
 
-            expander_llm = get_gemini_llm(thinking_budget=0)
+            expander_llm = get_llm(thinking_budget=0)
             rag_simple_mod.set_expand_fn(make_expand_fn(expander_llm))
 
             logger.info(
