@@ -25,7 +25,7 @@ def test_factory_case_insensitive():
 
     with (
         patch("src.backends.vector_store.settings") as s,
-        patch("src.backends.chroma_backend.load_vector_store"),
+        patch("src.vector_store.load_vector_store"),
     ):
         s.VECTOR_STORE = "CHROMA"
         # Should not raise
