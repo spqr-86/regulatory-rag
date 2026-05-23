@@ -44,6 +44,10 @@ except ImportError:
 
 
 def _create_openai_llm(**kwargs):
+    # Drop kwargs not understood by OpenAI (kept for forward compatibility
+    # so callers can pass thinking_budget/response_mime_type without crashing).
+    kwargs.pop("thinking_budget", None)
+    kwargs.pop("response_mime_type", None)
     return ChatOpenAI(
         model=settings.MODEL_NAME,
         temperature=settings.TEMPERATURE,
@@ -53,20 +57,35 @@ def _create_openai_llm(**kwargs):
     )
 
 
+def _create_gemini_llm(**kwargs):
+    """Forward kwargs (thinking_budget, response_mime_type, ...) to get_gemini_llm."""
+    return get_gemini_llm(**kwargs)
+
+
 _LLM_PROVIDERS = {
     "openai": _create_openai_llm,
+    "gemini": _create_gemini_llm,
 }
 
 
 def get_llm(**kwargs):
-    """Create LLM instance based on LLM_PROVIDER setting."""
+    """Create LLM instance based on LLM_PROVIDER setting.
+
+    Currently supported providers (set via LLM_PROVIDER env var):
+      gemini — Google Gemini (GEMINI_FAST_MODEL, GEMINI_API_KEY).
+               Accepts thinking_budget, response_mime_type, model_name.
+      openai — OpenAI ChatGPT (MODEL_NAME, OPENAI_API_KEY).
+               Silently drops Gemini-specific kwargs.
+
+    All providers accept **kwargs — provider-specific kwargs that another
+    provider does not understand are dropped silently, so the same call site
+    can be reused across providers.
+    """
     provider = settings.LLM_PROVIDER.lower()
     factory = _LLM_PROVIDERS.get(provider)
     if not factory:
         available = ", ".join(sorted(_LLM_PROVIDERS.keys()))
-        raise ValueError(
-            f"Неизвестный провайдер LLM: {provider}. Доступные: {available}"
-        )
+        raise ValueError(f"Unknown LLM_PROVIDER={provider!r}. Available: {available}")
     return factory(**kwargs)
 
 
