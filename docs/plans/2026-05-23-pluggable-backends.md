@@ -669,7 +669,8 @@ VECTOR_STORE=chroma
 Each future provider becomes its own small plan:
 - `docs/plans/YYYY-MM-DD-add-openai-llm.md` — register `openai` for main pipeline, eval, document
 - `docs/plans/YYYY-MM-DD-add-anthropic-llm.md` — same pattern
+- `docs/plans/YYYY-MM-DD-add-deepseek-llm.md` — reuse `DeepSeekLLM` class from `src/ers_rag/bridge.py` (already battle-tested in GOST pipeline), register in `_LLM_PROVIDERS`, eval, document
 - `docs/plans/YYYY-MM-DD-add-qdrant.md` — add `QdrantBackend`, eval, document
-- `docs/plans/YYYY-MM-DD-merge-gost-pipeline.md` — drop `src/ers_rag/*`, unify on backend abstraction
+- `docs/plans/YYYY-MM-DD-merge-gost-pipeline.md` — drop `src/ers_rag/*`, unify on backend abstraction (depends on DeepSeek being in main `_LLM_PROVIDERS` first)
 
 Each ships as: one new file + one eval row in README's "Tested with" table.
