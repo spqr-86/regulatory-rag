@@ -67,15 +67,18 @@ Eval: 50-question golden dataset, `eval/run_v7_eval.py`. LLM judge: Gemini 2.5 F
 git clone https://github.com/spqr-86/safety-incident-analyzer.git
 cd safety-incident-analyzer
 pip install -r requirements.txt
-cp .env.example .env  # add OPENAI_API_KEY + GEMINI_API_KEY
+cp .env.example .env  # add GEMINI_API_KEY (LLM) + OPENAI_API_KEY (embeddings)
 ```
 
-Add your PDF/DOCX regulatory documents to `source_docs/`, then:
+Drop your PDF/DOCX regulatory documents into `source_docs/`, then:
 
 ```bash
 python index.py        # index documents → ChromaDB
-streamlit run app.py   # open http://localhost:8501
+streamlit run app.py   # UI at http://localhost:8501
+uvicorn api:app --port 8503  # REST API at http://localhost:8503/docs
 ```
+
+Defaults to Gemini + Chroma + OpenAI embeddings. See [Backend abstraction](#backend-abstraction) to swap any layer via `.env`.
 
 ---
 
@@ -177,15 +180,28 @@ Interactive docs: `http://localhost:8503/docs`
 
 ## Backend abstraction
 
-LLM and vector store are accessed through factory layers (`src/llm_factory.py`, `src/backends/`), making it straightforward to add new providers without touching pipeline code. Currently shipped:
+LLM and vector store are accessed through factory layers (`src/llm_factory.py`, `src/backends/`). Adding a new provider is one file plus one registry entry — pipeline code does not change.
 
-| Layer | Provider | Configurable via |
-|-------|----------|------------------|
-| LLM   | Gemini   | `LLM_PROVIDER` (gemini · openai) |
-| Vector store | Chroma | `VECTOR_STORE` (chroma) |
-| Embeddings | OpenAI · local · hf_api | `EMBEDDING_PROVIDER` |
+| Layer | Shipped | Configurable via | Roadmap |
+|-------|---------|------------------|---------|
+| LLM   | Gemini, OpenAI | `LLM_PROVIDER` | Anthropic, DeepSeek |
+| Vector store | Chroma | `VECTOR_STORE` | Qdrant, pgvector |
+| Embeddings | OpenAI, local (sentence-transformers), hf_api | `EMBEDDING_PROVIDER` | — |
 
-Roadmap (`docs/plans/`): Anthropic · DeepSeek for main pipeline · Qdrant · pgvector.
+**Fully local setup** (no external APIs except LLM):
+```bash
+LLM_PROVIDER=gemini              # or any other supported provider
+VECTOR_STORE=chroma
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL_NAME=ai-forever/sbert_large_nlu_ru
+```
+
+**Adding a new LLM provider** (example: Anthropic):
+1. Add `_create_anthropic_llm(**kwargs)` to `src/llm_factory.py`
+2. Register it in `_LLM_PROVIDERS = {..., "anthropic": _create_anthropic_llm}`
+3. Set `LLM_PROVIDER=anthropic` in `.env`
+
+Same pattern for vector stores — implement `VectorStoreBackend` protocol in `src/backends/`, register in the factory. See `docs/plans/2026-05-23-pluggable-backends.md` for the architectural rationale.
 
 ---
 
