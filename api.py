@@ -46,13 +46,16 @@ async def lifespan(app: FastAPI):
         logger.error("api.startup: pipeline init failed", error=str(exc))
         raise
 
-    # Gosts pipeline — загружаем отдельно, не падаем если коллекции нет
+    # Gosts pipeline (ers_rag fork: V7 graph + DeepSeek LLM поверх chroma_db_gosts/wta_gosts)
+    # Старый src/gosts_pipeline.py оставлен на месте на случай отката.
     try:
-        from src.gosts_pipeline import _load_store as _gosts_load
+        from src.ers_rag import build_graph as _ers_build_graph
+        from src.ers_rag import init_ers_rag_from_chroma as _ers_init
 
-        _gosts_load()
+        _ers_init()
+        _pipeline["gosts_app"] = _ers_build_graph().compile()
         _pipeline["gosts_ready"] = True
-        logger.info("api.startup: gosts pipeline ready")
+        logger.info("api.startup: gosts (ers_rag) pipeline ready")
     except Exception as exc:
         logger.warning("api.startup: gosts pipeline not available", error=str(exc))
         _pipeline["gosts_ready"] = False
@@ -145,39 +148,49 @@ def query_gosts(req: QueryRequest) -> QueryResponse:
     if not req.question or not req.question.strip():
         raise HTTPException(status_code=400, detail="question must not be empty")
 
-    if not _pipeline.get("gosts_ready"):
+    gosts_app = _pipeline.get("gosts_app")
+    if not _pipeline.get("gosts_ready") or gosts_app is None:
         raise HTTPException(
             status_code=503,
             detail="gosts pipeline not available — run index_gosts.py first",
         )
 
+    t0 = time.perf_counter()
     try:
-        from src.gosts_pipeline import query as gosts_query
-
-        result = gosts_query(req.question.strip())
+        result = gosts_app.invoke({"query": req.question.strip()})
     except Exception as exc:
         logger.error("api.gosts: pipeline error", question=req.question, error=str(exc))
         raise HTTPException(status_code=500, detail=f"pipeline error: {exc}") from exc
+    elapsed = round(time.perf_counter() - t0, 2)
 
+    if result.get("clarify_message"):
+        answer = result["clarify_message"]
+    elif result.get("abstain_reason"):
+        answer = f"Не могу ответить: {result['abstain_reason']}"
+    else:
+        answer = result.get("answer") or ""
+
+    raw_passages = result.get("final_passages") or result.get("fallback_passages") or []
     passages = [
         Passage(
             text=p.get("text", ""),
             source=p.get("metadata", {}).get("source", ""),
             score=float(p.get("score", 0.0)),
         )
-        for p in result.get("passages", [])
+        for p in raw_passages
     ]
+    path = _infer_path(result)
     logger.info(
         "api.gosts: done",
         question=req.question[:80],
         passages=len(passages),
-        elapsed_sec=result.get("elapsed_sec"),
+        elapsed_sec=elapsed,
     )
     return QueryResponse(
-        answer=result.get("answer", ""),
+        answer=answer,
         passages=passages,
-        path=result.get("path", ""),
-        elapsed_sec=result.get("elapsed_sec", 0.0),
+        path=path,
+        elapsed_sec=elapsed,
     )
 
 

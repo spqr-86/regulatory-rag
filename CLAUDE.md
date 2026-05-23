@@ -157,6 +157,12 @@ python scripts/trace_v7.py --no-chroma "привет как дела"   # stub m
 
 ## Session Log
 
+### 2026-05-23 (сессия 38)
+
+- **Сделано:** README.md переписан на английский язык для GitHub-аудитории (HN, Reddit). Метрики (correctness 7.9/10, faithfulness 0.988, $0.0102/query) вынесены на первый экран. Quick Start сокращён до 4 команд. README_RU.md создан как русская версия. Закоммичено в main.
+- **Решения:** Push заблокирован auto mode — нужен ручной `git push`. GitHub Topics добавить вручную в Settings репо.
+- **Наблюдения:** Следующие шаги для роста звёзд: GIF с демо → Show HN → r/LocalLLaMA → awesome-lists. Всё описано в Telegram-переписке 23.05.
+
 ### 2026-05-22 (сессия 37)
 
 - **Сделано:** CPS baseline для V7 pipeline. Создан `scripts/measure_cps.py` (инструментация через `langchain_core.callbacks.UsageMetadataCallbackHandler`). Прогон на 10 вопросах из `dataset_original.csv`: **$0.0102/query, $10.21/1k**, avg 8 416 токенов (4 920 in + 3 495 out incl. thinking), avg latency 21.9 сек. Сырые цифры — `benchmarks/cps_2026-05-22.json` (gitignored). README дополнен секцией "Экономика (CPS baseline)". Разбор для интервью GenAI Lab — `~/career/shad/notes/sia_cps_baseline.md`.
