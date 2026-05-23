@@ -263,17 +263,11 @@ Add new section after Gemini section:
 
 ---
 
-### CARD-1.5 — Track: GOST pipeline LLM unification (out of scope, deferred)
+### CARD-1.5 — GOST pipeline LLM unification
 
-**Status:** ⬜ TODO (informational only — do NOT implement now)
+**Status:** ❌ WONTFIX (decided 2026-05-23)
 
-**Why deferred:** `src/ers_rag/bridge.py` uses custom `DeepSeekLLM` class (raw OpenAI SDK with DeepSeek endpoint). To merge into `get_llm()`, would need either:
-- `langchain-openai` with `base_url="https://api.deepseek.com"` (works, but loses DeepSeek-specific retry config)
-- New `_create_deepseek_llm` in registry
-
-**Decision needed from user:** Should `LLM_PROVIDER` control GOST pipeline too, or keep it pinned to DeepSeek?
-
-**Done when:** Decision recorded in this card, then either new card created or this is closed as wontfix.
+**Decision:** GOST pipeline stays pinned to DeepSeek. It's a WTA-specific implementation. Future work (not this plan): merge GOST into main pipeline as a single project run with DeepSeek + Chroma — proves end-to-end backend flexibility. Tracked separately, not in scope here.
 
 ---
 
@@ -723,13 +717,11 @@ VECTOR_STORE=chroma
 
 ---
 
-### CARD-2.7 — Track: GOST indexer (`index_gosts.py`) hardcodes Chroma (deferred)
+### CARD-2.7 — GOST indexer pluggable
 
-**Status:** ⬜ TODO (informational)
+**Status:** ❌ WONTFIX (decided 2026-05-23)
 
-**Why:** `index_gosts.py:205` uses `Chroma(...)` directly with a custom collection name. Could use factory, but GOST corpus is owned by WTA project and may want to stay on Chroma even when main pipeline is on Qdrant.
-
-**Decision needed from user.** Track here, do not implement.
+**Decision:** `index_gosts.py` stays on Chroma. Same reason as CARD-1.5 — GOST is a WTA-specific implementation, will be merged into main pipeline as future work.
 
 ---
 
@@ -799,12 +791,17 @@ QDRANT_API_KEY=your-key
 
 ---
 
+## Future work (out of scope for this plan)
+
+- **Merge GOST pipeline into main.** Remove `src/ers_rag/*`, `src/gosts_pipeline.py`, `index_gosts.py`, `/query/gosts` endpoint. Single pipeline handles both safety docs and GOSTs through one index + one LLM (DeepSeek + Chroma as the proof-of-flexibility setup). Validates backend abstraction end-to-end.
+
+---
+
 ## Acceptance — overall
 
 Plan is complete when:
 - [ ] All Board 1 cards `DONE` (LLM provider unified)
 - [ ] All Board 2 cards (excluding 2.7) `DONE` (vector store abstracted, Qdrant works)
 - [ ] All Board 3 cards `DONE` (docs updated)
-- [ ] CARD-1.5 and CARD-2.7 have a decision recorded (implement / wontfix)
 - [ ] `pytest -m unit` is green
 - [ ] `python scripts/trace_v7.py "test"` works with at least 2 different LLM providers and both vector stores
