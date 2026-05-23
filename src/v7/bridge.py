@@ -143,6 +143,22 @@ def make_section_fetch_fn(
         if not section or not source:
             return []
         try:
+            # Raw Chroma exposes _collection; backends expose get_by_filter.
+            if not hasattr(vector_store, "_collection"):
+                docs = vector_store.get_by_filter(
+                    {
+                        "parent_section": section,
+                        "source": source,
+                    }
+                )[:max_section_chunks]
+                return [
+                    {
+                        "text": d.page_content,
+                        "metadata": dict(d.metadata or {}),
+                        "score": 0.0,
+                    }
+                    for d in docs
+                ]
             col = vector_store._collection
             results = col.get(
                 where={
@@ -409,12 +425,16 @@ def init_v7_from_chroma(vector_store, llm_provider: str | None = "gemini") -> No
     rag_simple_mod.set_vector_search(search_fn)
     rag_complex_mod.set_vector_search(search_fn)
 
-    # Build BM25 corpus from ChromaDB
-    all_data = vector_store.get(include=["metadatas", "documents"])
-    corpus = [
-        {"text": doc, "metadata": meta}
-        for doc, meta in zip(all_data["documents"], all_data["metadatas"])
-    ]
+    # Build BM25 corpus. Raw Chroma exposes .get(); backends expose iter_all_documents().
+    # Check Chroma marker first (langchain_chroma.Chroma has ._collection).
+    if hasattr(vector_store, "_collection"):
+        all_data = vector_store.get(include=["metadatas", "documents"])
+        corpus = [
+            {"text": doc, "metadata": meta}
+            for doc, meta in zip(all_data["documents"], all_data["metadatas"])
+        ]
+    else:
+        corpus = list(vector_store.iter_all_documents())
     init_bm25_index(corpus)
 
     # Inject section-aware expander for complex path
