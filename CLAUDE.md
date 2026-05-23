@@ -157,6 +157,19 @@ python scripts/trace_v7.py --no-chroma "привет как дела"   # stub m
 
 ## Session Log
 
+### 2026-05-23 (сессия 39 — pluggable backends)
+
+- **Сделано:**
+  - **Pluggable backends** полностью реализован: `src/llm_factory.py` (get_llm() + registry, LLM_PROVIDER env), `src/backends/vector_store.py` (VectorStoreBackend Protocol + get_vector_store_backend()), `src/backends/chroma_backend.py` (ChromaBackend с iter_all_documents / get_by_filter / count). Все точки входа переключены на новый API.
+  - `src/v7/bridge.py` переключён с get_gemini_llm на get_llm(); duck-typing для BM25 corpus build и section_fetch.
+  - `config/settings.py`: добавлены `LLM_PROVIDER=gemini`, `VECTOR_STORE=chroma`.
+  - 14 новых тестов (llm_factory, vector_store_factory, chroma_backend). 223 тестов, все зелёные.
+  - **REST API section + Backend abstraction section** в README.md (curl examples, roadmap table).
+  - **docs/plans/ cleanup**: 10 устаревших планов в docs/plans/archive/.
+  - 7 коммитов запушены в GitHub.
+- **Решения:** GOST pipeline (ers_rag) исключён из рефакторинга — WTA-specific, WONTFIX. Duck-typing маркер: `hasattr(vs, "_collection")` для raw Chroma (инвертировано чтобы MagicMock не ломал тесты).
+- **Наблюдения:** ruff-хук удаляет неиспользуемые импорты после каждого Edit — import и usage должны быть в одном Edit. MagicMock имеет все атрибуты → positive hasattr-проверки с mock-объектами ненадёжны.
+
 ### 2026-05-23 (сессия 38)
 
 - **Сделано:** README.md переписан на английский язык для GitHub-аудитории (HN, Reddit). Метрики (correctness 7.9/10, faithfulness 0.988, $0.0102/query) вынесены на первый экран. Quick Start сокращён до 4 команд. README_RU.md создан как русская версия. Закоммичено в main.
@@ -271,8 +284,6 @@ python scripts/trace_v7.py --no-chroma "привет как дела"   # stub m
 - **Решения:** Ruff-хук снимает неиспользуемые импорты после каждого Edit — добавлять import и использование в одном edit.
 - **Наблюдения:** visual_enrichment — no-op без inject → безопасно деплоить.
 
-### 2026-05-07
+### Ранее (архив)
 
-- **Сделано:** Запущено на VPS порт 8502 (UFW opened). Переиндексировано 7 PDF → 749 чанков (ранее был только 1 документ — кеш из failed SOCKS runs). Исправлен `evaluate_complex`: `top_k` 12 → 24 (ответы стали полными, 8 категорий вместо 2-3 для "программа А"). Установлен PySocks для WARP proxy в Docling. В `.env` прописаны `HTTP(S)_PROXY=socks5h://localhost:40000`.
-- **Решения:** WARP proxy через `.env` (а не setenv в процессе) — Docling читает `.env` при старте. ChromaDB `document_cache/*.pkl` был corrupted (0 chunks) — удалили, переиндексировали. Gemini model = `gemini-3-flash-preview` (подтверждено через API list).
-- **Наблюдения:** Gemini 503 при перегрузке → bridge.py падает в stub → сырой текст вместо ответа. Нужен retry. `trace_v7.py` показывает `fallback_passages: 12` — это NOT означает использование fallback, это поле существует в state (от rag_simple), misleading.
+- **2026-05-07** — Первый деплой на VPS порт 8502. 7 PDF → 749 чанков. evaluate_complex top_k 12→24. WARP proxy через .env. ChromaDB cache был corrupted (0 chunks) — удалили, переиндексировали. Gemini = `gemini-3-flash-preview`.
