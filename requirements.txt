@@ -46,3 +46,4 @@ Pillow
 fastapi>=0.111
 uvicorn[standard]>=0.29
 structlog>=24.0
+slowapi>=0.1.9

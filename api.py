@@ -13,13 +13,19 @@ Run:
 from __future__ import annotations
 
 import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 load_dotenv()
 
@@ -28,15 +34,18 @@ logger = structlog.get_logger()
 # Pipeline state — initialized once on startup
 _pipeline: dict[str, Any] = {}
 
+# Rate limiter: 30/minute default, 10/minute on query endpoints
+limiter = Limiter(key_func=get_remote_address, default_limits=["30/minute"])
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load ChromaDB and initialize v7 pipeline on startup."""
     logger.info("api.startup: loading vector store and v7 pipeline")
     try:
+        from src.backends.vector_store import get_vector_store_backend
         from src.v7.bridge import init_v7_from_chroma
         from src.v7.graph import build_graph
-        from src.backends.vector_store import get_vector_store_backend
 
         vector_store = get_vector_store_backend(load_existing=True)
         init_v7_from_chroma(vector_store)
@@ -72,9 +81,29 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    """Attach a short request ID to every request for log correlation."""
+    request.state.request_id = uuid.uuid4().hex[:12]
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request.state.request_id
+    return response
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "rate limit exceeded — please slow down"},
+    )
+
 
 class QueryRequest(BaseModel):
-    question: str
+    question: str = Field(..., min_length=1, max_length=2000)
 
 
 class Passage(BaseModel):
@@ -91,21 +120,28 @@ class QueryResponse(BaseModel):
 
 
 @app.post("/query", response_model=QueryResponse)
-def query(req: QueryRequest) -> QueryResponse:
+@limiter.limit("10/minute")
+def query(request: Request, req: QueryRequest) -> QueryResponse:
     """Ask a question about workplace safety regulations."""
-    if not req.question or not req.question.strip():
-        raise HTTPException(status_code=400, detail="question must not be empty")
-
     pipeline_app = _pipeline.get("app")
     if pipeline_app is None:
         raise HTTPException(status_code=503, detail="pipeline not initialized")
 
+    rid = getattr(request.state, "request_id", "no-rid")
     t0 = time.perf_counter()
     try:
         result = pipeline_app.invoke({"query": req.question.strip()})
     except Exception as exc:
-        logger.error("api.query: pipeline error", question=req.question, error=str(exc))
-        raise HTTPException(status_code=500, detail=f"pipeline error: {exc}") from exc
+        logger.error(
+            "api.query: pipeline error",
+            request_id=rid,
+            question=req.question[:80],
+            error=str(exc),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"internal error (request_id={rid})"
+        ) from exc
     elapsed = round(time.perf_counter() - t0, 2)
 
     # Extract answer
@@ -132,6 +168,7 @@ def query(req: QueryRequest) -> QueryResponse:
 
     logger.info(
         "api.query: done",
+        request_id=rid,
         question=req.question[:80],
         path=path,
         passages=len(passages),
@@ -143,24 +180,28 @@ def query(req: QueryRequest) -> QueryResponse:
 
 
 @app.post("/query/gosts", response_model=QueryResponse)
-def query_gosts(req: QueryRequest) -> QueryResponse:
+@limiter.limit("10/minute")
+def query_gosts(request: Request, req: QueryRequest) -> QueryResponse:
     """Ask a question about technical standards (ГОСТ, СНиП, СП) for water treatment."""
-    if not req.question or not req.question.strip():
-        raise HTTPException(status_code=400, detail="question must not be empty")
-
     gosts_app = _pipeline.get("gosts_app")
     if not _pipeline.get("gosts_ready") or gosts_app is None:
-        raise HTTPException(
-            status_code=503,
-            detail="gosts pipeline not available — run index_gosts.py first",
-        )
+        raise HTTPException(status_code=503, detail="not ready")
 
+    rid = getattr(request.state, "request_id", "no-rid")
     t0 = time.perf_counter()
     try:
         result = gosts_app.invoke({"query": req.question.strip()})
     except Exception as exc:
-        logger.error("api.gosts: pipeline error", question=req.question, error=str(exc))
-        raise HTTPException(status_code=500, detail=f"pipeline error: {exc}") from exc
+        logger.error(
+            "api.gosts: pipeline error",
+            request_id=rid,
+            question=req.question[:80],
+            error=str(exc),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"internal error (request_id={rid})"
+        ) from exc
     elapsed = round(time.perf_counter() - t0, 2)
 
     if result.get("clarify_message"):
@@ -182,6 +223,7 @@ def query_gosts(req: QueryRequest) -> QueryResponse:
     path = _infer_path(result)
     logger.info(
         "api.gosts: done",
+        request_id=rid,
         question=req.question[:80],
         passages=len(passages),
         elapsed_sec=elapsed,
@@ -198,7 +240,7 @@ def query_gosts(req: QueryRequest) -> QueryResponse:
 def health() -> dict[str, str]:
     """Liveness check."""
     if _pipeline.get("app") is None:
-        raise HTTPException(status_code=503, detail="pipeline not ready")
+        raise HTTPException(status_code=503, detail="not ready")
     return {"status": "ok"}
 
 
