@@ -9,6 +9,8 @@
 - Citation Quality: Корректность и полнота цитирования источников
 """
 
+from __future__ import annotations
+
 import re
 from typing import List, Dict, Any
 from langchain_core.prompts import ChatPromptTemplate

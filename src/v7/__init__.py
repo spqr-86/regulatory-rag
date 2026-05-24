@@ -1,5 +1,7 @@
 """RAG Pipeline v7 — modular implementation."""
 
+from __future__ import annotations
+
 from src.v7.bridge import init_v7_from_chroma, init_v7_pipeline, make_vector_search_fn
 from src.v7.config import V7Config, v7_config
 from src.v7.graph import build_graph

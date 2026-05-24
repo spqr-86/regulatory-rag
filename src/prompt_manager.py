@@ -1,9 +1,14 @@
-import os
-import yaml
+from __future__ import annotations
+
 import hashlib
-import logging
-from typing import Any, Dict
+import os
+
+import structlog
+import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFound
+from typing import Any, Dict
+
+_log = structlog.get_logger()
 
 
 class PromptManager:
@@ -18,7 +23,6 @@ class PromptManager:
             autoescape=False,
         )
         self.registry = self._load_registry()
-        self.logger = logging.getLogger("PromptManager")
 
     def _load_registry(self) -> Dict[str, Any]:
         if not os.path.exists(self.registry_path):
@@ -31,7 +35,9 @@ class PromptManager:
         env_key = f"PROMPT_{prompt_id.upper()}_VERSION"
         if env_key in os.environ:
             version = os.environ[env_key]
-            self.logger.debug(f"Resolved {prompt_id} version from ENV: {version}")
+            _log.debug(
+                "prompt_manager.version_from_env", prompt_id=prompt_id, version=version
+            )
             return version
 
         # Приоритет 2: Registry active_version
@@ -72,14 +78,22 @@ class PromptManager:
 
             # Хеширование и логирование
             prompt_hash = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
-            self.logger.info(
-                f"Rendered prompt | ID: {prompt_id} | Version: {version} | "
-                f"Hash: {prompt_hash[:8]} | Inputs: {list(kwargs.keys())}"
+            _log.info(
+                "prompt_manager.rendered",
+                prompt_id=prompt_id,
+                version=version,
+                hash=prompt_hash[:8],
+                inputs=list(kwargs.keys()),
             )
 
             # Полный текст только в DEBUG
             if os.environ.get("DEBUG_PROMPTS") == "true":
-                self.logger.debug(f"Full prompt [{prompt_id}:{version}]:\n{rendered}")
+                _log.debug(
+                    "prompt_manager.full_prompt",
+                    prompt_id=prompt_id,
+                    version=version,
+                    rendered=rendered,
+                )
 
             return rendered
 
@@ -88,5 +102,5 @@ class PromptManager:
                 f"Template file '{template_path}' not found in {self.prompts_dir}"
             )
         except Exception as e:
-            self.logger.error(f"Error rendering prompt '{prompt_id}': {str(e)}")
+            _log.error("prompt_manager.render_error", prompt_id=prompt_id, error=str(e))
             raise

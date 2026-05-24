@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import List, Optional
 
 from langchain_core.documents import Document
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def chroma_results_to_documents(result: Optional[dict]) -> List[Document]:
