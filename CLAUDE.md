@@ -165,6 +165,20 @@ python scripts/trace_v7.py --no-chroma "привет как дела"   # stub m
 
 ## Session Log
 
+### 2026-05-24 (сессия 41 — Board 4 code quality polish)
+
+- **Сделано:**
+  - **CARD-4.1:** `from __future__ import annotations` добавлен в 10 файлов src/ (не имели).
+  - **CARD-4.2:** `logging.getLogger` → `structlog.get_logger()` в bridge.py, semantic_cache.py, llm_factory.py, ers_rag/*. structlog kwargs-стиль вместо f-string.
+  - **CARD-4.3:** narrow `except Exception` в eval/run_v7_eval.py: JSON parse → `(json.JSONDecodeError, ValueError, KeyError)`, молчащий блок relevance — добавлен logging.
+  - **CARD-4.5 (N/A):** `_is_retryable` существует только в `src/ers_rag/bridge.py` (WTA-specific, WONTFIX). V7-граф использует встроенный `max_retries` (CARD-5.5 уже сделана).
+  - **CARD-4.6:** `MagicMock(spec=Chroma)` в tests/test_chroma_backend.py — 6 моков обновлены. `_collection` set explicitly там где нужен.
+  - **CARD-4.7:** `_patch_socket_ipv6_for_googleapis` → `apply_ipv6_patch_for_googleapis`, идемпотентна (`_ipv6_patch_applied` guard), hostname check anchored (`endswith` вместо `in`). Явный вызов добавлен в api.py и app.py.
+  - **ers_rag/** закоммичен в репо (был untracked) — WTA-specific код, теперь в истории.
+  - 231 unit-тест, все зелёные.
+- **Решения:** CARD-4.4 (judge prompt → registry) пропущена — требует отдельного анализа. CARD-4.5 N/A для V7 (только ers_rag, WONTFIX).
+- **Наблюдения:** ruff удаляет импорт при первом Edit если он ещё не используется в файле — импорт и usage добавлять в одном Edit или через `# noqa: F401`.
+
 ### 2026-05-24 (сессия 40 — post-review refactor Boards 1-3)
 
 - **Сделано:**
