@@ -35,6 +35,7 @@ from src.advanced_generation_metrics import (
 )
 from src.backends.vector_store import get_vector_store_backend
 from src.llm_factory import get_gemini_llm
+from src.v7.bridge import init_v7_pipeline
 from src.v7.graph import build_graph
 
 # ── Config ────────────────────────────────────────────────────────────────────
