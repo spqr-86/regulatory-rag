@@ -142,18 +142,17 @@ def get_gemini_llm(
 
     llm = ChatGoogleGenerativeAI(**kwargs)
 
-    # Disable Gemini SDK's Automatic Function Calling (AFC).
-    # AFC creates its own tool-calling loop on top of LangGraph's, causing duplicate calls.
+    # Disable Gemini SDK's Automatic Function Calling (AFC) via the public
+    # Runnable.bind() API. AFC creates its own tool-calling loop on top of
+    # LangGraph's, causing duplicate tool calls. langchain-google-genai 4.2.x
+    # exposes no constructor parameter for AFC, but `_prepare_request` forwards
+    # **kwargs into `GenerateContentConfig`, where `automatic_function_calling`
+    # is a first-class field — so binding the kwarg is the supported path and
+    # avoids monkey-patching the private `_build_request_config` method.
     if AutomaticFunctionCallingConfig is not None:
-        _original_build = llm._build_request_config
-
-        def _patched_build(*args, **kw):
-            kw["automatic_function_calling"] = AutomaticFunctionCallingConfig(
-                disable=True
-            )
-            return _original_build(*args, **kw)
-
-        llm._build_request_config = _patched_build
+        llm = llm.bind(
+            automatic_function_calling=AutomaticFunctionCallingConfig(disable=True)
+        )
 
     return llm
 
