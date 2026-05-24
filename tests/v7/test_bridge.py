@@ -2,18 +2,31 @@
 
 from __future__ import annotations
 
-import json
 
 import pytest
 from unittest.mock import MagicMock, patch
 
 from src.v7.bridge import (
+    _VerifierVerdictSchema,
     init_v7_from_chroma,
     make_generate_fn,
     make_rewrite_fn,
     make_vector_search_fn,
     make_verify_fn,
 )
+
+
+def _llm_with_structured(verdict_obj=None, exc=None):
+    """Build a mock LLM whose .with_structured_output(...).invoke(...) returns verdict_obj
+    or raises exc. Mirrors langchain's Runnable.with_structured_output contract."""
+    mock_llm = MagicMock()
+    structured = MagicMock()
+    if exc is not None:
+        structured.invoke.side_effect = exc
+    else:
+        structured.invoke.return_value = verdict_obj
+    mock_llm.with_structured_output.return_value = structured
+    return mock_llm
 
 
 class TestMakeVectorSearchFn:
@@ -65,25 +78,53 @@ class TestMakeVectorSearchFn:
         assert result == []
 
 
+class TestVerifierVerdictSchema:
+    @pytest.mark.unit
+    def test_minimal_required_field(self):
+        v = _VerifierVerdictSchema(verdict="sufficient")
+        assert v.verdict == "sufficient"
+        assert v.reason == ""
+        assert v.missing_aspects == []
+        assert v.confidence == 0.0
+
+    @pytest.mark.unit
+    def test_rejects_unknown_verdict(self):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            _VerifierVerdictSchema(verdict="maybe")
+
+    @pytest.mark.unit
+    def test_accepts_full_payload(self):
+        v = _VerifierVerdictSchema(
+            verdict="rewrite",
+            reason="нужна точная норма",
+            rewrite_hint="добавь пункт",
+            missing_aspects=["числовые требования"],
+            confidence=0.71,
+        )
+        assert v.verdict == "rewrite"
+        assert v.missing_aspects == ["числовые требования"]
+        assert v.confidence == 0.71
+
+
 class TestMakeVerifyFn:
     @pytest.mark.unit
     def test_returns_callable(self):
-        mock_llm = MagicMock()
+        mock_llm = _llm_with_structured(_VerifierVerdictSchema(verdict="sufficient"))
         fn = make_verify_fn(mock_llm)
         assert callable(fn)
 
     @pytest.mark.unit
-    def test_parses_json_response(self):
-        mock_llm = MagicMock()
-        mock_llm.invoke.return_value.content = json.dumps(
-            {
-                "verdict": "sufficient",
-                "reason": "Passages содержат нужные данные",
-                "rewrite_hint": "",
-                "missing_aspects": [],
-                "confidence": 0.92,
-            }
+    def test_returns_verdict_from_structured_output(self):
+        verdict = _VerifierVerdictSchema(
+            verdict="sufficient",
+            reason="Passages содержат нужные данные",
+            rewrite_hint="",
+            missing_aspects=[],
+            confidence=0.92,
         )
+        mock_llm = _llm_with_structured(verdict)
         fn = make_verify_fn(mock_llm)
         result = fn(
             original_query="ГОСТ 12.1.005",
@@ -95,9 +136,8 @@ class TestMakeVerifyFn:
         assert result["missing_aspects"] == []
 
     @pytest.mark.unit
-    def test_returns_escalate_on_parse_error(self):
-        mock_llm = MagicMock()
-        mock_llm.invoke.return_value.content = "not json at all"
+    def test_returns_escalate_on_structured_output_none(self):
+        mock_llm = _llm_with_structured(None)
         fn = make_verify_fn(mock_llm)
         result = fn(
             original_query="test",
@@ -109,8 +149,7 @@ class TestMakeVerifyFn:
 
     @pytest.mark.unit
     def test_returns_escalate_on_llm_exception(self):
-        mock_llm = MagicMock()
-        mock_llm.invoke.side_effect = RuntimeError("LLM unavailable")
+        mock_llm = _llm_with_structured(exc=RuntimeError("LLM unavailable"))
         fn = make_verify_fn(mock_llm)
         result = fn(
             original_query="test",
@@ -121,20 +160,20 @@ class TestMakeVerifyFn:
         assert result["confidence"] == 0.0
 
     @pytest.mark.unit
-    def test_handles_gemini_style_content(self):
-        """Gemini returns content as list of dicts with 'text' key."""
-        mock_llm = MagicMock()
-        mock_llm.invoke.return_value.content = [
-            {"text": '{"verdict": "rewrite", "reason": "need more", "confidence": 0.6}'}
-        ]
+    def test_passes_prompt_to_structured_invoke(self):
+        verdict = _VerifierVerdictSchema(verdict="rewrite", confidence=0.6)
+        mock_llm = _llm_with_structured(verdict)
         fn = make_verify_fn(mock_llm)
-        result = fn(
-            original_query="test",
-            active_query="test",
+        fn(
+            original_query="ГОСТ X",
+            active_query="ГОСТ X нормы",
             passages=[{"text": "t", "score": 0.4}],
         )
-        assert result["verdict"] == "rewrite"
-        assert result["confidence"] == 0.6
+        structured = mock_llm.with_structured_output.return_value
+        structured.invoke.assert_called_once()
+        messages = structured.invoke.call_args[0][0]
+        assert "ГОСТ X" in messages[0].content
+        assert "ГОСТ X нормы" in messages[0].content
 
 
 class TestMakeRewriteFn:

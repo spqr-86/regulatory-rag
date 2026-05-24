@@ -11,14 +11,17 @@ Responsibilities:
 from __future__ import annotations
 
 import logging
-from typing import Callable, List
+from typing import Callable, List, Literal
 
 
 from langchain_core.messages import HumanMessage
+from pydantic import BaseModel, Field
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from src.llm_factory import get_llm
-from src.parsers import extract_text, parse_json_from_response
+from src.parsers import (
+    extract_text,
+)  # noqa: F401  # used by other make_*_fn
 from src.v7.nlp_core import init_bm25_index
 from src.v7.nodes import generate_answer as generate_answer_mod
 from src.v7.nodes import llm_verifier as llm_verifier_mod
@@ -209,8 +212,29 @@ def make_section_fetch_fn(
     return _fetch_section
 
 
+class _VerifierVerdictSchema(BaseModel):
+    """Pydantic schema for structured verifier output (Gemini → typed object).
+
+    Maps 1:1 to ``VerificationResult`` TypedDict; the name is suffixed with
+    ``Schema`` to avoid clashing with the ``VerifierVerdict`` Literal alias
+    declared in ``state_types``.
+    """
+
+    verdict: Literal["sufficient", "rewrite", "escalate"]
+    reason: str = ""
+    rewrite_hint: str = ""
+    missing_aspects: List[str] = Field(default_factory=list)
+    confidence: float = 0.0
+
+
 def make_verify_fn(llm) -> Callable[..., VerificationResult]:
-    """Create a v7-compatible verify function backed by Gemini LLM."""
+    """Create a v7-compatible verify function backed by Gemini LLM.
+
+    Uses ``llm.with_structured_output(_VerifierVerdictSchema)`` so Gemini
+    returns a typed Pydantic object directly — no regex/braces JSON parsing,
+    no «could not parse JSON» warnings on malformed responses.
+    """
+    structured_llm = llm.with_structured_output(_VerifierVerdictSchema)
 
     def _verify(
         original_query: str, active_query: str, passages: List[dict]
@@ -226,17 +250,15 @@ def make_verify_fn(llm) -> Callable[..., VerificationResult]:
             f"Найденные passages ({len(passages)}):\n{passages_text}"
         )
         try:
-            response = llm.invoke([HumanMessage(content=prompt)])
-            raw_text = extract_text(response.content)
-            data = parse_json_from_response(raw_text)
-            if not data or "verdict" not in data:
-                raise ValueError("No verdict in LLM response")
+            verdict_obj = structured_llm.invoke([HumanMessage(content=prompt)])
+            if verdict_obj is None:
+                raise ValueError("Structured output returned None")
             return VerificationResult(
-                verdict=data["verdict"],
-                reason=data.get("reason", ""),
-                rewrite_hint=data.get("rewrite_hint", ""),
-                missing_aspects=data.get("missing_aspects", []),
-                confidence=float(data.get("confidence", 0.0)),
+                verdict=verdict_obj.verdict,
+                reason=verdict_obj.reason,
+                rewrite_hint=verdict_obj.rewrite_hint,
+                missing_aspects=list(verdict_obj.missing_aspects),
+                confidence=float(verdict_obj.confidence),
             )
         except Exception as exc:
             logger.warning("LLM verify failed: %s", exc)
