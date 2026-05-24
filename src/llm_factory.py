@@ -160,6 +160,24 @@ def get_gemini_llm(
     return llm
 
 
+def get_simple_llm(**kwargs):
+    """LLM instance for the simple RAG path (cheaper model).
+
+    Reads ``settings.GEMINI_SIMPLE_MODEL``; falls back to
+    ``settings.GEMINI_FAST_MODEL`` when unset. Only meaningful for the gemini
+    provider — for other providers behaves like ``get_llm`` (model selection
+    is provider-specific).
+    """
+    provider = settings.LLM_PROVIDER.lower()
+    if provider == "gemini":
+        model_name = (
+            getattr(settings, "GEMINI_SIMPLE_MODEL", "") or settings.GEMINI_FAST_MODEL
+        )
+        kwargs.setdefault("model_name", model_name)
+        return get_gemini_llm(**kwargs)
+    return get_llm(**kwargs)
+
+
 def get_vision_llm():
     """
     Возвращает LLM с поддержкой Vision (зрения).

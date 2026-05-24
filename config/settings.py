@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # Google Gemini settings
     GEMINI_API_KEY: str = ""
     GEMINI_FAST_MODEL: str = "gemini-3-flash"
+    # Cheaper model used for the simple RAG path (rag_simple → generate).
+    # If empty, falls back to GEMINI_FAST_MODEL.
+    GEMINI_SIMPLE_MODEL: str = "gemini-2.5-flash"
 
     # Agent workflow settings
     THINKING_BUDGET: int = 8192

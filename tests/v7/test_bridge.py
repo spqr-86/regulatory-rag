@@ -343,6 +343,7 @@ class TestInitV7FromChroma:
         assert corpus[1]["metadata"]["source"] == "b.pdf"
 
     @pytest.mark.unit
+    @patch("src.v7.bridge.get_simple_llm")
     @patch("src.v7.bridge.get_llm")
     @patch("src.v7.bridge.generate_answer_mod")
     @patch("src.v7.bridge.llm_verifier_mod")
@@ -359,6 +360,7 @@ class TestInitV7FromChroma:
         mock_verifier,
         mock_generate,
         mock_get_llm,
+        mock_get_simple_llm,
     ):
         mock_store = MagicMock()
         mock_store.get.return_value = {
@@ -366,12 +368,19 @@ class TestInitV7FromChroma:
             "metadatas": [{"source": "a.pdf"}],
         }
         mock_get_llm.return_value = MagicMock()
+        mock_get_simple_llm.return_value = MagicMock()
         init_v7_from_chroma(mock_store, llm_provider="gemini")
         mock_verifier.set_verify_fn.assert_called_once()
         mock_rewriter.set_rewrite_fn.assert_called_once()
-        mock_generate.set_generate_fn.assert_called_once()
-        # 4 LLM instances: verifier, rewriter, generator, expander
+        mock_generate.set_generate_fns.assert_called_once()
+        # Simple-path generate uses get_simple_llm; complex-path uses get_llm.
+        mock_get_simple_llm.assert_called_once()
+        # get_llm: verifier, rewriter, complex generator, expander = 4 calls.
         assert mock_get_llm.call_count == 4
+        # The two generators must be different LLM instances.
+        kwargs = mock_generate.set_generate_fns.call_args.kwargs
+        assert "simple" in kwargs and "complex_" in kwargs
+        assert kwargs["simple"] is not kwargs["complex_"]
 
     @pytest.mark.unit
     @patch("src.v7.bridge.get_llm", side_effect=ImportError("no gemini"))
@@ -400,7 +409,7 @@ class TestInitV7FromChroma:
         init_v7_from_chroma(mock_store, llm_provider="gemini")
         mock_verifier.set_verify_fn.assert_not_called()
         mock_rewriter.set_rewrite_fn.assert_not_called()
-        mock_generate.set_generate_fn.assert_not_called()
+        mock_generate.set_generate_fns.assert_not_called()
 
     @pytest.mark.unit
     @patch("src.v7.bridge.init_bm25_index")
