@@ -14,15 +14,6 @@ from src.final_chain import create_final_hybrid_chain
 from src.ui_helpers import find_proof_images
 from utils.logging import logger
 
-# Multi-Agent RAG Workflow
-try:
-    from agents.multiagent_rag import MultiAgentRAGWorkflow
-
-    MAS_AVAILABLE = True
-except Exception as e:
-    logger.warning(f"Multi-Agent RAG is not available: {e}")
-    MAS_AVAILABLE = False
-
 # V7 Graph
 try:
     from src.v7.graph import build_graph as build_v7_graph
@@ -86,15 +77,8 @@ with st.sidebar:
         v7_mode = False
         st.warning("V7 Graph недоступен.")
 
-    # MAS — только если V7 выключен
-    mas_mode = False
-    if not v7_mode and MAS_AVAILABLE:
-        mas_mode = st.toggle("🧠 Multi-Agent RAG (устаревший)", value=False)
-
     if v7_mode:
         st.caption("Hybrid RAG → LangGraph → Gemini")
-    elif mas_mode:
-        st.caption("Router → RAG Agent → Verifier")
     else:
         st.caption("Classic RAG (legacy)")
 
@@ -148,18 +132,10 @@ def load_resources():
         return None, None, None, None
 
     try:
-        chain, retriever, agent_retriever = create_final_hybrid_chain()
+        chain, retriever, _ = create_final_hybrid_chain()
     except Exception as e:
         st.error(f"Произошла ошибка при подготовке RAG-цепочки: {e}")
         return None, None, None, None
-
-    # Multi-Agent RAG Workflow (использует OpenAI по умолчанию)
-    agent = None
-    if MAS_AVAILABLE:
-        try:
-            agent = MultiAgentRAGWorkflow(agent_retriever, llm_provider="gemini")
-        except Exception as e:
-            logger.warning(f"Failed to init MultiAgentRAGWorkflow: {e}")
 
     # V7 Graph
     v7_app = None
@@ -173,7 +149,7 @@ def load_resources():
         except Exception as e:
             logger.warning(f"Failed to init V7 Graph: {e}")
 
-    return (chain, retriever, agent, v7_app)
+    return (chain, retriever, v7_app)
 
 
 loaded = load_resources()
@@ -181,12 +157,7 @@ if not loaded or loaded[0] is None:
     st.warning("Приложение не может быть запущено…")
     st.stop()
 
-rag_chain, hybrid_retriever, agent, v7_app = loaded
-
-if mas_mode and agent is None:
-    st.sidebar.warning(
-        "Multi-Agent RAG не удалось инициализировать. Используется Classic RAG."
-    )
+rag_chain, hybrid_retriever, v7_app = loaded
 
 # =========================
 #     CHAT HISTORY INIT
@@ -265,76 +236,6 @@ if user_query:
                 answer = "Не удалось получить ответ."
 
             st.markdown(answer)
-
-        elif mas_mode and agent:
-            # --- MULTI-AGENT RAG MODE ---
-            status_container = st.empty()
-            answer_container = st.empty()
-
-            statuses = []
-            final_answer = ""
-            final_chunks = []
-            images_from_state = []
-
-            for event in agent.stream_events(user_query):
-                if not isinstance(event, dict):
-                    continue
-
-                if event.get("type") == "status":
-                    statuses.append(event["text"])
-                    with status_container:
-                        for s in statuses[-3:]:
-                            st.caption(s)
-                elif event.get("type") == "final":
-                    final_answer = event.get("answer", "")
-                    final_chunks = event.get("chunks_found", [])
-                    images_from_state = event.get("image_paths", [])
-                    answer_container.markdown(final_answer)
-
-            # After streaming finishes
-            status_container.empty()
-
-            # Combine and deduplicate images
-            images_from_text = find_proof_images(
-                final_answer
-            )  # Check for images mentioned in final answer content
-            all_images = list(set(images_from_state + images_from_text))
-
-            for img_path in all_images:
-                if os.path.exists(img_path):
-                    st.image(img_path, caption="Визуальное доказательство", width=600)
-
-            st.session_state.last_answer = final_answer
-
-            # Sources
-            if final_chunks:
-                with st.expander(
-                    f"🔎 Показать источники ({len(final_chunks)})", expanded=False
-                ):
-                    for i, chunk in enumerate(final_chunks, start=1):
-                        src = chunk.get("source", "N/A")
-                        pg = chunk.get("page_no", "")
-                        sim = chunk.get("similarity", 0.0)
-                        content_txt = chunk.get("content", "")
-                        preview = (
-                            content_txt[:500].strip().replace("\n", " ")
-                            if content_txt
-                            else ""
-                        )
-
-                        header_parts = [f"**{i}. Источник:** `{src}`"]
-                        if pg:
-                            header_parts.append(f"стр. {pg}")
-                        if sim and isinstance(sim, (int, float)) and sim > 0:
-                            header_parts.append(f"🎯 {sim:.2f}")
-
-                        st.markdown(" · ".join(header_parts))
-                        st.code(preview, language="markdown")
-                        st.divider()
-            else:
-                st.caption("Источники не найдены.")
-
-            answer = final_answer  # Assign to answer for history
 
         else:
             # --- RAG MODE (Legacy) ---
