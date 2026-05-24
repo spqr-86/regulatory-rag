@@ -20,7 +20,6 @@ except Exception as e:
 
 # V7 Graph
 try:
-    from src.v7.bridge import init_v7_from_chroma
     from src.v7.graph import build_graph as build_v7_graph
 
     V7_AVAILABLE = True
@@ -164,7 +163,7 @@ def load_resources():
             from src.backends.vector_store import get_vector_store_backend
 
             vector_store = get_vector_store_backend(load_existing=True)
-            init_v7_from_chroma(vector_store)
+            init_v7_pipeline(vector_store)
             v7_app = build_v7_graph().compile()
         except Exception as e:
             logger.warning(f"Failed to init V7 Graph: {e}")

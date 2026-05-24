@@ -15,8 +15,6 @@ from __future__ import annotations
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any
-
 import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -31,29 +29,36 @@ load_dotenv()
 
 logger = structlog.get_logger()
 
-# Pipeline state — initialized once on startup
-_pipeline: dict[str, Any] = {}
-
 # Rate limiter: 30/minute default, 10/minute on query endpoints
 limiter = Limiter(key_func=get_remote_address, default_limits=["30/minute"])
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load ChromaDB and initialize v7 pipeline on startup."""
+    """Load ChromaDB and initialize v7 pipeline on startup.
+
+    Graceful degradation: init failures leave pipeline=None so /health and
+    /query return 503 instead of crashing the process.
+    """
+    app.state.pipeline = None
+    app.state.gosts_pipeline = None
+    app.state.gosts_ready = False
+
     logger.info("api.startup: loading vector store and v7 pipeline")
     try:
         from src.backends.vector_store import get_vector_store_backend
-        from src.v7.bridge import init_v7_from_chroma
+        from src.v7.bridge import init_v7_pipeline
         from src.v7.graph import build_graph
 
         vector_store = get_vector_store_backend(load_existing=True)
-        init_v7_from_chroma(vector_store)
-        _pipeline["app"] = build_graph().compile()
+        init_v7_pipeline(vector_store)
+        app.state.pipeline = build_graph().compile()
         logger.info("api.startup: v7 pipeline ready")
     except Exception as exc:
-        logger.error("api.startup: pipeline init failed", error=str(exc))
-        raise
+        logger.error(
+            "api.startup: main pipeline init failed", error=str(exc), exc_info=True
+        )
+        # leave pipeline=None; /query returns 503, /health returns 503, process stays alive
 
     # Gosts pipeline (ers_rag fork: V7 graph + DeepSeek LLM поверх chroma_db_gosts/wta_gosts)
     # Старый src/gosts_pipeline.py оставлен на месте на случай отката.
@@ -62,15 +67,16 @@ async def lifespan(app: FastAPI):
         from src.ers_rag import init_ers_rag_from_chroma as _ers_init
 
         _ers_init()
-        _pipeline["gosts_app"] = _ers_build_graph().compile()
-        _pipeline["gosts_ready"] = True
+        app.state.gosts_pipeline = _ers_build_graph().compile()
+        app.state.gosts_ready = True
         logger.info("api.startup: gosts (ers_rag) pipeline ready")
     except Exception as exc:
         logger.warning("api.startup: gosts pipeline not available", error=str(exc))
-        _pipeline["gosts_ready"] = False
 
     yield
-    _pipeline.clear()
+    app.state.pipeline = None
+    app.state.gosts_pipeline = None
+    app.state.gosts_ready = False
     logger.info("api.shutdown: pipeline cleared")
 
 
@@ -123,7 +129,7 @@ class QueryResponse(BaseModel):
 @limiter.limit("10/minute")
 def query(request: Request, req: QueryRequest) -> QueryResponse:
     """Ask a question about workplace safety regulations."""
-    pipeline_app = _pipeline.get("app")
+    pipeline_app = request.app.state.pipeline
     if pipeline_app is None:
         raise HTTPException(status_code=503, detail="pipeline not initialized")
 
@@ -183,8 +189,8 @@ def query(request: Request, req: QueryRequest) -> QueryResponse:
 @limiter.limit("10/minute")
 def query_gosts(request: Request, req: QueryRequest) -> QueryResponse:
     """Ask a question about technical standards (ГОСТ, СНиП, СП) for water treatment."""
-    gosts_app = _pipeline.get("gosts_app")
-    if not _pipeline.get("gosts_ready") or gosts_app is None:
+    gosts_app = request.app.state.gosts_pipeline
+    if not request.app.state.gosts_ready or gosts_app is None:
         raise HTTPException(status_code=503, detail="not ready")
 
     rid = getattr(request.state, "request_id", "no-rid")
@@ -237,14 +243,14 @@ def query_gosts(request: Request, req: QueryRequest) -> QueryResponse:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health(request: Request) -> dict[str, str]:
     """Liveness check."""
-    if _pipeline.get("app") is None:
+    if request.app.state.pipeline is None:
         raise HTTPException(status_code=503, detail="not ready")
     return {"status": "ok"}
 
 
-def _infer_path(result: dict[str, Any]) -> str:
+def _infer_path(result: dict) -> str:
     """Derive human-readable pipeline path from state."""
     if result.get("clarify_message"):
         return "intent_gate → END (chitchat/oos)"

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pytest
 from unittest.mock import MagicMock, patch
+from langchain_chroma import Chroma  # noqa: F401 — used as MagicMock spec
 
 from src.v7.bridge import (
     _VerifierVerdictSchema,
@@ -316,7 +317,7 @@ class TestInitV7FromChroma:
     @patch("src.v7.bridge.rag_simple_mod")
     @patch("src.v7.bridge.rag_complex_mod")
     def test_injects_vector_search(self, mock_complex, mock_simple, mock_bm25):
-        mock_store = MagicMock()
+        mock_store = MagicMock(spec=Chroma)
         mock_store.get.return_value = {
             "documents": ["doc1 text", "doc2 text"],
             "metadatas": [{"source": "a.pdf"}, {"source": "b.pdf"}],
@@ -331,7 +332,7 @@ class TestInitV7FromChroma:
     @patch("src.v7.bridge.rag_simple_mod")
     @patch("src.v7.bridge.rag_complex_mod")
     def test_bm25_corpus_built_from_chroma(self, mock_complex, mock_simple, mock_bm25):
-        mock_store = MagicMock()
+        mock_store = MagicMock(spec=Chroma)
         mock_store.get.return_value = {
             "documents": ["text A", "text B"],
             "metadatas": [{"source": "a.pdf"}, {"source": "b.pdf"}],
@@ -362,7 +363,7 @@ class TestInitV7FromChroma:
         mock_get_llm,
         mock_get_simple_llm,
     ):
-        mock_store = MagicMock()
+        mock_store = MagicMock(spec=Chroma)
         mock_store.get.return_value = {
             "documents": ["d"],
             "metadatas": [{"source": "a.pdf"}],
@@ -400,7 +401,7 @@ class TestInitV7FromChroma:
         mock_generate,
         mock_get_llm,
     ):
-        mock_store = MagicMock()
+        mock_store = MagicMock(spec=Chroma)
         mock_store.get.return_value = {
             "documents": ["d"],
             "metadatas": [{"source": "a.pdf"}],
@@ -416,7 +417,7 @@ class TestInitV7FromChroma:
     @patch("src.v7.bridge.rag_simple_mod")
     @patch("src.v7.bridge.rag_complex_mod")
     def test_skips_llm_when_provider_none(self, mock_complex, mock_simple, mock_bm25):
-        mock_store = MagicMock()
+        mock_store = MagicMock(spec=Chroma)
         mock_store.get.return_value = {
             "documents": ["d"],
             "metadatas": [{"source": "a.pdf"}],

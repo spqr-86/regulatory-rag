@@ -62,8 +62,3 @@ class ChromaBackend:
             chroma_where = where
         result = self._vs.get(where=chroma_where, limit=limit)
         return chroma_results_to_documents(result)
-
-    @property
-    def raw(self):
-        """Escape hatch for legacy code that needs raw Chroma object."""
-        return self._vs

@@ -196,11 +196,11 @@ def trace(query: str, use_chroma: bool = True) -> None:
 
     if use_chroma:
         from src.backends.vector_store import get_vector_store_backend
-        from src.v7.bridge import init_v7_from_chroma
+        from src.v7.bridge import init_v7_pipeline
 
         print(f"{DIM}Загружаю vector store…{RESET}", end="", flush=True)
         vs = get_vector_store_backend(load_existing=True)
-        init_v7_from_chroma(vs)
+        init_v7_pipeline(vs)
         print(f" {GREEN}готово{RESET}")
     else:
         print(f"{YELLOW}Stub mode (нет ChromaDB){RESET}")

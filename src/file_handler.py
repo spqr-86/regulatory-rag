@@ -36,10 +36,6 @@ PIPELINE_VERSION = "v2.3-noise-clean"
 MIN_BBOX_HEIGHT = 7
 BLACKLIST_PHRASES = ["Премиальная версия", "Скачано с", "Страница"]
 MAX_CHUNK_SIZE = settings.CHUNK_SIZE
-# Parent-context chunking: parent (~1500 chars) stored as metadata on each child.
-# Children (~400 chars, 50-char overlap) are what gets embedded and indexed.
-CHILD_CHUNK_SIZE = 400
-CHILD_OVERLAP = 50
 
 # Паттерны шума — удаляются из текста чанка перед индексацией.
 # URL-водяные знаки (напр. https://1otruda.ru/#/document/99/727688582),
@@ -58,31 +54,6 @@ def _clean_noise(text: str) -> str:
     # Убираем лишние пробелы/переносы, оставшиеся после удаления
     cleaned = re.sub(r" {2,}", " ", cleaned)
     return cleaned.strip()
-
-
-def _split_into_children(parent_text: str, parent_meta: dict) -> List[Document]:
-    """Разбивает parent-чанк на child-чанки для индексации.
-
-    Child-чанки (~400 chars) используются для embedding/поиска.
-    Каждый child несёт parent_text в метаданных — именно он передаётся LLM.
-    """
-    if len(parent_text) <= CHILD_CHUNK_SIZE:
-        meta = {**parent_meta, "parent_text": parent_text}
-        return [Document(page_content=parent_text, metadata=meta)]
-
-    children: List[Document] = []
-    start = 0
-    child_idx = 0
-    while start < len(parent_text):
-        end = min(start + CHILD_CHUNK_SIZE, len(parent_text))
-        child_text = parent_text[start:end]
-        meta = {**parent_meta, "parent_text": parent_text, "child_idx": child_idx}
-        children.append(Document(page_content=child_text, metadata=meta))
-        if end == len(parent_text):
-            break
-        start += CHILD_CHUNK_SIZE - CHILD_OVERLAP
-        child_idx += 1
-    return children
 
 
 def _document_to_dict(doc: Document) -> dict:

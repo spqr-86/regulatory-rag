@@ -7,21 +7,20 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 from slowapi.errors import RateLimitExceeded
 
-
 # ---------------------------------------------------------------------------
 # App setup: patch pipeline so we never touch ChromaDB in unit tests
 # ---------------------------------------------------------------------------
 
 
 def _make_client(pipeline_app=None):
-    """Return a TestClient with _pipeline pre-populated (no lifespan startup)."""
-    # Import after patching so lifespan never runs inside TestClient context
+    """Return a TestClient with app.state pre-populated (no lifespan startup)."""
     import api as api_module
 
-    # Patch the module-level _pipeline dict so health / query work
+    # Set app.state attributes so health / query work without lifespan
     pipeline_stub = pipeline_app or MagicMock()
-    api_module._pipeline["app"] = pipeline_stub
-    api_module._pipeline["gosts_ready"] = False
+    api_module.app.state.pipeline = pipeline_stub
+    api_module.app.state.gosts_pipeline = None
+    api_module.app.state.gosts_ready = False
 
     # Use TestClient without lifespan (lifespan_startup=False requires HTTPX>=0.23)
     client = TestClient(api_module.app, raise_server_exceptions=False)
@@ -36,7 +35,7 @@ def _make_client(pipeline_app=None):
 class TestRequestIdHeader:
     def test_health_has_request_id_header(self):
         client, api_module = _make_client()
-        api_module._pipeline["app"] = MagicMock()  # mark as ready
+        api_module.app.state.pipeline = MagicMock()  # mark as ready
         response = client.get("/health")
         assert "x-request-id" in response.headers, "X-Request-ID header missing"
         rid = response.headers["x-request-id"]
@@ -96,9 +95,9 @@ class TestExceptionHiding:
         assert response.status_code == 500
         rid_header = response.headers.get("x-request-id", "")
         detail = response.json().get("detail", "")
-        assert rid_header in detail, (
-            f"request_id in header ({rid_header!r}) not found in detail ({detail!r})"
-        )
+        assert (
+            rid_header in detail
+        ), f"request_id in header ({rid_header!r}) not found in detail ({detail!r})"
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +109,7 @@ class TestGenericErrorMessages:
     def test_health_503_is_generic(self):
         import api as api_module
 
-        api_module._pipeline.pop("app", None)  # simulate not-ready
+        api_module.app.state.pipeline = None  # simulate not-ready
         client = TestClient(api_module.app, raise_server_exceptions=False)
         response = client.get("/health")
         assert response.status_code == 503
@@ -121,9 +120,9 @@ class TestGenericErrorMessages:
     def test_gosts_503_is_generic(self):
         import api as api_module
 
-        api_module._pipeline["app"] = MagicMock()  # main pipeline ready
-        api_module._pipeline["gosts_ready"] = False
-        api_module._pipeline.pop("gosts_app", None)
+        api_module.app.state.pipeline = MagicMock()  # main pipeline ready
+        api_module.app.state.gosts_ready = False
+        api_module.app.state.gosts_pipeline = None
         client = TestClient(api_module.app, raise_server_exceptions=False)
         response = client.post("/query/gosts", json={"question": "test"})
         assert response.status_code == 503
@@ -173,10 +172,8 @@ class TestRateLimitHandler:
 
         mock_pipeline = MagicMock()
         mock_pipeline.invoke.return_value = {"answer": "ok", "final_passages": []}
-        api_module._pipeline["app"] = mock_pipeline
-        api_module._pipeline["gosts_ready"] = False
-
-        client = TestClient(api_module.app, raise_server_exceptions=False)
+        api_module.app.state.pipeline = mock_pipeline
+        api_module.app.state.gosts_ready = False
 
         # Directly invoke the exception handler
         from starlette.requests import Request as StarletteRequest

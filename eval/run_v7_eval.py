@@ -35,7 +35,6 @@ from src.advanced_generation_metrics import (
 )
 from src.backends.vector_store import get_vector_store_backend
 from src.llm_factory import get_gemini_llm
-from src.v7.bridge import init_v7_from_chroma
 from src.v7.graph import build_graph
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -163,7 +162,7 @@ def run(
 
     print("Initializing V7 graph...")
     vector_store = get_vector_store_backend(load_existing=True)
-    init_v7_from_chroma(vector_store)
+    init_v7_pipeline(vector_store)
     graph = build_graph().compile()
     print("  Graph ready.")
 

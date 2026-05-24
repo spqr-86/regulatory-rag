@@ -18,6 +18,9 @@ from typing import Callable, List, Literal
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
+from src.backends.vector_store import (
+    VectorStoreBackend,
+)  # noqa: F401 — used in isinstance checks
 from src.llm_factory import get_llm, get_simple_llm
 from src.parsers import (
     extract_text,
@@ -173,8 +176,8 @@ def make_section_fetch_fn(
         if not section or not source:
             return []
         try:
-            # Raw Chroma exposes _collection; backends expose get_by_filter.
-            if not hasattr(vector_store, "_collection"):
+            # VectorStoreBackend (Protocol) exposes get_by_filter; raw Chroma uses _collection.
+            if isinstance(vector_store, VectorStoreBackend):
                 docs = vector_store.get_by_filter(
                     {
                         "parent_section": section,
@@ -447,8 +450,8 @@ def make_generate_fn(llm) -> Callable[[str, str, List[dict]], str]:
     return _generate
 
 
-def init_v7_from_chroma(vector_store, llm_provider: str | None = "gemini") -> None:
-    """Initialize v7 pipeline from existing ChromaDB vector store.
+def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
+    """Initialize V7 pipeline from a vector store (raw Chroma or VectorStoreBackend).
 
     1. Creates vector search wrapper
     2. Injects it into rag_simple and rag_complex nodes
@@ -462,16 +465,16 @@ def init_v7_from_chroma(vector_store, llm_provider: str | None = "gemini") -> No
     rag_simple_mod.set_vector_search(search_fn)
     rag_complex_mod.set_vector_search(search_fn)
 
-    # Build BM25 corpus. Raw Chroma exposes .get(); backends expose iter_all_documents().
-    # Check Chroma marker first (langchain_chroma.Chroma has ._collection).
-    if hasattr(vector_store, "_collection"):
+    # Build BM25 corpus. VectorStoreBackend exposes iter_all_documents();
+    # legacy raw Chroma exposes .get() — kept for backward compat.
+    if isinstance(vector_store, VectorStoreBackend):
+        corpus = list(vector_store.iter_all_documents())
+    else:
         all_data = vector_store.get(include=["metadatas", "documents"])
         corpus = [
             {"text": doc, "metadata": meta}
             for doc, meta in zip(all_data["documents"], all_data["metadatas"])
         ]
-    else:
-        corpus = list(vector_store.iter_all_documents())
     init_bm25_index(corpus)
 
     # Inject section-aware expander for complex path
@@ -539,3 +542,7 @@ def init_v7_from_chroma(vector_store, llm_provider: str | None = "gemini") -> No
             logger.info("v7 visual proof injected successfully")
     except Exception as exc:
         logger.warning("Failed to initialize visual proof for v7: %s.", exc)
+
+
+# Backward-compat alias — remove after one release cycle.
+init_v7_from_chroma = init_v7_pipeline
