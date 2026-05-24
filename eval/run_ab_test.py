@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 from langchain_classic.smith import RunEvalConfig
 from langsmith import Client
 
-from src.custom_evaluators import check_correctness
-from src.advanced_generation_metrics import (
+from eval.custom_evaluators import check_correctness
+from eval.advanced_generation_metrics import (
     evaluate_faithfulness,
     evaluate_answer_relevance,
     evaluate_citation_quality,

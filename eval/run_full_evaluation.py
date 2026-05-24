@@ -17,12 +17,12 @@ import argparse
 # Добавляем корень проекта в путь
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.advanced_generation_metrics import (
+from eval.advanced_generation_metrics import (
     evaluate_faithfulness,
     evaluate_answer_relevance,
     evaluate_citation_quality,
 )
-from src.custom_evaluators import check_correctness
+from eval.custom_evaluators import check_correctness
 from src.llm_factory import get_llm
 from src.final_chain import create_final_hybrid_chain
 from agents.multiagent_rag import MultiAgentRAGWorkflow
