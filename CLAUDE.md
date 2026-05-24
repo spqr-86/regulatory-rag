@@ -43,6 +43,7 @@ black . && ruff check . --fix                    # lint (run before commits)
 python scripts/validate_prompts.py               # validate after prompt changes
 python scripts/trace_v7.py "вопрос"             # E2E smoke test с трассировкой
 python scripts/measure_cps.py --n 10             # Cost-per-sample замер (token usage + $$)
+python eval/run_v7_eval.py --skip-judge          # pipeline-only eval (no LLM judge, ~$0)
 ```
 
 ## Eval Datasets
@@ -156,6 +157,12 @@ python scripts/trace_v7.py --no-chroma "привет как дела"   # stub m
 ---
 
 ## Session Log
+
+### 2026-05-24 (сессия 39 cont)
+
+- **Сделано:** Repo root cleanup — eval_log_*.txt, AGENTS.md, GEMINI.md, REVIEW_2026-05-15.md удалены из репо (gitignored); check_deps.py/check_ibm_deps.py/inspect_langgraph.py → scripts/; run_ab_test.py → eval/. Добавлен `--skip-judge` флаг в eval/run_v7_eval.py (pipeline без LLM-судьи, $0, сохраняет ответы в JSONL).
+- **Решения:** eval_log в .gitignore (были в корне из-за git add -A без проверки). skip_judge не считает false_sufficiency (нет correctness_score) — агрегация разветвлена.
+- **Наблюдения:** Идеи для roadmap: auto_calibrate.py (синтетические вопросы → калибровка порогов без датасета), RERANKER_MODEL env var, calibration.md guide.
 
 ### 2026-05-23 (сессия 39 — pluggable backends)
 
