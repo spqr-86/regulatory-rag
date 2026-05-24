@@ -165,6 +165,19 @@ python scripts/trace_v7.py --no-chroma "привет как дела"   # stub m
 
 ## Session Log
 
+### 2026-05-24 (сессия 40 — post-review refactor Boards 1-3)
+
+- **Сделано:**
+  - **Board 5 (LangChain idiomatic):** SemanticCache→BaseCache, LineListOutputParser в applicability_retriever, structlog warning в openai factory, пин langchain-google-genai==4.2.1.
+  - **Cheap model:** `GEMINI_SIMPLE_MODEL=gemini-2.5-flash` на simple path. `get_simple_llm()` + `set_generate_fns(simple_fn, complex_fn)` в generate_answer. Simple path: 4.91s vs 15.42s (-68% latency).
+  - **Board 1 (P0 Security):** slowapi 10/min per IP, exception detail hiding (request_id), Field(max_length=2000), X-Request-ID header. 11 новых тестов test_api.py.
+  - **Board 2 (P1 Supply Chain):** pickle→JSON cache (schema_version:1), trust_remote_code удалён, threading.RLock в init_v7_pipeline, BM25 без кэша.
+  - **Board 3 (P2 Architecture):** isinstance(VectorStoreBackend) вместо hasattr, rename init_v7_pipeline (алиас init_v7_from_chroma сохранён), dead code удалён (_split_into_children, .raw property), app.state вместо module globals, graceful lifespan, новый test_bridge_integration.py.
+  - **Test isolation fix:** init_v7_pipeline заполняет и _vector_search (rag_simple) и _bm25_index (nlp_core) — monkeypatch обоих в интеграционном тесте.
+  - **Eval smoke:** --skip-judge --limit 10 → 10/10 OK, 9.7s mean. 453 тестов.
+- **Решения:** Cheap model только на simple path (complex остаётся на GEMINI_FAST_MODEL). Интеграционный тест = @pytest.mark.integration, не запускается в unit-suite.
+- **Наблюдения:** Board 4 (P3: type hints, structlog, _is_retryable) — не начата, не urgency.
+
 ### 2026-05-24 (сессия 39 cont)
 
 - **Сделано:** Repo root cleanup — eval_log_*.txt, AGENTS.md, GEMINI.md, REVIEW_2026-05-15.md удалены из репо (gitignored); check_deps.py/check_ibm_deps.py/inspect_langgraph.py → scripts/; run_ab_test.py → eval/. Добавлен `--skip-judge` флаг в eval/run_v7_eval.py (pipeline без LLM-судьи, $0, сохраняет ответы в JSONL).
