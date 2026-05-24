@@ -9,7 +9,7 @@ langchain
 langchain-core
 langchain-community
 langchain-openai
-langchain-google-genai
+langchain-google-genai==4.2.1  # pinned to avoid breaking .bind(AutomaticFunctionCallingConfig) API
 langchain-chroma
 langchain-classic
 langchain-text-splitters

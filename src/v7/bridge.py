@@ -11,6 +11,7 @@ Responsibilities:
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Callable, List, Literal
 
 
@@ -33,6 +34,11 @@ from src.v7.nodes.utils import extract_doc_identifiers
 from src.v7.state_types import VerificationResult
 
 logger = logging.getLogger(__name__)
+
+# Module-level RLock protecting init_v7_from_chroma.
+# Concurrent calls serialize to prevent readers observing a half-initialized
+# pipeline state (7 set_*_fn injectors + BM25 build are not atomic individually).
+_init_lock = threading.RLock()
 
 
 def make_visual_proof_fn() -> Callable[[str, int, list, str], str]:
@@ -162,7 +168,7 @@ def make_section_fetch_fn(
         if not passages:
             return []
         anchor_meta = passages[0].get("metadata", {})
-        section = anchor_meta.get("parent_section", "")
+        section = (anchor_meta.get("parent_section") or "").strip()
         source = anchor_meta.get("source", "")
         if not section or not source:
             return []
@@ -173,8 +179,9 @@ def make_section_fetch_fn(
                     {
                         "parent_section": section,
                         "source": source,
-                    }
-                )[:max_section_chunks]
+                    },
+                    limit=max_section_chunks,
+                )
                 return [
                     {
                         "text": d.page_content,

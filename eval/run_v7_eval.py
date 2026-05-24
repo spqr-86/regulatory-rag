@@ -29,14 +29,6 @@ from typing import Any
 # Make project root importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# ── Lazy SQLite3 fix (same as app.py) ─────────────────────────────────────────
-try:
-    import pysqlite3
-
-    sys.modules["sqlite3"] = pysqlite3
-except ImportError:
-    pass
-
 from src.advanced_generation_metrics import (
     evaluate_answer_relevance,
     evaluate_faithfulness,

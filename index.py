@@ -35,9 +35,11 @@ def main():
     if os.path.exists(settings.CACHE_DIR):
         logger.info(f"Очистка Docling-cache: {settings.CACHE_DIR}")
         shutil.rmtree(settings.CACHE_DIR, ignore_errors=True)
+    # .bm25_cache.pkl no longer produced (CARD-2.1b: BM25 rebuilt on startup).
+    # Kept here as a no-op cleanup for any stale files from older deployments.
     bm25_cache = ".bm25_cache.pkl"
     if os.path.exists(bm25_cache):
-        logger.info(f"Удаление BM25-cache: {bm25_cache}")
+        logger.info(f"Удаление устаревшего BM25-cache: {bm25_cache}")
         os.remove(bm25_cache)
 
     # Собираем все файлы допустимых типов

@@ -40,7 +40,7 @@ class VectorStoreBackend(Protocol):
         """Total document count."""
         ...
 
-    def get_by_filter(self, where: dict) -> list[Document]:
+    def get_by_filter(self, where: dict, limit: int = 200) -> list[Document]:
         """Metadata filter query.
 
         `where` uses Chroma syntax: {"field": value} or

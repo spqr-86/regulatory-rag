@@ -1,5 +1,3 @@
-import pickle
-import os
 from operator import itemgetter
 
 from flashrank import Ranker
@@ -60,32 +58,17 @@ def create_final_hybrid_chain():
     print("Создание финальной гибридной RAG-цепочки...")
     vector_store = load_vector_store()
 
-    bm25_cache_path = ".bm25_cache.pkl"
-    keyword_retriever = None
-
-    if os.path.exists(bm25_cache_path):
-        try:
-            print("Загрузка BM25 из кэша...")
-            with open(bm25_cache_path, "rb") as f:
-                keyword_retriever = pickle.load(f)
-        except Exception as e:
-            print(f"Ошибка загрузки кэша BM25: {e}")
-
-    if not keyword_retriever:
-        print("Построение индекса BM25 (может занять время)...")
-        all_data = vector_store.get(include=["metadatas", "documents"])
-        all_docs_as_objects = [
-            Document(page_content=doc, metadata=meta)
-            for doc, meta in zip(all_data["documents"], all_data["metadatas"])
-        ]
-        keyword_retriever = BM25Retriever.from_documents(all_docs_as_objects)
-        keyword_retriever.k = settings.VECTOR_SEARCH_K
-
-        try:
-            with open(bm25_cache_path, "wb") as f:
-                pickle.dump(keyword_retriever, f)
-        except Exception as e:
-            print(f"Не удалось сохранить кэш BM25: {e}")
+    # BM25 is rebuilt on startup — no pickle cache (Option A from CARD-2.1b).
+    # Build time is O(n_chunks): ~1-2s for current 1973 chunks. Acceptable.
+    # Pickle cache was removed as it allowed RCE if an attacker can write to the dir.
+    print("Построение индекса BM25 (может занять время)...")
+    all_data = vector_store.get(include=["metadatas", "documents"])
+    all_docs_as_objects = [
+        Document(page_content=doc, metadata=meta)
+        for doc, meta in zip(all_data["documents"], all_data["metadatas"])
+    ]
+    keyword_retriever = BM25Retriever.from_documents(all_docs_as_objects)
+    keyword_retriever.k = settings.VECTOR_SEARCH_K
 
     llm = get_llm()
 

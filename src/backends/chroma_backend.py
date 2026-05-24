@@ -43,7 +43,7 @@ class ChromaBackend:
     def count(self) -> int:
         return self._vs._collection.count()
 
-    def get_by_filter(self, where: dict) -> list[Document]:
+    def get_by_filter(self, where: dict, limit: int = 200) -> list[Document]:
         from src.chroma_helpers import chroma_results_to_documents
 
         # Chroma needs explicit $and wrapper for multi-condition filters
@@ -60,7 +60,7 @@ class ChromaBackend:
             )
         else:
             chroma_where = where
-        result = self._vs.get(where=chroma_where)
+        result = self._vs.get(where=chroma_where, limit=limit)
         return chroma_results_to_documents(result)
 
     @property

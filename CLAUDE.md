@@ -25,6 +25,13 @@ source venv/bin/activate   # before any command
 **VPS env requirements:**
 - `HTTPS_PROXY=socks5h://localhost:40000` + `HTTP_PROXY=socks5h://localhost:40000` — WARP proxy для Gemini (VPS AEZA заблокирован по ASN)
 - PySocks установлен (`pip install httpx[socks] requests[socks]`) — нужен для SOCKS в httpx/requests
+- **SQLite requirement:** ChromaDB needs sqlite ≥ 3.35. Check with `python3 -c "import sqlite3; print(sqlite3.sqlite_version)"`. Ubuntu 22.04+ ships sqlite 3.37+ (OK). On older systems (Ubuntu 20.04 has 3.31), install `pysqlite3-binary` and add the swap stanza at the top of any entry-point that imports chromadb directly. Current VPS: 3.45.1 (OK — no pysqlite3 swap needed).
+
+**Visuals LRU cleanup (cron):**
+```bash
+# Add to crontab manually: crontab -e
+0 3 * * * cd /home/petr/projects/ai/safety-incident-analyzer && /home/petr/projects/ai/safety-incident-analyzer/venv/bin/python scripts/cleanup_visuals.py >> /tmp/cleanup_visuals.log 2>&1
+```
 
 ## Known Issues
 

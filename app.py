@@ -1,14 +1,7 @@
 import os
-import sys
 
 import streamlit as st
 from dotenv import load_dotenv
-
-# --- Fix для ChromaDB/SQLite3 в некоторых окружениях (например, облако) ---
-if os.path.exists("/home/adminuser/venv/bin/python"):
-    __import__("pysqlite3")
-    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
-# ---------------------------------------------------------------------------
 
 # Локальные импорты
 from config.settings import settings

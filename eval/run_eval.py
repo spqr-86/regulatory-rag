@@ -31,14 +31,6 @@ from typing import Any
 # Make project root importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# ── Lazy SQLite3 fix (same as app.py) ─────────────────────────────────────────
-try:
-    import pysqlite3
-
-    sys.modules["sqlite3"] = pysqlite3
-except ImportError:
-    pass
-
 from eval.metrics import (
     compute_abstain_rate,
     compute_citation_doc_match,

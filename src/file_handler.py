@@ -4,9 +4,7 @@ import hashlib
 import io
 import json
 import os
-import pickle
 import re
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Union, Any
@@ -87,10 +85,12 @@ def _split_into_children(parent_text: str, parent_meta: dict) -> List[Document]:
     return children
 
 
-@dataclass
-class CacheEntry:
-    timestamp: float
-    chunks: List[Document]
+def _document_to_dict(doc: Document) -> dict:
+    return {"page_content": doc.page_content, "metadata": dict(doc.metadata or {})}
+
+
+def _dict_to_document(d: dict) -> Document:
+    return Document(page_content=d["page_content"], metadata=d.get("metadata") or {})
 
 
 class DocumentProcessor:
@@ -397,17 +397,21 @@ class DocumentProcessor:
         key = hashlib.sha256(
             f"{file_hash}:{PIPELINE_VERSION}".encode("utf-8")
         ).hexdigest()
-        return self.cache_dir / f"{key}.pkl"
+        return self.cache_dir / f"{key}.json"
 
     def _save_to_cache(self, chunks: List[Document], cache_path: Path) -> None:
-        data = CacheEntry(timestamp=datetime.now().timestamp(), chunks=chunks)
-        with open(cache_path, "wb") as f:
-            pickle.dump(data, f)
+        payload = {
+            "schema_version": 1,
+            "timestamp": datetime.now().timestamp(),
+            "chunks": [_document_to_dict(c) for c in chunks],
+        }
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False))
 
     def _load_from_cache(self, cache_path: Path) -> List[Document]:
-        with open(cache_path, "rb") as f:
-            data: CacheEntry = pickle.load(f)
-        return data.chunks
+        raw = json.loads(cache_path.read_text())
+        if raw.get("schema_version") != 1:
+            raise ValueError(f"unsupported cache schema: {raw.get('schema_version')}")
+        return [_dict_to_document(d) for d in raw["chunks"]]
 
     def _is_cache_valid(self, cache_path: Path) -> bool:
         if not cache_path.exists():

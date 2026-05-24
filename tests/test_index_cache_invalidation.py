@@ -35,7 +35,7 @@ def fake_caches(tmp_path, monkeypatch):
 def test_main_clears_bm25_and_docling_cache(fake_caches):
     import index
 
-    with patch.object(index, "create_vector_store"):
+    with patch.object(index, "get_vector_store_backend"):
         index.main()
 
     assert not fake_caches["cache_dir"].exists(), "Docling cache must be removed"
@@ -55,5 +55,5 @@ def test_main_handles_missing_caches_gracefully(tmp_path, monkeypatch):
 
     import index
 
-    with patch.object(index, "create_vector_store"):
+    with patch.object(index, "get_vector_store_backend"):
         index.main()  # should not raise

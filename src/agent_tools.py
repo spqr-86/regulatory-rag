@@ -191,6 +191,7 @@ def make_tools(ctx: ToolContext):
 
 SOURCE_DOCS_DIR = Path("source_docs").resolve()
 MAX_BBOX_DIM = 10_000.0  # PDF user-units; защита от DoS-рендера
+MAX_BBOX_AREA_PT2 = 921_600.0  # ~4 MP at 150 DPI; ~1.84 A4 pages
 
 
 def _validate_file_name(file_name: str) -> Path | str:
@@ -228,6 +229,9 @@ def _validate_bbox(bbox) -> str | None:
     left, top, right, bottom = vals
     if right <= left or abs(bottom - top) < 1e-6:
         return "Error: bbox has zero/negative area."
+    area = (right - left) * (bottom - top)
+    if area > MAX_BBOX_AREA_PT2:
+        return f"Error: bbox area {area:.0f}pt² exceeds max {MAX_BBOX_AREA_PT2:.0f}pt² (≈4 MP at 150 DPI)."
     return None
 
 

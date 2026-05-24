@@ -1,5 +1,6 @@
 import os
 
+import structlog as _structlog
 from dotenv import load_dotenv
 from langchain_community.embeddings import (
     HuggingFaceEmbeddings,
@@ -45,11 +46,20 @@ except ImportError:
     AutomaticFunctionCallingConfig = None
 
 
+
+_log = _structlog.get_logger()
+_GEMINI_ONLY_KWARGS = {"thinking_budget", "response_mime_type"}
+
+
 def _create_openai_llm(**kwargs):
-    # Drop kwargs not understood by OpenAI (kept for forward compatibility
-    # so callers can pass thinking_budget/response_mime_type without crashing).
-    kwargs.pop("thinking_budget", None)
-    kwargs.pop("response_mime_type", None)
+    dropped = {k: kwargs.pop(k) for k in list(kwargs) if k in _GEMINI_ONLY_KWARGS}
+    if dropped:
+        _log.warning(
+            "llm_factory.kwarg_drop",
+            provider="openai",
+            dropped=dropped,
+            note="provider-specific kwargs ignored — may cause behavior drift",
+        )
     return ChatOpenAI(
         model=settings.MODEL_NAME,
         temperature=settings.TEMPERATURE,
@@ -152,6 +162,10 @@ def get_gemini_llm(
     # **kwargs into `GenerateContentConfig`, where `automatic_function_calling`
     # is a first-class field — so binding the kwarg is the supported path and
     # avoids monkey-patching the private `_build_request_config` method.
+    # WARNING: uses .bind(AutomaticFunctionCallingConfig) API —
+    # version is pinned in requirements.txt (langchain-google-genai==4.2.1).
+    # To upgrade: bump pin, re-run scripts/trace_v7.py and verify pipeline ends
+    # with answer (not duplicate tool calls in trace).
     if AutomaticFunctionCallingConfig is not None:
         llm = llm.bind(
             automatic_function_calling=AutomaticFunctionCallingConfig(disable=True)

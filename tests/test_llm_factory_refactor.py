@@ -29,12 +29,13 @@ def test_get_llm_gemini_forwards_kwargs():
 
 @pytest.mark.unit
 def test_get_llm_openai_drops_gemini_kwargs():
-    """OpenAI factory must silently drop kwargs it does not understand."""
+    """OpenAI factory must drop Gemini-specific kwargs and log a warning."""
     from src.llm_factory import get_llm
 
     with (
         patch("src.llm_factory.settings") as s,
         patch("src.llm_factory.ChatOpenAI") as mock_cls,
+        patch("src.llm_factory._log") as mock_log,
     ):
         s.LLM_PROVIDER = "openai"
         s.MODEL_NAME = "gpt-4o-mini"
@@ -48,6 +49,13 @@ def test_get_llm_openai_drops_gemini_kwargs():
         assert "thinking_budget" not in call_kwargs
         assert "response_mime_type" not in call_kwargs
         assert call_kwargs["model"] == "gpt-4o-mini"
+
+        mock_log.warning.assert_called_once()
+        warn_kwargs = mock_log.warning.call_args
+        assert warn_kwargs.args[0] == "llm_factory.kwarg_drop"
+        dropped = warn_kwargs.kwargs["dropped"]
+        assert "thinking_budget" in dropped
+        assert "response_mime_type" in dropped
 
 
 @pytest.mark.unit
