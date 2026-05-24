@@ -1,46 +1,41 @@
-"""Bridge: adapt existing ChromaDB vector store for v7 pipeline.
+"""Bridge: adapt ChromaDB ГОСТ corpus for ers_rag pipeline (V7 fork).
+
+Fork of src/v7/bridge.py:
+- Vector store loaded from ERS_CHROMA_PATH / ERS_COLLECTION_NAME (defaults
+  chroma_db_gosts / wta_gosts).
+- LLM backend = DeepSeek (deepseek-chat) instead of Gemini llm_factory.
 
 Responsibilities:
 1. Wrap ChromaDB's similarity_search_with_score -> v7 dict format
 2. Build BM25 corpus from ChromaDB docs
 3. Inject search functions into rag_simple / rag_complex nodes
-4. Inject FlashRank reranker into rag_complex
+4. Inject BGE-reranker-v2-m3 (ONNX int8) into rag_complex / rag_simple
 5. Inject LLM-backed verify, rewrite, and generate functions
 """
 
 from __future__ import annotations
 
-import threading
-from typing import Callable, List, Literal
+import os
+from dataclasses import dataclass
+from typing import Callable, List
 
 import structlog
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel, Field
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from src.backends.vector_store import (
-    VectorStoreBackend,
-)  # noqa: F401 — used in isinstance checks
-from src.llm_factory import get_llm, get_simple_llm
-from src.parsers import (
-    extract_text,
-)  # noqa: F401  # used by other make_*_fn
-from src.v7.nlp_core import init_bm25_index
-from src.v7.nodes import generate_answer as generate_answer_mod
-from src.v7.nodes import llm_verifier as llm_verifier_mod
-from src.v7.nodes import rag_complex as rag_complex_mod
-from src.v7.nodes import rag_simple as rag_simple_mod
-from src.v7.nodes import rewriter as rewriter_mod
-from src.v7.nodes import visual_enrichment as visual_enrichment_mod
-from src.v7.nodes.llm_verifier import VERIFIER_SYSTEM_PROMPT
-from src.v7.nodes.utils import extract_doc_identifiers
-from src.v7.state_types import VerificationResult
+from src.parsers import extract_text, parse_json_from_response
+from src.ers_rag.nlp_core import init_bm25_index
+from src.ers_rag.nodes import generate_answer as generate_answer_mod
+from src.ers_rag.nodes import llm_verifier as llm_verifier_mod
+from src.ers_rag.nodes import rag_complex as rag_complex_mod
+from src.ers_rag.nodes import rag_simple as rag_simple_mod
+from src.ers_rag.nodes import rewriter as rewriter_mod
+from src.ers_rag.nodes import visual_enrichment as visual_enrichment_mod
+from src.ers_rag.nodes.llm_verifier import VERIFIER_SYSTEM_PROMPT
+from src.ers_rag.nodes.utils import extract_doc_identifiers
+from src.ers_rag.state_types import VerificationResult
 
 logger = structlog.get_logger()
-
-# Module-level RLock protecting init_v7_from_chroma.
-# Concurrent calls serialize to prevent readers observing a half-initialized
-# pipeline state (7 set_*_fn injectors + BM25 build are not atomic individually).
-_init_lock = threading.RLock()
 
 
 def make_visual_proof_fn() -> Callable[[str, int, list, str], str]:
@@ -65,64 +60,19 @@ def make_visual_proof_fn() -> Callable[[str, int, list, str], str]:
 
 
 def make_rerank_fn(
-    model_name: str = "ms-marco-MiniLM-L-12-v2",
-    cache_dir: str = ".flashrank_cache",
+    model_dir: str = "models/bge-reranker-v2-m3-onnx-int8",
+    max_length: int = 512,
 ) -> Callable[[str, List[dict], int], List[dict]]:
-    """Create a FlashRank reranker function for v7 rag_complex.
+    """Create a BGE-reranker-v2-m3 (ONNX int8) rerank function for ers_rag.
 
-    Thin adapter over ``langchain_community.document_compressors.FlashrankRerank``:
-    converts v7 passage dicts ↔ ``Document`` and preserves the original vector
-    similarity score in ``metadata["vector_score"]`` so downstream MMR/gates
-    keep using vector scores (FlashRank scores are not calibrated for Russian
-    domain — see fix 2026-05-16).
-
-    Signature: fn(query, passages, top_k) -> passages (reranked, ≤ top_k items).
-    Each passage must have a 'text' key.
+    Multilingual cross-encoder optimised for Russian technical text. Drop-in
+    replacement for the previous FlashRank wrapper: same fn(query, passages,
+    top_k) signature and same passage-dict contract (preserves 'vector_score',
+    writes sigmoid relevance into 'score').
     """
-    from flashrank import Ranker
-    from langchain_community.document_compressors import FlashrankRerank
-    from langchain_core.documents import Document
+    from src.ers_rag.nodes.bge_reranker import make_bge_rerank_fn
 
-    ranker = Ranker(model_name=model_name, cache_dir=cache_dir)
-
-    def _rerank(query: str, passages: List[dict], top_k: int) -> List[dict]:
-        if not passages:
-            return passages
-
-        # Freeze vector_score BEFORE rerank so we don't overwrite it with the
-        # FlashRank score (see CLAUDE.md "Known Issues" — fix 2026-05-16).
-        compressor = FlashrankRerank(client=ranker, top_n=top_k)
-        docs: List[Document] = []
-        for idx, p in enumerate(passages):
-            meta = dict(p.get("metadata", {}))
-            meta["_v7_passage_idx"] = idx
-            docs.append(Document(page_content=p.get("text", ""), metadata=meta))
-
-        compressed = compressor.compress_documents(documents=docs, query=query)
-
-        reranked: List[dict] = []
-        for doc in compressed:
-            idx = doc.metadata.get("_v7_passage_idx")
-            orig = passages[idx] if isinstance(idx, int) else {}
-            vector_score = orig.get("vector_score", orig.get("score", 0.0))
-            relevance = float(doc.metadata.get("relevance_score", 0.0))
-            new_meta = {
-                k: v
-                for k, v in doc.metadata.items()
-                if k not in ("_v7_passage_idx", "id", "relevance_score")
-            }
-            reranked.append(
-                {
-                    **orig,
-                    "text": doc.page_content,
-                    "metadata": new_meta,
-                    "vector_score": vector_score,
-                    "score": round(relevance, 4),
-                }
-            )
-        return reranked
-
-    return _rerank
+    return make_bge_rerank_fn(model_dir=model_dir, max_length=max_length)
 
 
 def make_vector_search_fn(vector_store) -> Callable[..., List[dict]]:
@@ -170,28 +120,11 @@ def make_section_fetch_fn(
         if not passages:
             return []
         anchor_meta = passages[0].get("metadata", {})
-        section = (anchor_meta.get("parent_section") or "").strip()
+        section = anchor_meta.get("parent_section", "")
         source = anchor_meta.get("source", "")
         if not section or not source:
             return []
         try:
-            # VectorStoreBackend (Protocol) exposes get_by_filter; raw Chroma uses _collection.
-            if isinstance(vector_store, VectorStoreBackend):
-                docs = vector_store.get_by_filter(
-                    {
-                        "parent_section": section,
-                        "source": source,
-                    },
-                    limit=max_section_chunks,
-                )
-                return [
-                    {
-                        "text": d.page_content,
-                        "metadata": dict(d.metadata or {}),
-                        "score": 0.0,
-                    }
-                    for d in docs
-                ]
             col = vector_store._collection
             results = col.get(
                 where={
@@ -220,29 +153,8 @@ def make_section_fetch_fn(
     return _fetch_section
 
 
-class _VerifierVerdictSchema(BaseModel):
-    """Pydantic schema for structured verifier output (Gemini → typed object).
-
-    Maps 1:1 to ``VerificationResult`` TypedDict; the name is suffixed with
-    ``Schema`` to avoid clashing with the ``VerifierVerdict`` Literal alias
-    declared in ``state_types``.
-    """
-
-    verdict: Literal["sufficient", "rewrite", "escalate"]
-    reason: str = ""
-    rewrite_hint: str = ""
-    missing_aspects: List[str] = Field(default_factory=list)
-    confidence: float = 0.0
-
-
 def make_verify_fn(llm) -> Callable[..., VerificationResult]:
-    """Create a v7-compatible verify function backed by Gemini LLM.
-
-    Uses ``llm.with_structured_output(_VerifierVerdictSchema)`` so Gemini
-    returns a typed Pydantic object directly — no regex/braces JSON parsing,
-    no «could not parse JSON» warnings on malformed responses.
-    """
-    structured_llm = llm.with_structured_output(_VerifierVerdictSchema)
+    """Create a v7-compatible verify function backed by Gemini LLM."""
 
     def _verify(
         original_query: str, active_query: str, passages: List[dict]
@@ -258,15 +170,17 @@ def make_verify_fn(llm) -> Callable[..., VerificationResult]:
             f"Найденные passages ({len(passages)}):\n{passages_text}"
         )
         try:
-            verdict_obj = structured_llm.invoke([HumanMessage(content=prompt)])
-            if verdict_obj is None:
-                raise ValueError("Structured output returned None")
+            response = llm.invoke([HumanMessage(content=prompt)])
+            raw_text = extract_text(response.content)
+            data = parse_json_from_response(raw_text)
+            if not data or "verdict" not in data:
+                raise ValueError("No verdict in LLM response")
             return VerificationResult(
-                verdict=verdict_obj.verdict,
-                reason=verdict_obj.reason,
-                rewrite_hint=verdict_obj.rewrite_hint,
-                missing_aspects=list(verdict_obj.missing_aspects),
-                confidence=float(verdict_obj.confidence),
+                verdict=data["verdict"],
+                reason=data.get("reason", ""),
+                rewrite_hint=data.get("rewrite_hint", ""),
+                missing_aspects=data.get("missing_aspects", []),
+                confidence=float(data.get("confidence", 0.0)),
             )
         except Exception as exc:
             logger.warning("LLM verify failed: %s", exc)
@@ -390,15 +304,28 @@ _GENERATE_SYSTEM_PROMPT = """\
 Первоисточники: [только если источников больше двух — список в конце; иначе пропусти раздел]"""
 
 
+def _is_retryable(exc: BaseException) -> bool:
+    """Retry on 503 / RESOURCE_EXHAUSTED / rate limit errors from Gemini."""
+    msg = str(exc).lower()
+    return any(
+        kw in msg
+        for kw in ("503", "resource_exhausted", "rate limit", "quota", "overloaded")
+    )
+
+
 def make_generate_fn(llm) -> Callable[[str, str, List[dict]], str]:
     """Create an LLM-backed answer generation function for v7 generate_answer node.
 
     Signature: fn(query, active_query, passages) -> answer_text.
-    Relies on ChatGoogleGenerativeAI's built-in retry (max_retries=3 in
-    ``get_gemini_llm``) for transient 5xx / 429 errors. On final failure
-    falls back to a stub (concatenated top passages).
+    Retries up to 3 times on Gemini 503/rate-limit before falling back to stub.
     """
 
+    @retry(
+        retry=retry_if_exception(_is_retryable),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=2, max=10),
+        reraise=True,
+    )
     def _call_llm(prompt: str) -> str:
         response = llm.invoke([HumanMessage(content=prompt)])
         answer = extract_text(response.content).strip()
@@ -449,99 +376,181 @@ def make_generate_fn(llm) -> Callable[[str, str, List[dict]], str]:
     return _generate
 
 
-def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
-    """Initialize V7 pipeline from a vector store (raw Chroma or VectorStoreBackend).
+# --- DeepSeek LLM adapter (langchain-like .invoke() contract) ---------------
 
-    1. Creates vector search wrapper
-    2. Injects it into rag_simple and rag_complex nodes
-    3. Builds BM25 index from full corpus
-    4. Injects FlashRank reranker into rag_complex
-    5. Injects LLM-backed verify, rewrite, and generate functions (if provider available)
+ERS_CHROMA_PATH = os.getenv("ERS_CHROMA_PATH", "./chroma_db_gosts")
+ERS_COLLECTION_NAME = os.getenv("ERS_COLLECTION_NAME", "wta_gosts")
+ERS_DEEPSEEK_MODEL = os.getenv("ERS_DEEPSEEK_MODEL", "deepseek-chat")
+
+
+@dataclass
+class _DeepSeekResponse:
+    """Mimic langchain BaseMessage with .content string."""
+
+    content: str
+
+
+class DeepSeekLLM:
+    """Minimal LLM exposing .invoke([HumanMessage]) -> obj with .content.
+
+    Drop-in replacement for langchain Gemini llm used by ers_rag bridge
+    (make_verify_fn / make_rewrite_fn / make_generate_fn / make_expand_fn).
+    """
+
+    def __init__(
+        self,
+        model: str = ERS_DEEPSEEK_MODEL,
+        temperature: float = 0.0,
+        max_tokens: int = 2048,
+        response_format: dict | None = None,
+    ) -> None:
+        from openai import OpenAI
+
+        api_key = os.environ.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise RuntimeError("DEEPSEEK_API_KEY env var is not set")
+        self._client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+        self._model = model
+        self._temperature = temperature
+        self._max_tokens = max_tokens
+        self._response_format = response_format
+
+    def invoke(self, messages):
+        prompt_parts: list[str] = []
+        for m in messages:
+            content = getattr(m, "content", None)
+            if content is None:
+                content = str(m)
+            prompt_parts.append(content)
+        prompt = "\n\n".join(prompt_parts)
+
+        kwargs: dict = {
+            "model": self._model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": self._max_tokens,
+            "temperature": self._temperature,
+        }
+        if self._response_format is not None:
+            kwargs["response_format"] = self._response_format
+
+        response = self._client.chat.completions.create(**kwargs)
+        text = response.choices[0].message.content or ""
+        return _DeepSeekResponse(content=text)
+
+
+def _load_ers_vector_store():
+    """Load ChromaDB ГОСТ corpus (mirrors src/gosts_pipeline._load_store)."""
+    from langchain_chroma import Chroma
+
+    from src.llm_factory import get_embedding_model
+
+    if not os.path.isdir(ERS_CHROMA_PATH):
+        raise FileNotFoundError(
+            f"ChromaDB ГОСТов не найдена: {ERS_CHROMA_PATH}. "
+            "Запустите python index_gosts.py"
+        )
+    embeddings = get_embedding_model()
+    vs = Chroma(
+        collection_name=ERS_COLLECTION_NAME,
+        embedding_function=embeddings,
+        persist_directory=ERS_CHROMA_PATH,
+    )
+    count = vs._collection.count()
+    if count == 0:
+        raise ValueError(
+            f"ChromaDB ГОСТов пуста (collection={ERS_COLLECTION_NAME}). "
+            "Запустите python index_gosts.py"
+        )
+    logger.info("ers_rag: store loaded chunks=%d", count)
+    return vs
+
+
+def init_ers_rag_from_chroma(vector_store=None, llm_enabled: bool = True) -> None:
+    """Initialize ers_rag (V7 fork) pipeline against ГОСТ ChromaDB + DeepSeek.
+
+    1. Loads vector store from ERS_CHROMA_PATH / ERS_COLLECTION_NAME if not given.
+    2. Injects vector search into rag_simple / rag_complex nodes.
+    3. Builds BM25 index from full corpus.
+    4. Injects BGE-reranker-v2-m3 (complex + simple evidence assess).
+    5. Injects DeepSeek-backed verify, rewrite, generate, expand functions.
     """
     from config.settings import settings
+
+    if vector_store is None:
+        vector_store = _load_ers_vector_store()
 
     search_fn = make_vector_search_fn(vector_store)
     rag_simple_mod.set_vector_search(search_fn)
     rag_complex_mod.set_vector_search(search_fn)
 
-    # Build BM25 corpus. VectorStoreBackend exposes iter_all_documents();
-    # legacy raw Chroma exposes .get() — kept for backward compat.
-    if isinstance(vector_store, VectorStoreBackend):
-        corpus = list(vector_store.iter_all_documents())
-    else:
-        all_data = vector_store.get(include=["metadatas", "documents"])
-        corpus = [
-            {"text": doc, "metadata": meta}
-            for doc, meta in zip(all_data["documents"], all_data["metadatas"])
-        ]
+    # Build BM25 corpus from ChromaDB
+    all_data = vector_store.get(include=["metadatas", "documents"])
+    corpus = [
+        {"text": doc, "metadata": meta}
+        for doc, meta in zip(all_data["documents"], all_data["metadatas"])
+    ]
     init_bm25_index(corpus)
 
     # Inject section-aware expander for complex path
     try:
         section_fetch_fn = make_section_fetch_fn(vector_store)
         rag_complex_mod.set_section_fetch_fn(section_fetch_fn)
-        logger.info("v7 section-aware expander injected successfully")
+        logger.info("ers_rag section-aware expander injected successfully")
     except Exception as exc:
-        logger.warning("Failed to initialize section fetch for v7: %s.", exc)
+        logger.warning("Failed to initialize section fetch for ers_rag: %s.", exc)
 
-    # Inject FlashRank reranker for complex path and V8 evidence assess (simple path)
+    # Inject BGE-reranker-v2-m3 (ONNX int8) for complex path and evidence assess
+    # (simple path). Multilingual cross-encoder, strong on Russian ГОСТ/СНиП.
     try:
-        rerank_fn = make_rerank_fn(
-            model_name=settings.RERANKING_MODEL,
-            cache_dir=settings.FLASHRANK_CACHE_DIR,
+        model_dir = getattr(
+            settings,
+            "BGE_RERANKER_DIR",
+            "models/bge-reranker-v2-m3-onnx-int8",
         )
+        rerank_fn = make_rerank_fn(model_dir=model_dir)
         rag_complex_mod.set_rerank_fn(rerank_fn)
         rag_simple_mod.set_reranker(rerank_fn)
-        logger.info("v7 FlashRank reranker injected successfully")
+        logger.info("ers_rag BGE reranker injected successfully (dir=%s)", model_dir)
     except Exception as exc:
         logger.warning(
-            "Failed to initialize FlashRank for v7: %s. Complex path will skip reranking.",
+            "Failed to initialize BGE reranker for ers_rag: %s. "
+            "Complex path will skip reranking.",
             exc,
         )
 
-    # Inject LLM-backed verify, rewrite, generate, and expand functions
-    if llm_provider:
+    # Inject DeepSeek-backed verify, rewrite, generate, expand functions
+    if llm_enabled:
         try:
-            verifier_llm = get_llm(
-                thinking_budget=1024, response_mime_type="application/json"
+            verifier_llm = DeepSeekLLM(
+                max_tokens=1024,
+                response_format={"type": "json_object"},
             )
             llm_verifier_mod.set_verify_fn(make_verify_fn(verifier_llm))
 
-            rewriter_llm = get_llm(thinking_budget=1024)
+            rewriter_llm = DeepSeekLLM(max_tokens=512)
             rewriter_mod.set_rewrite_fn(make_rewrite_fn(rewriter_llm))
 
-            # Split generators: cheap model for the simple path, full-quality
-            # model for the complex path (where verifier/rewriter already paid
-            # the latency tax — answer quality dominates CPS savings).
-            generator_llm_complex = get_llm(thinking_budget=4096)
-            generator_llm_simple = get_simple_llm(thinking_budget=4096)
-            generate_answer_mod.set_generate_fns(
-                simple=make_generate_fn(generator_llm_simple),
-                complex_=make_generate_fn(generator_llm_complex),
-            )
+            generator_llm = DeepSeekLLM(max_tokens=2048)
+            generate_answer_mod.set_generate_fn(make_generate_fn(generator_llm))
 
-            expander_llm = get_llm(thinking_budget=0)
+            expander_llm = DeepSeekLLM(max_tokens=256)
             rag_simple_mod.set_expand_fn(make_expand_fn(expander_llm))
 
             logger.info(
-                "v7 LLM verifier, rewriter, generator, and expander injected successfully"
+                "ers_rag DeepSeek verifier, rewriter, generator, expander injected"
             )
         except Exception as exc:
             logger.warning(
-                "Failed to initialize LLM for v7 verifier/rewriter/generator: %s. "
+                "Failed to initialize DeepSeek for ers_rag: %s. "
                 "Using rule-based stubs.",
                 exc,
             )
 
-    # Inject visual proof function for visual_enrichment node
+    # Inject visual proof function for visual_enrichment node (no-op if unavailable)
     try:
         visual_proof_fn = make_visual_proof_fn()
         if visual_proof_fn is not None:
             visual_enrichment_mod.set_visual_proof_fn(visual_proof_fn)
-            logger.info("v7 visual proof injected successfully")
+            logger.info("ers_rag visual proof injected successfully")
     except Exception as exc:
-        logger.warning("Failed to initialize visual proof for v7: %s.", exc)
-
-
-# Backward-compat alias — remove after one release cycle.
-init_v7_from_chroma = init_v7_pipeline
+        logger.warning("Failed to initialize visual proof for ers_rag: %s.", exc)

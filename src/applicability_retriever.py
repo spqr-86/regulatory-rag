@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import List, Optional, Dict, Any
 
 from langchain_classic.retrievers.multi_query import LineListOutputParser

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from src.v7.bridge import init_v7_from_chroma, init_v7_pipeline, make_vector_search_fn
-from src.v7.config import V7Config, v7_config
-from src.v7.graph import build_graph
-from src.v7.state_types import (
+from src.ers_rag.bridge import init_ers_rag_from_chroma, make_vector_search_fn
+from src.ers_rag.config import V7Config, v7_config
+from src.ers_rag.graph import build_graph
+from src.ers_rag.state_types import (
     ALLOWED_FILTER_KEYS,
     MAX_VERIFY_ITERATIONS,
     HardGateResult,
@@ -22,8 +22,7 @@ from src.v7.state_types import (
 __all__ = [
     "ALLOWED_FILTER_KEYS",
     "build_graph",
-    "init_v7_pipeline",
-    "init_v7_from_chroma",  # deprecated alias, kept for one release
+    "init_ers_rag_from_chroma",
     "make_vector_search_fn",
     "HardGateResult",
     "Intent",

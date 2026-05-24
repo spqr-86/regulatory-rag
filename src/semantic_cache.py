@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import json
-import logging
 import os
 from typing import List, Optional, Sequence
 
+import structlog
 import numpy as np
 from langchain_core.caches import RETURN_VAL_TYPE, BaseCache
 from langchain_core.outputs import Generation
 from sentence_transformers import SentenceTransformer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SemanticCache(BaseCache):
@@ -48,7 +48,7 @@ class SemanticCache(BaseCache):
         try:
             self.model = SentenceTransformer(self.model_name)
         except Exception as e:  # noqa: BLE001 - third-party may raise broad types
-            logger.warning("Failed to load SentenceTransformer model: %s", e)
+            logger.warning("Failed to load SentenceTransformer model", error=str(e))
             self.model = None
 
         self._load()
@@ -70,7 +70,7 @@ class SemanticCache(BaseCache):
                 "namespaces", [self._DEFAULT_NAMESPACE] * len(self.sentences)
             )
         except (OSError, json.JSONDecodeError) as e:
-            logger.error("Failed to load cache: %s", e)
+            logger.error("Failed to load cache", error=str(e))
 
     def save(self) -> None:
         """Persist cache to disk."""
@@ -84,7 +84,7 @@ class SemanticCache(BaseCache):
             with open(self.cache_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except OSError as e:
-            logger.error("Failed to save cache: %s", e)
+            logger.error("Failed to save cache", error=str(e))
 
     # ------------------------------------------------------------------ #
     # Internal helpers
@@ -116,7 +116,7 @@ class SemanticCache(BaseCache):
             if similarities[best_local] >= self.threshold:
                 return ns_indices[best_local]
         except (ValueError, RuntimeError) as e:
-            logger.error("Error in semantic cache similarity search: %s", e)
+            logger.error("Error in semantic cache similarity search", error=str(e))
 
         return None
 
@@ -141,7 +141,7 @@ class SemanticCache(BaseCache):
 
             self.save()
         except (ValueError, RuntimeError) as e:
-            logger.error("Error adding to semantic cache: %s", e)
+            logger.error("Error adding to semantic cache", error=str(e))
 
     # ------------------------------------------------------------------ #
     # BaseCache interface

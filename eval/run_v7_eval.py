@@ -139,7 +139,7 @@ JSON:"""
                 "correctness_score": float(data.get("score", 0.0)),
                 "correctness_reasoning": data.get("reasoning", ""),
             }
-    except Exception:
+    except (json.JSONDecodeError, ValueError, KeyError):
         pass
     return {
         "correctness_score": 0.0,
@@ -227,7 +227,8 @@ def run(
 
         try:
             relevance = evaluate_answer_relevance(question, answer, judge_llm)
-        except Exception:
+        except Exception as e:
+            print(f"  WARNING: relevance eval failed: {e}")
             relevance = {"answer_relevance_score": 0.0}
 
         try:

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 
 import structlog as _structlog
@@ -15,16 +17,29 @@ load_dotenv()
 
 # IPv6 patch for Gemini API: VPS datacenter IPv4 is ASN-blocked by Google,
 # but IPv6 is not. When no HTTPS_PROXY is set, prefer IPv6 for googleapis.com.
-def _patch_socket_ipv6_for_googleapis() -> None:
-    """Override getaddrinfo to prefer IPv6 for googleapis.com connections."""
+# Call apply_ipv6_patch_for_googleapis() explicitly in entry points (api.py, app.py)
+# before importing any langchain_google_genai modules.
+_ipv6_patch_applied = False
+
+
+def apply_ipv6_patch_for_googleapis() -> None:
+    """Override getaddrinfo to prefer IPv6 for googleapis.com connections.
+
+    Idempotent — safe to call multiple times. Must be called before the first
+    ChatGoogleGenerativeAI import (i.e. before src.llm_factory is imported).
+    """
+    global _ipv6_patch_applied
+    if _ipv6_patch_applied:
+        return
     import socket  # noqa: PLC0415
 
     if os.getenv("HTTPS_PROXY") or os.getenv("https_proxy"):
+        _ipv6_patch_applied = True
         return  # proxy handles routing, skip patch
     _orig = socket.getaddrinfo
 
     def _prefer_ipv6(host: str | None, port, family=0, *args, **kwargs):
-        if host and "googleapis.com" in host:
+        if host and (host == "googleapis.com" or host.endswith(".googleapis.com")):
             try:
                 results = _orig(host, port, socket.AF_INET6, *args, **kwargs)
                 if results:
@@ -34,9 +49,10 @@ def _patch_socket_ipv6_for_googleapis() -> None:
         return _orig(host, port, family, *args, **kwargs)
 
     socket.getaddrinfo = _prefer_ipv6  # type: ignore[assignment]
+    _ipv6_patch_applied = True
 
 
-_patch_socket_ipv6_for_googleapis()
+apply_ipv6_patch_for_googleapis()
 
 try:
     from langchain_google_genai import ChatGoogleGenerativeAI
@@ -44,7 +60,6 @@ try:
 except ImportError:
     ChatGoogleGenerativeAI = None
     AutomaticFunctionCallingConfig = None
-
 
 
 _log = _structlog.get_logger()
