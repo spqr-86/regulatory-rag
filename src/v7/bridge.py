@@ -10,11 +10,10 @@ Responsibilities:
 
 from __future__ import annotations
 
-import logging
 import threading
 from typing import Callable, List, Literal
 
-
+import structlog
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
@@ -36,7 +35,7 @@ from src.v7.nodes.llm_verifier import VERIFIER_SYSTEM_PROMPT
 from src.v7.nodes.utils import extract_doc_identifiers
 from src.v7.state_types import VerificationResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Module-level RLock protecting init_v7_from_chroma.
 # Concurrent calls serialize to prevent readers observing a half-initialized
