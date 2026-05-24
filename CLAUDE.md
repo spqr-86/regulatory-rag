@@ -93,7 +93,7 @@ Revision: verifier (needs_revision) → rag_agent (max 1)
 
 Versioned Jinja2 templates. Registry: `prompts/registry.yaml`. Override via env: `PROMPT_RESEARCH_AGENT_VERSION=v2`.
 
-### LLM Factory (`src/llm_factory.py`)
+### LLM Factory (`src/infra/llm_factory.py`)
 
 `get_llm()`, `get_gemini_llm(thinking_budget)`, `get_vision_llm()`. Provider via `LLM_PROVIDER` env var. **Note**: Gemini SDK patched to disable AFC (Automatic Function Calling) — prevents duplicate tool calls.
 
@@ -164,6 +164,17 @@ python scripts/trace_v7.py --no-chroma "привет как дела"   # stub m
 ---
 
 ## Session Log
+
+### 2026-05-24 (сессия 42 — repo cleanup + src/ restructure)
+
+- **Сделано:**
+  - **Repo cleanup:** удалены из репо .github/workflows/, .opencode/, legacy agents/ (multiagent_rag, router_agent), source_docs/ (12 PDF, 7.7MB), docs/plans/archive/ (11 файлов), static/visuals/*.png (git rm --cached). tests/test_multiagent_routing.py удалён вместе с agents/.
+  - **eval метрики перенесены** из src/ в eval/: advanced_generation_metrics.py, retrieval_metrics.py, custom_evaluators.py.
+  - **app.py:** убран весь MAS (Multi-Agent RAG) блок — импорт MultiAgentRAGWorkflow, mas_mode toggle, streaming ветка, agent из load_resources().
+  - **src/ restructure:** создан src/infra/ (llm_factory, prompt_manager, semantic_cache, parsers, types) и src/indexing/ (file_handler, chroma_helpers, vector_store, applicability_retriever). Все импорты обновлены через sed + ручные правки.
+  - 231 unit-тест зелёные. trace_v7 smoke test прошёл. Запушено на GitHub.
+- **Решения:** После массового sed — обязателен verify-grep на старые пути (поймали `import src.llm_factory as lf` в тесте после всех sed-прогонов).
+- **Наблюдения:** Старый процесс Streamlit висел на порту 8502 — пришлось убить и перезапустить через `venv/bin/streamlit`.
 
 ### 2026-05-24 (сессия 41 — Board 4 code quality polish)
 
