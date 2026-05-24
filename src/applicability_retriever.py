@@ -1,11 +1,11 @@
 from typing import List, Optional, Dict, Any
 
+from langchain_classic.retrievers.multi_query import LineListOutputParser
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.vectorstores import VectorStore
 from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
 from langchain_community.retrievers import BM25Retriever
 from pydantic import PrivateAttr
 
@@ -24,7 +24,14 @@ class ApplicabilityRetriever(BaseRetriever):
     _expansion_cache: Dict[str, List[str]] = PrivateAttr(default_factory=dict)
 
     def _generate_queries(self, original_query: str) -> List[str]:
-        """Генерирует вариации поискового запроса с помощью LLM."""
+        """Генерирует вариации поискового запроса с помощью LLM.
+
+        Uses LangChain's ``LineListOutputParser`` from MultiQueryRetriever to
+        parse line-separated alternatives, instead of hand-rolled splitting.
+        Full migration to ``MultiQueryRetriever`` is blocked by this class's
+        custom ensemble behaviour (BM25 only on original query, similarity
+        score propagation, content-prefix dedup); see CARD-5.2 notes.
+        """
         if original_query in self._expansion_cache:
             return self._expansion_cache[original_query]
 
@@ -34,11 +41,10 @@ class ApplicabilityRetriever(BaseRetriever):
                 "applicability_retriever", question=original_query
             )
             prompt = PromptTemplate.from_template(prompt_str)
-            chain = prompt | self.llm | StrOutputParser()
-            result = chain.invoke({})
+            parser = LineListOutputParser()
+            chain = prompt | self.llm | parser
+            queries = chain.invoke({})
 
-            # Разбираем ответ: ожидаем 3 строки
-            queries = [q.strip() for q in result.split("\n") if q.strip()]
             # Добавляем оригинал, если его нет
             if original_query not in queries:
                 queries.insert(0, original_query)
