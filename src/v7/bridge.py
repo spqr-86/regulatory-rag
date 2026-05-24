@@ -60,32 +60,54 @@ def make_rerank_fn(
 ) -> Callable[[str, List[dict], int], List[dict]]:
     """Create a FlashRank reranker function for v7 rag_complex.
 
-    Signature: fn(query, passages, top_k) -> passages (reranked, top_k items).
-    Passages must have 'text' key; score is updated with FlashRank score.
+    Thin adapter over ``langchain_community.document_compressors.FlashrankRerank``:
+    converts v7 passage dicts ↔ ``Document`` and preserves the original vector
+    similarity score in ``metadata["vector_score"]`` so downstream MMR/gates
+    keep using vector scores (FlashRank scores are not calibrated for Russian
+    domain — see fix 2026-05-16).
+
+    Signature: fn(query, passages, top_k) -> passages (reranked, ≤ top_k items).
+    Each passage must have a 'text' key.
     """
-    from flashrank import Ranker, RerankRequest
+    from flashrank import Ranker
+    from langchain_community.document_compressors import FlashrankRerank
+    from langchain_core.documents import Document
 
     ranker = Ranker(model_name=model_name, cache_dir=cache_dir)
 
     def _rerank(query: str, passages: List[dict], top_k: int) -> List[dict]:
         if not passages:
             return passages
-        rerank_request = RerankRequest(
-            query=query,
-            passages=[
-                {"id": i, "text": p.get("text", "")} for i, p in enumerate(passages)
-            ],
-        )
-        results = ranker.rerank(rerank_request)
-        # results: list of dicts with 'id', 'score', 'text'
-        reranked = []
-        for r in results[:top_k]:
-            orig = passages[r["id"]]
+
+        # Freeze vector_score BEFORE rerank so we don't overwrite it with the
+        # FlashRank score (see CLAUDE.md "Known Issues" — fix 2026-05-16).
+        compressor = FlashrankRerank(client=ranker, top_n=top_k)
+        docs: List[Document] = []
+        for idx, p in enumerate(passages):
+            meta = dict(p.get("metadata", {}))
+            meta["_v7_passage_idx"] = idx
+            docs.append(Document(page_content=p.get("text", ""), metadata=meta))
+
+        compressed = compressor.compress_documents(documents=docs, query=query)
+
+        reranked: List[dict] = []
+        for doc in compressed:
+            idx = doc.metadata.get("_v7_passage_idx")
+            orig = passages[idx] if isinstance(idx, int) else {}
+            vector_score = orig.get("vector_score", orig.get("score", 0.0))
+            relevance = float(doc.metadata.get("relevance_score", 0.0))
+            new_meta = {
+                k: v
+                for k, v in doc.metadata.items()
+                if k not in ("_v7_passage_idx", "id", "relevance_score")
+            }
             reranked.append(
                 {
                     **orig,
-                    "vector_score": orig.get("score", 0.0),
-                    "score": round(float(r["score"]), 4),
+                    "text": doc.page_content,
+                    "metadata": new_meta,
+                    "vector_score": vector_score,
+                    "score": round(relevance, 4),
                 }
             )
         return reranked
