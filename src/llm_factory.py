@@ -1,8 +1,10 @@
 import os
 
 from dotenv import load_dotenv
-from huggingface_hub import InferenceClient
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import (
+    HuggingFaceEmbeddings,
+    HuggingFaceInferenceAPIEmbeddings,
+)
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from config.settings import settings
@@ -167,20 +169,12 @@ def get_vision_llm():
 
 
 def _create_hf_embeddings():
-    model = settings.EMBEDDING_MODEL_NAME
-    client = InferenceClient(
-        model=model or "intfloat/multilingual-e5-base",
+    model = settings.EMBEDDING_MODEL_NAME or "intfloat/multilingual-e5-base"
+    api_key = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN") or ""
+    return HuggingFaceInferenceAPIEmbeddings(
+        api_key=api_key,
+        model_name=model,
     )
-
-    # Оборачиваем в "легкий адаптер" для LangChain
-    class HFEmbeddingsWrapper:
-        def embed_query(self, text: str):
-            return client.feature_extraction(text)
-
-        def embed_documents(self, texts: list[str]):
-            return [client.feature_extraction(t) for t in texts]
-
-    return HFEmbeddingsWrapper()
 
 
 def _create_local_embeddings():
