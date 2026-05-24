@@ -134,6 +134,7 @@ def get_gemini_llm(
         temperature=temperature,
         max_output_tokens=max_output_tokens,
         timeout=settings.REQUEST_TIMEOUT,
+        max_retries=3,
     )
     if thinking_budget is not None:
         kwargs["thinking_budget"] = thinking_budget

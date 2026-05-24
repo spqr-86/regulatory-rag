@@ -62,3 +62,21 @@ def test_gemini_llm_max_output_tokens_scales_with_thinking_budget(mock_chat):
 
     kwargs = mock_chat.call_args.kwargs
     assert kwargs["max_output_tokens"] >= 1024 + 2048
+
+
+@patch("src.llm_factory.ChatGoogleGenerativeAI")
+def test_gemini_llm_passes_max_retries(mock_chat):
+    """Gemini factory must pass max_retries=3 so LangChain handles transient
+    5xx/429 retries itself (replaces the previous tenacity wrapper in bridge).
+    """
+    from src.llm_factory import get_gemini_llm
+
+    mock_chat.return_value = MagicMock()
+    with patch("src.llm_factory.settings") as mock_settings:
+        mock_settings.GEMINI_API_KEY = "test-key"
+        mock_settings.GEMINI_FAST_MODEL = "gemini-3-flash-preview"
+        mock_settings.REQUEST_TIMEOUT = 120.0
+        get_gemini_llm(thinking_budget=1024)
+
+    kwargs = mock_chat.call_args.kwargs
+    assert kwargs["max_retries"] == 3

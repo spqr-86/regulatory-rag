@@ -16,7 +16,6 @@ from typing import Callable, List, Literal
 
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from src.llm_factory import get_llm
 from src.parsers import (
@@ -382,28 +381,15 @@ _GENERATE_SYSTEM_PROMPT = """\
 Первоисточники: [только если источников больше двух — список в конце; иначе пропусти раздел]"""
 
 
-def _is_retryable(exc: BaseException) -> bool:
-    """Retry on 503 / RESOURCE_EXHAUSTED / rate limit errors from Gemini."""
-    msg = str(exc).lower()
-    return any(
-        kw in msg
-        for kw in ("503", "resource_exhausted", "rate limit", "quota", "overloaded")
-    )
-
-
 def make_generate_fn(llm) -> Callable[[str, str, List[dict]], str]:
     """Create an LLM-backed answer generation function for v7 generate_answer node.
 
     Signature: fn(query, active_query, passages) -> answer_text.
-    Retries up to 3 times on Gemini 503/rate-limit before falling back to stub.
+    Relies on ChatGoogleGenerativeAI's built-in retry (max_retries=3 in
+    ``get_gemini_llm``) for transient 5xx / 429 errors. On final failure
+    falls back to a stub (concatenated top passages).
     """
 
-    @retry(
-        retry=retry_if_exception(_is_retryable),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=2, min=2, max=10),
-        reraise=True,
-    )
     def _call_llm(prompt: str) -> str:
         response = llm.invoke([HumanMessage(content=prompt)])
         answer = extract_text(response.content).strip()
