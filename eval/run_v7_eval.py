@@ -11,6 +11,7 @@ Usage:
     source venv/bin/activate
     python eval/run_v7_eval.py
     python eval/run_v7_eval.py --limit 5          # quick smoke test
+    python eval/run_v7_eval.py --skip-judge       # pipeline only, no LLM judge (~$0)
     python eval/run_v7_eval.py --output benchmarks/eval_v7_custom.jsonl
 """
 
@@ -157,7 +158,11 @@ JSON:"""
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
-def run(limit: int | None = None, output: Path = DEFAULT_OUTPUT) -> None:
+def run(
+    limit: int | None = None,
+    output: Path = DEFAULT_OUTPUT,
+    skip_judge: bool = False,
+) -> None:
     print("Loading dataset...")
     dataset = load_dataset(DATASET_PATH)
     if limit:
@@ -170,9 +175,13 @@ def run(limit: int | None = None, output: Path = DEFAULT_OUTPUT) -> None:
     graph = build_graph().compile()
     print("  Graph ready.")
 
-    print("Loading judge LLM...")
-    judge_llm = get_gemini_llm(temperature=0.0)
-    print("  Judge ready.\n")
+    judge_llm = None
+    if skip_judge:
+        print("  [--skip-judge] LLM judge disabled — pipeline only, $0 cost.\n")
+    else:
+        print("Loading judge LLM...")
+        judge_llm = get_gemini_llm(temperature=0.0)
+        print("  Judge ready.\n")
 
     results = []
     for i, item in enumerate(dataset, 1):
@@ -205,7 +214,20 @@ def run(limit: int | None = None, output: Path = DEFAULT_OUTPUT) -> None:
             )
             continue
 
-        # Evaluate
+        if skip_judge:
+            record = {
+                "question": question,
+                "ground_truth": ground_truth,
+                "answer": answer,
+                "path": path,
+                "elapsed_sec": run_result["elapsed_sec"],
+                "retrieval_attempts": run_result["retrieval_attempts"],
+            }
+            results.append(record)
+            print(f"  path={path} | elapsed={run_result['elapsed_sec']:.1f}s")
+            continue
+
+        # Evaluate with LLM judge
         try:
             faithfulness = evaluate_faithfulness(question, context, answer, judge_llm)
         except Exception as e:
@@ -251,36 +273,50 @@ def run(limit: int | None = None, output: Path = DEFAULT_OUTPUT) -> None:
         print("\nNo valid results to aggregate.")
         return
 
-    avg_faith = sum(r.get("faithfulness_score", 0) for r in valid) / n
-    avg_rel = sum(r.get("answer_relevance_score", 0) for r in valid) / n
-    avg_correct = sum(r.get("correctness_score", 0) for r in valid) / n
     avg_elapsed = sum(r.get("elapsed_sec", 0) for r in valid) / n
-
-    simple_path = [r for r in valid if r.get("path") == "simple"]
-    false_sufficiency_cases = [
-        r
-        for r in simple_path
-        if r.get("correctness_score", 10) < FALSE_SUFFICIENCY_THRESHOLD
-    ]
-    false_sufficiency_rate = (
-        len(false_sufficiency_cases) / len(simple_path) if simple_path else 0.0
+    complex_rate = sum(1 for r in valid if r.get("path") == "complex") / n
+    abstain_count = sum(
+        1
+        for r in valid
+        if not r.get("answer") or r.get("answer", "").startswith("Не могу")
     )
 
-    complex_rate = sum(1 for r in valid if r.get("path") == "complex") / n
+    aggregate: dict[str, Any] = {
+        "complex_path_rate": round(complex_rate, 3),
+        "mean_elapsed_sec": round(avg_elapsed, 2),
+        "answered": n,
+        "abstained": abstain_count,
+    }
+
+    if not skip_judge:
+        avg_faith = sum(r.get("faithfulness_score", 0) for r in valid) / n
+        avg_rel = sum(r.get("answer_relevance_score", 0) for r in valid) / n
+        avg_correct = sum(r.get("correctness_score", 0) for r in valid) / n
+        simple_path = [r for r in valid if r.get("path") == "simple"]
+        false_sufficiency_cases = [
+            r
+            for r in simple_path
+            if r.get("correctness_score", 10) < FALSE_SUFFICIENCY_THRESHOLD
+        ]
+        false_sufficiency_rate = (
+            len(false_sufficiency_cases) / len(simple_path) if simple_path else 0.0
+        )
+        aggregate.update(
+            {
+                "faithfulness": round(avg_faith, 3),
+                "answer_relevance": round(avg_rel, 3),
+                "correctness_mean": round(avg_correct, 2),
+                "false_sufficiency_rate": round(false_sufficiency_rate, 3),
+            }
+        )
 
     summary = {
         "timestamp": datetime.now().isoformat(),
+        "skip_judge": skip_judge,
         "dataset": str(DATASET_PATH),
         "dataset_size": len(dataset),
         "valid_results": n,
-        "aggregate": {
-            "faithfulness": round(avg_faith, 3),
-            "answer_relevance": round(avg_rel, 3),
-            "correctness_mean": round(avg_correct, 2),
-            "false_sufficiency_rate": round(false_sufficiency_rate, 3),
-            "complex_path_rate": round(complex_rate, 3),
-            "mean_elapsed_sec": round(avg_elapsed, 2),
-        },
+        "aggregate": aggregate,
         "false_sufficiency_threshold": FALSE_SUFFICIENCY_THRESHOLD,
         "results": results,
     }
@@ -291,16 +327,29 @@ def run(limit: int | None = None, output: Path = DEFAULT_OUTPUT) -> None:
 
     print(f"\n{'=' * 55}")
     print(f"Results ({n}/{len(dataset)} valid)")
-    print(f"  Faithfulness:          {avg_faith:.3f}  (target >0.85)")
-    print(f"  Answer Relevance:      {avg_rel:.3f}  (target >0.85)")
-    print(f"  Correctness:           {avg_correct:.1f}/10  (target >7.5)")
-    print(f"  False-sufficiency:     {false_sufficiency_rate:.1%}  (target <10%)")
+    if not skip_judge:
+        print(
+            f"  Faithfulness:          {aggregate['faithfulness']:.3f}  (target >0.85)"
+        )
+        print(
+            f"  Answer Relevance:      {aggregate['answer_relevance']:.3f}  (target >0.85)"
+        )
+        print(
+            f"  Correctness:           {aggregate['correctness_mean']:.1f}/10  (target >7.5)"
+        )
+        print(
+            f"  False-sufficiency:     {aggregate['false_sufficiency_rate']:.1%}  (target <10%)"
+        )
+        if false_sufficiency_cases:
+            print(f"\nFalse-sufficiency cases ({len(false_sufficiency_cases)}):")
+            for r in false_sufficiency_cases:
+                print(
+                    f"  - [{r.get('correctness_score', 0):.1f}] {r['question'][:60]}..."
+                )
+    else:
+        print("  [skip-judge mode] Quality metrics not computed.")
     print(f"  Complex path rate:     {complex_rate:.1%}")
     print(f"  Mean latency:          {avg_elapsed:.1f}s")
-    if false_sufficiency_cases:
-        print(f"\nFalse-sufficiency cases ({len(false_sufficiency_cases)}):")
-        for r in false_sufficiency_cases:
-            print(f"  - [{r.get('correctness_score', 0):.1f}] {r['question'][:60]}...")
     print(f"\nSaved → {output}")
 
 
@@ -312,5 +361,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output", type=Path, default=DEFAULT_OUTPUT, help="Output JSONL path"
     )
+    parser.add_argument(
+        "--skip-judge",
+        action="store_true",
+        help="Skip LLM judge (no faithfulness/correctness scoring). Pipeline runs only. Cost ~$0.",
+    )
     args = parser.parse_args()
-    run(limit=args.limit, output=args.output)
+    run(limit=args.limit, output=args.output, skip_judge=args.skip_judge)
