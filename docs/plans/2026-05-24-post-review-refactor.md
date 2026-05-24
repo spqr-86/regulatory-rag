@@ -1769,13 +1769,13 @@ llm = ChatGoogleGenerativeAI(
 - [ ] CARD-5.8 `SKIPPED` — `labeled_criteria` возвращает binary, наш judge на шкале 0-10; миграция сломает baseline 7.9. Отдельная задача с пересчётом baseline
 
 ### Board 4 (P3):
-- [ ] CARD-4.1 `DONE` — type hints
-- [ ] CARD-4.2 `DONE` — structlog migration
-- [ ] CARD-4.3 `DONE` — narrow excepts
-- [ ] CARD-4.4 `DONE` — judge prompt in registry
-- [ ] CARD-4.5 `DONE` — retry by type
-- [ ] CARD-4.6 `DONE` — MagicMock spec
-- [ ] CARD-4.7 `DONE` — explicit IPv6 patch
+- [x] CARD-4.1 `DONE` — type hints
+- [x] CARD-4.2 `DONE` — structlog migration
+- [x] CARD-4.3 `DONE` — narrow excepts
+- [x] CARD-4.4 `DONE` — judge prompt in registry
+- [x] CARD-4.5 `DONE` — retry by type
+- [x] CARD-4.6 `DONE` — MagicMock spec
+- [x] CARD-4.7 `DONE` — explicit IPv6 patch
 
 ### Global:
 - [ ] `pytest -m unit` green (current 223 tests pass)
