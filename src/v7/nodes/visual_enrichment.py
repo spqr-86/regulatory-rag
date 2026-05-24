@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Callable, Optional
 
-from src.parsers import detect_incomplete_chunk
+from src.infra.parsers import detect_incomplete_chunk
 from src.v7.state_types import RAGState
 
 logger = logging.getLogger(__name__)

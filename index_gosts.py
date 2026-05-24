@@ -78,7 +78,7 @@ def _fix_docx_rels(data: bytes) -> bytes:
 
 def _extract_chunks_docling(path: str) -> list[dict]:
     """Извлечь чанки из DOCX через Docling (с патчем rels для битых файлов)."""
-    from src.file_handler import DocumentProcessor
+    from src.indexing.file_handler import DocumentProcessor
 
     ext = os.path.splitext(path)[1].lower()
     if ext != ".docx":
@@ -143,8 +143,8 @@ def _chunk_text(
 
 def main() -> None:
     from langchain_chroma import Chroma
-    from src.llm_factory import get_embedding_model
-    from src.vector_store import _batches_by_tokens, _sanitize_metadata
+    from src.infra.llm_factory import get_embedding_model
+    from src.indexing.vector_store import _batches_by_tokens, _sanitize_metadata
     from utils.logging import logger
 
     logger.info("index_gosts: старт", docs_path=GOSTS_DOCS_PATH)

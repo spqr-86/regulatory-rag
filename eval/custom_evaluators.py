@@ -5,7 +5,7 @@ import json
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.llm_factory import get_llm
+from src.infra.llm_factory import get_llm
 
 
 def check_correctness(run, example):

@@ -23,7 +23,7 @@ from eval.advanced_generation_metrics import (
     evaluate_citation_quality,
 )
 from eval.custom_evaluators import check_correctness
-from src.llm_factory import get_llm
+from src.infra.llm_factory import get_llm
 from src.final_chain import create_final_hybrid_chain
 from agents.multiagent_rag import MultiAgentRAGWorkflow
 

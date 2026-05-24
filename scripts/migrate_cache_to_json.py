@@ -10,7 +10,7 @@ import json
 import pickle  # noqa: S403 — intentional: migrating trusted local cache
 from pathlib import Path
 
-from src.file_handler import _document_to_dict
+from src.indexing.file_handler import _document_to_dict
 
 CACHE_DIR = Path("document_cache")
 

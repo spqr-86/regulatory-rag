@@ -12,7 +12,7 @@ class ChromaBackend:
 
     def __init__(self, load_existing: bool = True) -> None:
         if load_existing:
-            from src.vector_store import load_vector_store
+            from src.indexing.vector_store import load_vector_store
 
             self._vs = load_vector_store()
         else:
@@ -20,7 +20,7 @@ class ChromaBackend:
 
     def create(self, chunks: list[Document]) -> "ChromaBackend":
         """Build a new Chroma index from chunks. Used by index.py."""
-        from src.vector_store import create_vector_store
+        from src.indexing.vector_store import create_vector_store
 
         self._vs = create_vector_store(chunks)
         return self
@@ -44,7 +44,7 @@ class ChromaBackend:
         return self._vs._collection.count()
 
     def get_by_filter(self, where: dict, limit: int = 200) -> list[Document]:
-        from src.chroma_helpers import chroma_results_to_documents
+        from src.indexing.chroma_helpers import chroma_results_to_documents
 
         # Chroma needs explicit $and wrapper for multi-condition filters
         if len(where) > 1 or any(isinstance(v, dict) for v in where.values()):

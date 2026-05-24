@@ -11,7 +11,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_community.retrievers import BM25Retriever
 from pydantic import PrivateAttr
 
-from .prompt_manager import PromptManager
+from src.infra.prompt_manager import PromptManager
 
 
 class ApplicabilityRetriever(BaseRetriever):

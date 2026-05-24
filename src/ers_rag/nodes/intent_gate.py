@@ -88,7 +88,7 @@ def intent_gate(state: RAGState) -> RAGState:
 
     threshold = v7_config.DOMAIN_GATE_THRESHOLD
     if threshold > 0.0:
-        from src.llm_factory import get_embedding_model
+        from src.infra.llm_factory import get_embedding_model
 
         embedding_model = get_embedding_model()
         query_embedding = embedding_model.embed_query(q)

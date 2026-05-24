@@ -7,7 +7,7 @@ import pytest
 from langchain_core.caches import BaseCache
 from langchain_core.outputs import Generation
 
-from src.semantic_cache import SemanticCache
+from src.infra.semantic_cache import SemanticCache
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def cache(tmp_path):
     def encode(text):
         return vectors.get(text, np.array([0.0, 1.0, 0.0]))
 
-    with patch("src.semantic_cache.SentenceTransformer") as mock_st:
+    with patch("src.infra.semantic_cache.SentenceTransformer") as mock_st:
         model = MagicMock()
         model.encode.side_effect = encode
         mock_st.return_value = model
@@ -102,7 +102,7 @@ def test_persistence_round_trip(tmp_path):
     def encode(text):
         return vectors.get(text, np.array([0.0, 1.0]))
 
-    with patch("src.semantic_cache.SentenceTransformer") as mock_st:
+    with patch("src.infra.semantic_cache.SentenceTransformer") as mock_st:
         model = MagicMock()
         model.encode.side_effect = encode
         mock_st.return_value = model

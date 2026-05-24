@@ -15,9 +15,9 @@ from langchain_core.messages import HumanMessage
 from langchain_core.documents import Document
 
 from config.settings import settings
-from src.llm_factory import get_vision_llm
-from src.vector_store import load_vector_store
-from src.chroma_helpers import query_chunks_by_range
+from src.infra.llm_factory import get_vision_llm
+from src.indexing.vector_store import load_vector_store
+from src.indexing.chroma_helpers import query_chunks_by_range
 
 
 @dataclass

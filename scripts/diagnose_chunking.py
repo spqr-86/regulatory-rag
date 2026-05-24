@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from docling.document_converter import DocumentConverter
 from docling_core.types.doc import ListItem, SectionHeaderItem, TextItem
 
-from src.file_handler import BLACKLIST_PHRASES, MAX_CHUNK_SIZE, MIN_BBOX_HEIGHT
+from src.indexing.file_handler import BLACKLIST_PHRASES, MAX_CHUNK_SIZE, MIN_BBOX_HEIGHT
 
 TARGET_SUBSTRINGS = [
     "Повторный инструктаж",

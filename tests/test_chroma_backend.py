@@ -11,7 +11,7 @@ from langchain_core.documents import Document
 
 @pytest.mark.unit
 def test_similarity_search_delegates():
-    with patch("src.vector_store.load_vector_store") as mock_load:
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
         mock_vs = MagicMock(spec=Chroma)
         mock_vs.similarity_search_with_score.return_value = [
             (Document(page_content="t"), 0.9)
@@ -29,7 +29,7 @@ def test_similarity_search_delegates():
 
 @pytest.mark.unit
 def test_iter_all_documents_yields_dicts():
-    with patch("src.vector_store.load_vector_store") as mock_load:
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
         mock_vs = MagicMock(spec=Chroma)
         mock_vs.get.return_value = {
             "documents": ["doc1", "doc2"],
@@ -50,7 +50,7 @@ def test_iter_all_documents_yields_dicts():
 @pytest.mark.unit
 def test_iter_all_documents_handles_none_metadata():
     """If a doc has metadata=None, iter_all_documents must yield empty dict."""
-    with patch("src.vector_store.load_vector_store") as mock_load:
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
         mock_vs = MagicMock(spec=Chroma)
         mock_vs.get.return_value = {
             "documents": ["doc1"],
@@ -66,7 +66,7 @@ def test_iter_all_documents_handles_none_metadata():
 
 @pytest.mark.unit
 def test_count_delegates_to_collection():
-    with patch("src.vector_store.load_vector_store") as mock_load:
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
         mock_vs = MagicMock(spec=Chroma)
         mock_vs._collection = MagicMock()  # instance attr not in spec, set explicitly
         mock_vs._collection.count.return_value = 1973
@@ -80,7 +80,7 @@ def test_count_delegates_to_collection():
 @pytest.mark.unit
 def test_get_by_filter_wraps_multi_condition_with_and():
     """Multi-key where dict must be wrapped in $and for Chroma."""
-    with patch("src.vector_store.load_vector_store") as mock_load:
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
         mock_vs = MagicMock(spec=Chroma)
         mock_vs.get.return_value = {"documents": [], "metadatas": []}
         mock_load.return_value = mock_vs
@@ -102,7 +102,7 @@ def test_get_by_filter_wraps_multi_condition_with_and():
 
 @pytest.mark.unit
 def test_get_by_filter_single_condition_passes_through():
-    with patch("src.vector_store.load_vector_store") as mock_load:
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
         mock_vs = MagicMock(spec=Chroma)
         mock_vs.get.return_value = {"documents": [], "metadatas": []}
         mock_load.return_value = mock_vs
@@ -120,7 +120,7 @@ def test_satisfies_protocol():
     from src.backends.chroma_backend import ChromaBackend
     from src.backends.vector_store import VectorStoreBackend
 
-    with patch("src.vector_store.load_vector_store"):
+    with patch("src.indexing.vector_store.load_vector_store"):
         backend = ChromaBackend()
         assert isinstance(backend, VectorStoreBackend)
 
@@ -130,7 +130,7 @@ def test_create_populates_vs():
     """ChromaBackend(load_existing=False).create(chunks) must build a new index."""
     from src.backends.chroma_backend import ChromaBackend
 
-    with patch("src.vector_store.create_vector_store") as mock_create:
+    with patch("src.indexing.vector_store.create_vector_store") as mock_create:
         mock_create.return_value = MagicMock()
         backend = ChromaBackend(load_existing=False)
         chunks = [Document(page_content="x", metadata={})]

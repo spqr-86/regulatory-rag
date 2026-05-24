@@ -4,7 +4,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 # Must happen before any langchain_google_genai import (occurs inside src modules).
-from src.llm_factory import apply_ipv6_patch_for_googleapis
+from src.infra.llm_factory import apply_ipv6_patch_for_googleapis
 
 apply_ipv6_patch_for_googleapis()
 

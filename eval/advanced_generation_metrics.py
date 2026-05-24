@@ -360,7 +360,7 @@ def evaluate_generation_comprehensive(
 
 # Пример использования
 if __name__ == "__main__":
-    from src.llm_factory import get_llm
+    from src.infra.llm_factory import get_llm
 
     llm = get_llm()
 

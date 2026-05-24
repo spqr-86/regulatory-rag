@@ -22,7 +22,7 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.llm_factory import get_embedding_model  # noqa: E402
+from src.infra.llm_factory import get_embedding_model  # noqa: E402
 from src.v7.domain_gate import cosine_similarity, get_corpus_centroid  # noqa: E402
 
 

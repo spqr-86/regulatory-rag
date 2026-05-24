@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 import json
-from src.file_handler import DocumentProcessor
+from src.indexing.file_handler import DocumentProcessor
 
 # Correct imports based on inspection
 from docling.datamodel.document import SectionHeaderItem, TextItem

@@ -14,11 +14,11 @@ import pytest
 @pytest.mark.unit
 def test_get_llm_gemini_forwards_kwargs():
     """Gemini factory must pass thinking_budget/response_mime_type through."""
-    from src.llm_factory import get_llm
+    from src.infra.llm_factory import get_llm
 
     with (
-        patch("src.llm_factory.settings") as s,
-        patch("src.llm_factory.get_gemini_llm") as mock_g,
+        patch("src.infra.llm_factory.settings") as s,
+        patch("src.infra.llm_factory.get_gemini_llm") as mock_g,
     ):
         s.LLM_PROVIDER = "gemini"
         get_llm(thinking_budget=4096, response_mime_type="application/json")
@@ -30,12 +30,12 @@ def test_get_llm_gemini_forwards_kwargs():
 @pytest.mark.unit
 def test_get_llm_openai_drops_gemini_kwargs():
     """OpenAI factory must drop Gemini-specific kwargs and log a warning."""
-    from src.llm_factory import get_llm
+    from src.infra.llm_factory import get_llm
 
     with (
-        patch("src.llm_factory.settings") as s,
-        patch("src.llm_factory.ChatOpenAI") as mock_cls,
-        patch("src.llm_factory._log") as mock_log,
+        patch("src.infra.llm_factory.settings") as s,
+        patch("src.infra.llm_factory.ChatOpenAI") as mock_cls,
+        patch("src.infra.llm_factory._log") as mock_log,
     ):
         s.LLM_PROVIDER = "openai"
         s.MODEL_NAME = "gpt-4o-mini"
@@ -61,9 +61,9 @@ def test_get_llm_openai_drops_gemini_kwargs():
 @pytest.mark.unit
 def test_get_llm_unknown_provider_raises():
     """Unknown provider must raise ValueError listing available ones."""
-    from src.llm_factory import get_llm
+    from src.infra.llm_factory import get_llm
 
-    with patch("src.llm_factory.settings") as s:
+    with patch("src.infra.llm_factory.settings") as s:
         s.LLM_PROVIDER = "anthropic"
         with pytest.raises(ValueError, match="anthropic"):
             get_llm()
@@ -72,7 +72,7 @@ def test_get_llm_unknown_provider_raises():
 @pytest.mark.unit
 def test_registry_contains_gemini_and_openai():
     """Registry must expose both providers after refactor."""
-    from src.llm_factory import _LLM_PROVIDERS
+    from src.infra.llm_factory import _LLM_PROVIDERS
 
     assert "gemini" in _LLM_PROVIDERS
     assert "openai" in _LLM_PROVIDERS
@@ -92,7 +92,7 @@ def test_get_gemini_llm_does_not_monkeypatch_build_request_config(monkeypatch):
     """
     from unittest.mock import MagicMock
 
-    import src.llm_factory as lf
+    import src.infra.llm_factory as lf
 
     monkeypatch.setattr(lf.settings, "GEMINI_API_KEY", "test-key", raising=False)
     monkeypatch.setattr(lf.settings, "GEMINI_FAST_MODEL", "gemini-x", raising=False)

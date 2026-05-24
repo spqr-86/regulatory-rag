@@ -20,8 +20,8 @@ from pydantic import BaseModel, Field
 from src.backends.vector_store import (
     VectorStoreBackend,
 )  # noqa: F401 — used in isinstance checks
-from src.llm_factory import get_llm, get_simple_llm
-from src.parsers import (
+from src.infra.llm_factory import get_llm, get_simple_llm
+from src.infra.parsers import (
     extract_text,
 )  # noqa: F401  # used by other make_*_fn
 from src.v7.nlp_core import init_bm25_index

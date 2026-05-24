@@ -1,4 +1,4 @@
-from src.parsers import (
+from src.infra.parsers import (
     parse_json_from_response,
     extract_text,
     parse_status_block,

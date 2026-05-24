@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from config.settings import settings
 from src.backends.vector_store import get_vector_store_backend
-from src.file_handler import DocumentProcessor
+from src.indexing.file_handler import DocumentProcessor
 from utils.logging import logger
 
 load_dotenv()

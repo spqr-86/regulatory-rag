@@ -26,7 +26,7 @@ RERANK_TOP_N = 8
 
 @lru_cache(maxsize=1)
 def _load_store() -> Chroma:
-    from src.llm_factory import get_embedding_model
+    from src.infra.llm_factory import get_embedding_model
 
     if not os.path.isdir(GOSTS_CHROMA_PATH):
         raise FileNotFoundError(

@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from src.chroma_helpers import query_chunks_by_range, chroma_results_to_documents
+from src.indexing.chroma_helpers import query_chunks_by_range, chroma_results_to_documents
 
 
 class TestChromaResultsToDocuments:

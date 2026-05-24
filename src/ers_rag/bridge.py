@@ -23,7 +23,7 @@ import structlog
 from langchain_core.messages import HumanMessage
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from src.parsers import extract_text, parse_json_from_response
+from src.infra.parsers import extract_text, parse_json_from_response
 from src.ers_rag.nlp_core import init_bm25_index
 from src.ers_rag.nodes import generate_answer as generate_answer_mod
 from src.ers_rag.nodes import llm_verifier as llm_verifier_mod
@@ -442,7 +442,7 @@ def _load_ers_vector_store():
     """Load ChromaDB ГОСТ corpus (mirrors src/gosts_pipeline._load_store)."""
     from langchain_chroma import Chroma
 
-    from src.llm_factory import get_embedding_model
+    from src.infra.llm_factory import get_embedding_model
 
     if not os.path.isdir(ERS_CHROMA_PATH):
         raise FileNotFoundError(

@@ -6,7 +6,7 @@ import json
 import re
 from typing import List
 
-from src.types import RAGStatus, ChunkInfo
+from src.infra.types import RAGStatus, ChunkInfo
 
 
 def parse_json_from_response(raw: str) -> dict:

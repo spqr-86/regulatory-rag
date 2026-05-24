@@ -13,10 +13,10 @@ from langchain_core.messages import HumanMessage
 
 from config.settings import settings
 
-from .applicability_retriever import ApplicabilityRetriever
-from .llm_factory import get_llm
-from .vector_store import load_vector_store
-from .prompt_manager import PromptManager
+from src.indexing.applicability_retriever import ApplicabilityRetriever
+from src.infra.llm_factory import get_llm
+from src.indexing.vector_store import load_vector_store
+from src.infra.prompt_manager import PromptManager
 
 
 def format_docs(docs):

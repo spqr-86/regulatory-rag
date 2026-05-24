@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 from langchain_core.vectorstores import VectorStore
 
-from src.applicability_retriever import ApplicabilityRetriever
+from src.indexing.applicability_retriever import ApplicabilityRetriever
 
 
 def _make_doc(text: str, **meta) -> Document:
@@ -54,7 +54,7 @@ def mock_llm():
     )
 
 
-@patch("src.applicability_retriever.PromptManager")
+@patch("src.indexing.applicability_retriever.PromptManager")
 def test_generate_queries_uses_line_parser(
     mock_pm_cls, mock_vector_store, mock_bm25, mock_llm
 ):
@@ -74,7 +74,7 @@ def test_generate_queries_uses_line_parser(
     assert len(queries) <= 4
 
 
-@patch("src.applicability_retriever.PromptManager")
+@patch("src.indexing.applicability_retriever.PromptManager")
 def test_generate_queries_cached(mock_pm_cls, mock_vector_store, mock_bm25, mock_llm):
     """Second call for the same query hits the in-memory cache."""
     mock_pm_cls.return_value.render.return_value = "TEMPLATE rendered"
@@ -97,7 +97,7 @@ def test_generate_queries_cached(mock_pm_cls, mock_vector_store, mock_bm25, mock
     del spy_llm  # silence unused
 
 
-@patch("src.applicability_retriever.PromptManager")
+@patch("src.indexing.applicability_retriever.PromptManager")
 def test_generate_queries_fallback_on_error(mock_pm_cls, mock_vector_store, mock_bm25):
     """If LLM/chain explodes, fall back to the original query alone."""
     mock_pm_cls.return_value.render.return_value = "TEMPLATE rendered"
@@ -113,7 +113,7 @@ def test_generate_queries_fallback_on_error(mock_pm_cls, mock_vector_store, mock
     assert retriever._generate_queries("оригинал") == ["оригинал"]
 
 
-@patch("src.applicability_retriever.PromptManager")
+@patch("src.indexing.applicability_retriever.PromptManager")
 def test_get_relevant_documents_merges_all_subqueries(
     mock_pm_cls, mock_vector_store, mock_bm25, mock_llm
 ):
@@ -142,7 +142,7 @@ def test_get_relevant_documents_merges_all_subqueries(
             assert "similarity_score" in d.metadata
 
 
-@patch("src.applicability_retriever.PromptManager")
+@patch("src.indexing.applicability_retriever.PromptManager")
 def test_query_expansion_disabled_skips_llm(
     mock_pm_cls, mock_vector_store, mock_bm25, mock_llm
 ):

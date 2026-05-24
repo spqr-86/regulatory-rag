@@ -10,7 +10,7 @@ from langchain_core.documents import Document
 from langchain_chroma import Chroma
 
 from config.settings import settings
-from src.llm_factory import get_embedding_model
+from src.infra.llm_factory import get_embedding_model
 from utils.logging import logger
 
 try:

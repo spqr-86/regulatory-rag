@@ -13,7 +13,7 @@ from eval.advanced_generation_metrics import (
 )
 
 # --- Импортируем цепочки кандидаты ---
-from src.llm_factory import get_llm
+from src.infra.llm_factory import get_llm
 from src.ultimate_chain import create_ultimate_chain
 
 # Убираем предупреждения о параллелизме
