@@ -199,7 +199,7 @@ def _create_local_embeddings():
     model = settings.EMBEDDING_MODEL_NAME
     return HuggingFaceEmbeddings(
         model_name=model or "ai-forever/sbert_large_nlu_ru",
-        model_kwargs={"device": "cpu", "trust_remote_code": True},
+        model_kwargs={"device": "cpu"},
         encode_kwargs={"normalize_embeddings": True, "batch_size": 64},
     )
 
