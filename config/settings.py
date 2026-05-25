@@ -49,9 +49,6 @@ class Settings(BaseSettings):
     MAX_VISUAL_PROOF_CALLS: int = 1
     MAX_VISUAL_PROOFS: int = 3
 
-    # V7 graph toggle
-    USE_V7_GRAPH: bool = False
-
     def model_post_init(self, __context) -> None:
         if self.CHROMA_DB_PATH == "./chroma_db":
             object.__setattr__(

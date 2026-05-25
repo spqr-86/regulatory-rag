@@ -102,7 +102,7 @@ def load_resources():
         st.error("База данных не найдена. Запустите 'python index.py' для её создания.")
         return None
 
-    if not V7_AVAILABLE or not settings.USE_V7_GRAPH:
+    if not V7_AVAILABLE:
         st.error("V7 Graph недоступен. Проверьте конфигурацию.")
         return None
 
