@@ -1,23 +1,8 @@
-final_chain:
-  active_version: "v1"
-  versions:
-    v1: "chains/ultimate_v1.j2"
-
 applicability_retriever:
   active_version: "v2"
   versions:
     v1: "agents/query_expansion_v1.j2"
     v2: "agents/query_expansion_v2.j2"
-
-multiagent_rag_agent:
-  active_version: "v1"
-  versions:
-    v1: "agents/rag_agent_v1.j2"
-
-multiagent_verifier:
-  active_version: "v2"
-  versions:
-    v2: "agents/verifier_v2.j2"
 
 router_v2:
   active_version: "v2"
