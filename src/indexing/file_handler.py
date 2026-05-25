@@ -26,7 +26,7 @@ FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
 # ⚙️ Обновляем версию, так как формат хранения кардинально меняется
 # v2.2-grouped: bbox-фильтр больше не отбрасывает текст (только зануляет bbox);
 # MAX_CHUNK_SIZE из settings; смена страницы flushит чанк.
-PIPELINE_VERSION = "v2.3-noise-clean"
+PIPELINE_VERSION = "v2.4-sentence-overlap"
 
 # --- Константы для фильтрации и группировки ---
 # Порог высоты bbox: ниже него bbox считается мусором (визуальные артефакты, footer).
@@ -194,20 +194,26 @@ class DocumentProcessor:
         current_chunk_text = []
         current_chunk_bbox = None  # [l, t, r, b]
         current_chunk_page = None
+        last_chunk_tail = ""  # overlap: конец предыдущего чанка
+
+        CHUNK_OVERLAP = 150  # символов overlap между чанками
 
         def finalize_chunk(idx_for_id):
-            nonlocal current_chunk_text, current_chunk_bbox, current_chunk_page
+            nonlocal \
+                current_chunk_text, \
+                current_chunk_bbox, \
+                current_chunk_page, \
+                last_chunk_tail
             if not current_chunk_text:
                 return
 
-            # Собираем текст
             full_text = "\n".join(current_chunk_text)
 
             meta = {
                 "source": source,
                 "type": "grouped_text",
                 "chunk_id": idx_for_id,
-                "parent_section": current_section,  # В метаданные, не в контент
+                "parent_section": current_section,
             }
 
             if current_chunk_bbox:
@@ -215,8 +221,14 @@ class DocumentProcessor:
             if current_chunk_page:
                 meta["page_no"] = current_chunk_page
 
-            # Контент БЕЗ заголовка (чистый текст)
             chunks.append(Document(page_content=full_text, metadata=meta))
+
+            # Сохраняем хвост для overlap следующего чанка
+            last_chunk_tail = (
+                full_text[-CHUNK_OVERLAP:]
+                if len(full_text) > CHUNK_OVERLAP
+                else full_text
+            )
 
             # Сброс
             current_chunk_text = []
@@ -317,24 +329,32 @@ class DocumentProcessor:
                 continue
 
             # 4. Grouping Logic
-            # Если страница сменилась — закрываем чанк
+            # Страница сменилась — НЕ флашим: норма может продолжаться на следующей странице.
+            # Просто обновляем трекинг страницы для bbox-координат.
             if (
                 current_chunk_page is not None
                 and item_page is not None
                 and current_chunk_page != item_page
             ):
-                finalize_chunk(i)
+                # Сбрасываем bbox (координаты с разных страниц некорректны),
+                # но текст продолжаем в том же чанке.
+                current_chunk_bbox = None
+                current_chunk_page = item_page
 
-            # Если размер превышен — закрываем чанк
+            # Если размер превышен — закрываем чанк по sentence boundary
             current_len = sum(len(t) for t in current_chunk_text)
             if current_len + len(text) > MAX_CHUNK_SIZE:
                 finalize_chunk(i)
+                # Overlap: начинаем новый чанк с хвоста предыдущего
+                if last_chunk_tail:
+                    current_chunk_text = [last_chunk_tail]
 
             # Добавляем в буфер
             if item_bbox:
-                # Смена страницы внутри bbox-обновления: flush + new chunk.
                 if not update_bbox(item_bbox, item_page):
-                    finalize_chunk(i)
+                    # bbox с другой страницы — сбрасываем bbox, текст продолжаем
+                    current_chunk_bbox = None
+                    current_chunk_page = item_page
                     update_bbox(item_bbox, item_page)
             elif item_page and current_chunk_page is None:
                 current_chunk_page = item_page

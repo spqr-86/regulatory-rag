@@ -94,6 +94,17 @@ def rag_simple(state: RAGState) -> RAGState:
             vector_results, key=lambda x: x.get("score", 0.0), reverse=True
         )
 
+    # BM25 guarantee: ensure top-3 BM25 results from each query variant are always
+    # included. Handles cases where BM25 finds exact-match factoid chunks that
+    # vector search misses (e.g. "как часто" → "не реже чем один раз в пять лет").
+    existing_ids = {p.get("chunk_id") or p.get("text", "")[:50] for p in passages}
+    for bm25_list in all_bm25_lists:
+        for p in bm25_list[:3]:
+            pid = p.get("chunk_id") or p.get("text", "")[:50]
+            if pid not in existing_ids:
+                passages.append(p)
+                existing_ids.add(pid)
+
     _, metrics = compute_attempt_metrics(original_q, active_q, passages, plan)
     metrics["retrieval_type"] = "hybrid_rrf"
 
