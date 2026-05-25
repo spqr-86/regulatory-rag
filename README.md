@@ -3,7 +3,7 @@
 **Production RAG pipeline for Russian regulatory documents (GOST, SNiP, Labour Code) — answers questions with citations or explicitly abstains when uncertain.**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
-[![Test](https://github.com/spqr-86/safety-incident-analyzer/actions/workflows/evaluation.yml/badge.svg)](https://github.com/spqr-86/safety-incident-analyzer/actions)
+[![CI](https://github.com/spqr-86/safety-incident-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/safety-incident-analyzer/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Correctness: 7.9/10 · Faithfulness: 0.988 · Cost: $0.01/query**
