@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-**AI Safety Compliance Assistant** — RAG system for analyzing Russian workplace safety regulations (ГОСТ, СНиП, СП). Uses hybrid retrieval (semantic + BM25), FlashRank reranking, and multi-agent LangGraph workflows.
+**AI Safety Compliance Assistant** — RAG system for analyzing Russian workplace safety regulations (ГОСТ, СНиП, СП). Uses hybrid retrieval (semantic + BM25), FlashRank reranking, and deterministic LangGraph V7 pipeline.
 
-**Stack**: Python 3.11+, LangChain, LangGraph, ChromaDB, Docling, FlashRank, Streamlit, Google Gemini 3
+**Stack**: Python 3.11+, LangChain, LangGraph, ChromaDB, Docling, FlashRank, Streamlit, Google Gemini 2.5 Flash
 
 ## Virtual Environment
 
@@ -18,7 +18,7 @@ source venv/bin/activate   # before any command
 
 - **URL:** http://213.176.64.237:8502
 - **Port:** 8502 (UFW opened), tmux session `sia` (attach: `tmux a -t sia`)
-- **Start:** `cd /home/petr/projects/safety-incident-analyzer && source venv/bin/activate && streamlit run app.py --server.port 8502`
+- **Start:** `cd /home/petr/projects/ai/safety-incident-analyzer && source venv/bin/activate && streamlit run app.py --server.port 8502`
 - **Indexed docs:** 12 PDFs → 1973 chunks (добавлен полный ТК РФ, v2.3-noise-clean, 2026-05-16).
 - **Машина — это VPS.** Локальная директория `/home/petr/projects/safety-incident-analyzer` и есть прод-инстанс. Никакого scp/git pull не нужно — правки сразу на сервере, остаётся только перезапустить tmux `sia`.
 
@@ -72,22 +72,19 @@ python eval/run_v7_eval.py --skip-judge          # pipeline-only eval (no LLM ju
 
 ## Architecture
 
-### Multi-Agent RAG (`agents/multiagent_rag.py`) — legacy fallback (V7 Graph — основной)
+### src/ layout
 
 ```
-glossary expansion → regex filter → rag_agent (ReAct) → verifier → format_final
-                                   → direct_response (chitchat/out_of_scope)
-Revision: verifier (needs_revision) → rag_agent (max 1)
+src/
+├── infra/          — LLM factory, prompt manager, semantic cache, parsers, types
+├── indexing/       — file handler, chroma helpers, vector store, applicability retriever
+├── backends/       — VectorStoreBackend protocol + Chroma impl
+├── v7/             — V7 LangGraph nodes, graph, state_types, hard_gates, nlp_core
+├── ers_rag/        — WTA-specific ERS bridge (parallel project)
+└── ...             — final_chain.py (legacy), glossary, agent_tools, ui_helpers
 ```
 
-- **Regex Filter** (`_classify_query`): deterministic regex, no LLM. Classifies chitchat / out_of_scope / rag.
-- **RAG Agent** (flash, thinking: 8192, max 16 steps): ReAct with `search_documents` + `visual_proof` tools.
-- **Verifier** (flash, thinking: 1024): JSON fact-check, 6 criteria.
-- **Revision**: agent receives previous `draft_answer` + verifier feedback.
-- **Shared rules**: `prompts/common/base_rules.j2` — macro imported via `{% import "common/base_rules.j2" as rules %}`.
 - **Term Glossary**: `config/term_glossary.yaml` — deterministic expansion of domain abbreviations before query enters the graph. To add terms: edit YAML, no code changes.
-
-**Simple RAG Chain** (`src/final_chain.py`): Legacy fallback. Hybrid retrieval → FlashRank rerank → LLM.
 
 ### Prompt Management
 

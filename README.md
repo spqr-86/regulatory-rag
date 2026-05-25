@@ -55,7 +55,7 @@ Key design decisions:
 | Answer Relevance | **0.85+** | > 0.85 |
 | False-sufficiency rate | **15%** | < 10% |
 | Cost per query | **$0.0102** | — |
-| Avg latency | 21.9 sec | — |
+| Avg latency | 21.9 sec (complex path) / 4.9 sec (simple path) | — |
 
 Eval: 50-question golden dataset, `eval/run_v7_eval.py`. LLM judge: Gemini 2.5 Flash.
 
@@ -168,7 +168,7 @@ Interactive docs: `http://localhost:8503/docs`
 | Layer | Technology |
 |-------|-----------|
 | Orchestration | LangGraph (V7 deterministic graph) |
-| LLM | Gemini 2.5 Flash (generation), DeepSeek V3 (GOST) |
+| LLM | Gemini 2.5 Flash (simple path, ~5s) + Pro/complex path, DeepSeek V3 (GOST) |
 | Embeddings | OpenAI text-embedding-3-small |
 | Vector store | ChromaDB |
 | Reranking | FlashRank Cross-Encoder |
@@ -180,7 +180,7 @@ Interactive docs: `http://localhost:8503/docs`
 
 ## Backend abstraction
 
-LLM and vector store are accessed through factory layers (`src/llm_factory.py`, `src/backends/`). Adding a new provider is one file plus one registry entry — pipeline code does not change.
+LLM and vector store are accessed through factory layers (`src/infra/llm_factory.py`, `src/backends/`). Adding a new provider is one file plus one registry entry — pipeline code does not change.
 
 | Layer | Shipped | Configurable via | Roadmap |
 |-------|---------|------------------|---------|
