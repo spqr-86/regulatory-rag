@@ -45,7 +45,9 @@ st.set_page_config(
 left, right = st.columns([0.8, 0.2], vertical_alignment="center")
 with left:
     st.title("🤖 AI Safety Compliance Assistant")
-    st.caption("Ваш ИИ-помощник по нормативной документации (СНиП, ГОСТ, ОТ, ПБ).")
+    st.caption(
+        "Ваш ИИ-помощник по нормативной и технической документации (ГОСТ, СНиП, СП, ТК РФ)."
+    )
 with right:
     st.markdown(
         f"""
@@ -166,7 +168,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Здравствуйте! Задайте вопрос по охране труда, и я найду ответ в нормативных документах (приказы, ТК РФ, СанПиН, ГОСТы).",
+            "content": "Здравствуйте! Задайте вопрос по нормативной документации, и я найду ответ (ГОСТ, СНиП, СП, ТК РФ).",
         }
     ]
 
@@ -231,7 +233,7 @@ if user_query:
                         st.code(preview, language="markdown")
                         st.divider()
             elif result.get("intent") == "noise":
-                answer = "Задайте вопрос по охране труда."
+                answer = "Задайте вопрос по нормативной документации."
             else:
                 answer = "Не удалось получить ответ."
 
