@@ -8,10 +8,9 @@ from src.infra.llm_factory import apply_ipv6_patch_for_googleapis
 
 apply_ipv6_patch_for_googleapis()
 
-# Локальные импорты
 from config.settings import settings
-from src.final_chain import create_final_hybrid_chain
 from src.ui_helpers import find_proof_images
+from src.v7.bridge import init_v7_pipeline
 from utils.logging import logger
 
 # V7 Graph
@@ -25,7 +24,7 @@ except Exception as e:
 
 # Индексация «по кнопке»
 try:
-    import index as index_module  # index.py должен содержать main()
+    import index as index_module
 
     INDEX_AVAILABLE = True
 except Exception as e:
@@ -39,7 +38,6 @@ load_dotenv()
 # =========================
 st.set_page_config(page_title="Regulatory RAG", page_icon="📚", layout="wide")
 
-# Верхний заголовок
 st.title("📚 Regulatory RAG")
 st.caption("Поиск по нормативной базе: ГОСТ, СНиП, СП, ТК РФ и другие документы.")
 
@@ -47,19 +45,19 @@ st.caption("Поиск по нормативной базе: ГОСТ, СНиП,
 #        SIDEBAR
 # =========================
 with st.sidebar:
-    # V7 режим — без toggle, автоматически
-    v7_mode = V7_AVAILABLE and settings.USE_V7_GRAPH
-
     st.markdown(
         f"""
         <div style="padding:8px 10px;border-radius:8px;background:#eef2ff;
                     border:1px solid #c7d2fe;font-size:12px;margin-bottom:4px;">
-            LLM: <b>{settings.LLM_PROVIDER}</b> · <b>{settings.MODEL_NAME}</b>
+            Simple: <b>{settings.SIMPLE_LLM_PROVIDER}</b> · <b>{settings.SIMPLE_MODEL_NAME}</b>
         </div>
         <div style="padding:8px 10px;border-radius:8px;background:#ecfeff;
-                    border:1px solid #a5f3fc;font-size:12px;">
-            Embeddings: <b>{getattr(settings, "EMBEDDING_PROVIDER", "?")}</b>
-            · <b>{getattr(settings, "EMBEDDING_MODEL_NAME", "?")}</b>
+                    border:1px solid #a5f3fc;font-size:12px;margin-bottom:4px;">
+            Complex: <b>{settings.COMPLEX_LLM_PROVIDER}</b> · <b>{settings.COMPLEX_MODEL_NAME}</b>
+        </div>
+        <div style="padding:8px 10px;border-radius:8px;background:#f0fdf4;
+                    border:1px solid #bbf7d0;font-size:12px;">
+            Embeddings: <b>{settings.EMBEDDING_PROVIDER}</b> · <b>{settings.EMBEDDING_MODEL_NAME}</b>
         </div>
         """,
         unsafe_allow_html=True,
@@ -70,13 +68,11 @@ with st.sidebar:
     st.subheader("📄 Библиотека документов")
     st.caption(f"БД: `{settings.CHROMA_DB_PATH}`")
 
-    # Кнопка пересоздания индекса
     if INDEX_AVAILABLE:
         if st.button("♻️ Переиндексировать библиотеку", use_container_width=True):
             with st.spinner("Индексация… это может занять несколько минут"):
                 try:
                     index_module.main()
-                    # Обновить кэш ресурсов после индексации
                     load_resources.clear()
                     st.success("Готово: библиотека переиндексирована.")
                 except Exception as e:
@@ -92,7 +88,6 @@ with st.sidebar:
     st.divider()
     if st.button("🧹 Очистить чат", use_container_width=True):
         st.session_state.pop("messages", None)
-        st.session_state.pop("last_answer", None)
         st.rerun()
 
 
@@ -101,46 +96,33 @@ with st.sidebar:
 # =========================
 @st.cache_resource(show_spinner=False)
 def load_resources():
-    """
-    Грузим один раз:
-      - гибридную RAG-цепочку (retriever + LLM)
-      - Multi-Agent RAG Workflow
-      - V7 Graph (if enabled)
-    """
-    # Проверяем наличие БД
     if not os.path.exists(settings.CHROMA_DB_PATH) or not os.listdir(
         settings.CHROMA_DB_PATH
     ):
         st.error("База данных не найдена. Запустите 'python index.py' для её создания.")
-        return None, None, None, None
+        return None
+
+    if not V7_AVAILABLE or not settings.USE_V7_GRAPH:
+        st.error("V7 Graph недоступен. Проверьте конфигурацию.")
+        return None
 
     try:
-        chain, retriever, _ = create_final_hybrid_chain()
+        from src.backends.vector_store import get_vector_store_backend
+
+        vector_store = get_vector_store_backend(load_existing=True)
+        init_v7_pipeline(vector_store)
+        v7_app = build_v7_graph().compile()
+        return v7_app
     except Exception as e:
-        st.error(f"Произошла ошибка при подготовке RAG-цепочки: {e}")
-        return None, None, None, None
-
-    # V7 Graph
-    v7_app = None
-    if V7_AVAILABLE and settings.USE_V7_GRAPH:
-        try:
-            from src.backends.vector_store import get_vector_store_backend
-
-            vector_store = get_vector_store_backend(load_existing=True)
-            init_v7_pipeline(vector_store)
-            v7_app = build_v7_graph().compile()
-        except Exception as e:
-            logger.warning(f"Failed to init V7 Graph: {e}")
-
-    return (chain, retriever, v7_app)
+        st.error(f"Ошибка инициализации V7 Graph: {e}")
+        logger.warning(f"Failed to init V7 Graph: {e}")
+        return None
 
 
-loaded = load_resources()
-if not loaded or loaded[0] is None:
+v7_app = load_resources()
+if v7_app is None:
     st.warning("Приложение не может быть запущено…")
     st.stop()
-
-rag_chain, hybrid_retriever, v7_app = loaded
 
 # =========================
 #     CHAT HISTORY INIT
@@ -153,12 +135,9 @@ if "messages" not in st.session_state:
         }
     ]
 
-# Рендерим историю
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
-        # Рендеринг картинок в истории сложнее, так как st.image создает отдельный блок
-        # Проверим, есть ли картинки в контенте сообщения (если это сохраненный ответ)
         if m["role"] == "assistant":
             for img_path in find_proof_images(m["content"]):
                 st.image(img_path, caption="Визуальное доказательство", width=600)
@@ -170,41 +149,22 @@ user_query = st.chat_input(
     "Спросите, например: «Какие требования к ширине эвакуационных путей?»"
 )
 if user_query:
-    answer = ""  # Initialize answer to prevent NameError
-    # Показываем сообщение пользователя
     st.session_state.messages.append({"role": "user", "content": user_query})
     with st.chat_message("user"):
         st.markdown(user_query)
 
-    # Ветка ответа
     with st.chat_message("assistant"):
-        if v7_mode and v7_app:
-            # --- V7 GRAPH MODE ---
-            with st.spinner("Ищу в нормативных документах..."):
-                result = v7_app.invoke({"query": user_query})
+        with st.spinner("Ищу в нормативных документах..."):
+            result = v7_app.invoke({"query": user_query})
 
-            # Determine answer
-            if result.get("clarify_message"):
-                answer = result["clarify_message"]
-            elif result.get("abstain_reason"):
-                answer = f"Не могу ответить: {result['abstain_reason']}"
-            elif result.get("answer"):
-                answer = result["answer"]
-                # Источники к синтезированному ответу
-                passages = result.get("final_passages", [])
-                if passages:
-                    with st.expander(f"🔎 Источники ({len(passages)})", expanded=False):
-                        for i, p in enumerate(passages[:show_sources_n], 1):
-                            src = p.get("metadata", {}).get("source", "N/A")
-                            score = p.get("score", 0.0)
-                            preview = p.get("text", "")[:500].strip().replace("\n", " ")
-                            st.markdown(f"**{i}.** `{src}` · 🎯 {score:.2f}")
-                            st.code(preview, language="markdown")
-                            st.divider()
-            elif result.get("final_passages"):
-                passages = result["final_passages"]
-                texts = [p.get("text", "") for p in passages[:10]]
-                answer = "\n\n---\n\n".join(texts)
+        if result.get("clarify_message"):
+            answer = result["clarify_message"]
+        elif result.get("abstain_reason"):
+            answer = f"Не могу ответить: {result['abstain_reason']}"
+        elif result.get("answer"):
+            answer = result["answer"]
+            passages = result.get("final_passages", [])
+            if passages:
                 with st.expander(f"🔎 Источники ({len(passages)})", expanded=False):
                     for i, p in enumerate(passages[:show_sources_n], 1):
                         src = p.get("metadata", {}).get("source", "N/A")
@@ -213,65 +173,22 @@ if user_query:
                         st.markdown(f"**{i}.** `{src}` · 🎯 {score:.2f}")
                         st.code(preview, language="markdown")
                         st.divider()
-            elif result.get("intent") == "noise":
-                answer = "Задайте вопрос по нормативной документации."
-            else:
-                answer = "Не удалось получить ответ."
-
-            st.markdown(answer)
-
+        elif result.get("final_passages"):
+            passages = result["final_passages"]
+            answer = "\n\n---\n\n".join(p.get("text", "") for p in passages[:10])
+            with st.expander(f"🔎 Источники ({len(passages)})", expanded=False):
+                for i, p in enumerate(passages[:show_sources_n], 1):
+                    src = p.get("metadata", {}).get("source", "N/A")
+                    score = p.get("score", 0.0)
+                    preview = p.get("text", "")[:500].strip().replace("\n", " ")
+                    st.markdown(f"**{i}.** `{src}` · 🎯 {score:.2f}")
+                    st.code(preview, language="markdown")
+                    st.divider()
+        elif result.get("intent") == "noise":
+            answer = "Задайте вопрос по нормативной документации."
         else:
-            # --- RAG MODE (Legacy) ---
-            try:
-                with st.spinner("Готовлю ответ (Classic RAG)..."):
-                    response_text = st.write_stream(
-                        rag_chain.stream(
-                            {
-                                "question": user_query,
-                                "chat_history": st.session_state.get("messages", []),
-                            }
-                        )
-                    )
-                st.session_state.last_answer = response_text
-                answer = response_text
+            answer = "Не удалось получить ответ."
 
-                # Источники Legacy RAG
-                try:
-                    retrieved_docs = hybrid_retriever.invoke(user_query)[
-                        :show_sources_n
-                    ]
-                except Exception:
-                    retrieved_docs = []
+        st.markdown(answer)
 
-                if retrieved_docs:
-                    with st.expander(
-                        f"🔎 Показать источники (топ-{len(retrieved_docs)})",
-                        expanded=False,
-                    ):
-                        for i, doc in enumerate(retrieved_docs, start=1):
-                            src = (
-                                doc.metadata.get("source")
-                                or doc.metadata.get("file_path")
-                                or "N/A"
-                            )
-                            section = (
-                                doc.metadata.get("section")
-                                or doc.metadata.get("header")
-                                or ""
-                            )
-                            preview = doc.page_content[:500].strip().replace("\n", " ")
-                            st.markdown(
-                                f"**{i}. Источник:** `{src}`"
-                                + (f" · *{section}*" if section else "")
-                            )
-                            st.code(preview, language="markdown")
-                            st.divider()
-                else:
-                    st.caption("Не удалось получить источники для отображения.")
-
-            except Exception as e:
-                st.error(f"Ошибка RAG-цепочки: {e}")
-                answer = f"Извините, произошла ошибка: {e}"
-
-    # Сохраняем сообщение ассистента в историю
     st.session_state.messages.append({"role": "assistant", "content": answer})
