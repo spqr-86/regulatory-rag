@@ -39,9 +39,6 @@ class Settings(BaseSettings):
     # HTTP
     REQUEST_TIMEOUT: float = 120.0
 
-    # Google Gemini
-    GEMINI_API_KEY: str = ""
-
     # Per-path model config — change independently without touching other paths
     SIMPLE_LLM_PROVIDER: str = "gemini"
     SIMPLE_MODEL_NAME: str = "gemini-2.5-flash"

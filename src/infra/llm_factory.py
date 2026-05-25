@@ -126,7 +126,7 @@ def get_gemini_llm(
             "Please install it or use another provider."
         )
 
-    api_key = os.getenv("GEMINI_API_KEY") or settings.GEMINI_API_KEY
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError(
             "GEMINI_API_KEY not found. Set it in .env or environment variables."
