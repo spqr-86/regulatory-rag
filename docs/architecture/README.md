@@ -4,7 +4,7 @@
 
 ## ⚡ TL;DR
 
-**Что это:** RAG-система для поиска по нормативным документам (ГОСТ, ТК РФ, приказы). Основной режим — V7 LangGraph Pipeline с детерминированным графом и Gemini-генерацией. MAS и Simple RAG — legacy.
+**Что это:** RAG-система для поиска по нормативным документам (ГОСТ, ТК РФ, СНиП, СП). Основной режим — V7 LangGraph Pipeline с детерминированным графом и Gemini-генерацией.
 
 **Топ-3 команды:**
 1. `python index.py` — индексация документов (DESTRUCTIVE)
@@ -17,11 +17,10 @@
 
 ## ⚙️ Как это работает
 
-Система использует **LangGraph** для оркестрации. Три режима (выбираются в UI, V7 — основной):
+Система использует **LangGraph** для оркестрации. Основной режим — V7 Pipeline:
 
 1. **V7 Pipeline** (`src/v7/`) — основной: детерминированный граф без LLM-роутинга. Bridge (`src/v7/bridge.py`) инжектит ChromaDB и Gemini через DI.
-2. **Multi-Agent RAG** (`agents/multiagent_rag.py`) — legacy: ReAct-агенты с thinking levels и верификатором.
-3. **Simple RAG Chain** (`src/final_chain.py`) — legacy fallback: гибридный поиск → FlashRank → LLM.
+2. **Simple RAG Chain** (`src/final_chain.py`) — legacy fallback: гибридный поиск → FlashRank → LLM.
 
 ### Основные этапы (V7 Pipeline)
 
@@ -37,43 +36,6 @@
 | 8. Generate Answer | `src/v7/nodes/generate_answer.py` | Gemini (thinking_budget=4096) синтезирует ответ из `final_passages[:24]` |
 
 ---
-
-## 🤖 Multi-Agent RAG (ReAct-агент) — legacy
-
-Легаси-подход (`agents/multiagent_rag.py`), заменён V7-пайплайном. Единый RAG Agent — автономный ReAct-агент, который сам решает, когда искать, когда использовать visual_proof и нужна ли декомпозиция.
-
-```mermaid
-flowchart TD
-    Q[Вопрос] --> Glossary[Term Glossary - config/term_glossary.yaml]
-    Glossary --> Filter[Regex Filter - _classify_query]
-    Filter -->|chitchat / out_of_scope| Direct[Direct Response]
-    Filter -->|rag| Agent[RAG Agent - Flash, thinking: 8192]
-
-    Agent --> Verifier[Verifier - Flash, thinking: 1024]
-
-    Verifier -->|approved| Final[Format Final]
-    Verifier -->|needs_revision, count <= 1| Agent
-    Verifier -->|max revisions| Final
-```
-
-### Ключевые компоненты
-
-| Компонент | Модель | Thinking | Задача |
-|-----------|--------|----------|--------|
-| Regex Filter | — (regex) | — | Детерминированная классификация (chitchat / oos / rag) |
-| RAG Agent | Gemini Flash | 8192 | Поиск, условная декомпозиция, visual_proof (ReAct) |
-| Verifier | Gemini Flash | 1024 | Проверка по 6 критериям (JSON) |
-
-### Инструменты агентов
-
-- **`search_documents`**: Гибридный поиск + Smart Context Extension (скользящее окно ±2 чанка)
-- **`visual_proof`**: `mode="show"` (вырезка из PDF) или `mode="analyze"` (VLM-анализ страницы с красной рамкой)
-
-### Потоки данных
-
-- **Term Glossary**: `config/term_glossary.yaml` содержит маппинг неофициальных доменных сокращений → официальные термины. Логика — в общем модуле `src/glossary.py`. Применяется детерминированно до regex-фильтра. Морфологический матчинг: слова >4 букв по стему, аббревиатуры ≤4 букв — целым словом. Если термин не найден в глоссарии, агент получает инструкцию из BASE_RULES (case 10) для self-service поиска.
-- **Ревизия**: Верификатор возвращает `needs_revision` → агент получает предыдущий `draft_answer` + feedback для точечного исправления
-- **Общие правила**: `prompts/common/base_rules.j2` — макрос с запретами, правилами visual_proof, 10 краевыми случаями (включая интеграцию с глоссарием)
 
 ---
 
@@ -133,10 +95,12 @@ streamlit run app.py     # Запуск UI
 
 | Директория | Описание |
 |------------|----------|
-| `agents/` | Логика мульти-агентных систем: `multiagent_rag.py` (ReAct-агенты с LangGraph). |
 | `prompts/` | Централизованное хранилище промптов (Jinja2) и реестр версий (`registry.yaml`). |
-| `src/` | Ядро RAG-логики: цепочки (`final_chain.py`), работа с векторной БД (`vector_store.py`), фабрики LLM (`llm_factory.py`). |
 | `src/v7/` | **Основной** V7 pipeline: детерминированный граф (intent_gate → router → rag_simple → evaluate_triage → rag_complex → generate_answer). |
+| `src/infra/` | Инфраструктура: `llm_factory.py`, `prompt_manager.py`, `semantic_cache.py`, parsers, types. |
+| `src/indexing/` | Индексирование: `file_handler.py`, `chroma_helpers.py`, `vector_store.py`, `applicability_retriever.py`. |
+| `src/backends/` | VectorStoreBackend protocol + ChromaDB реализация. |
+| `src/` | Legacy: `final_chain.py`, `glossary.py`, `agent_tools.py`, `ui_helpers.py`. |
 | `src/gosts_pipeline.py` | GOST RAG: ChromaDB `wta_gosts` (108 DOCX, 9344 чанков) → FlashRank → DeepSeek V3. |
 | `api.py` | FastAPI (порт 8503): `POST /query`, `POST /query/gosts`, `GET /health`. |
 | `config/` | Настройки приложения (`settings.py`) и доменный глоссарий (`term_glossary.yaml`). |
@@ -205,7 +169,7 @@ flowchart TD
 | `bridge.py` | DI-адаптер: ChromaDB + Gemini → v7 pipeline |
 
 ### Known Issues / TODO
-- [ ] **[P1]** Баг чанкинга в `src/file_handler.py` (`_process_docling_document`) — выроняет целые пункты норм из индекса. Ограничивает eval correctness. См. `docs/plans/backlog.md`.
+- [x] Баг чанкинга в `src/indexing/file_handler.py` — исправлен в v2.3-noise-clean (2026-05-15): 830 → 1973 чанков.
 - [ ] FlashRank score inflation в evaluate_complex — cross-encoder вероятности ~0.999, порог COMPLEX_THRESHOLD=0.35 всегда проходит. Нужно сортировать по FlashRank, threshold считать по vector_score.
 - [ ] Добавить Chat History в LangGraph (диалоговая память).
 - [x] V7 pipeline: intent_gate → router → rag_simple → evaluate_triage → rag_complex → generate_answer.
@@ -224,17 +188,3 @@ flowchart TD
 
 Подробнее см. в руководстве: [Prompt Management Guide](../guides/prompt-management.md).
 
-### Regex Filter (Multi-Agent RAG)
-Классификация запроса в `agents/multiagent_rag.py` через regex-паттерны (`_classify_query`):
-- `chitchat`: Приветствия, благодарности, вопросы о боте (regex: `привет`, `спасибо`, `кто ты`...).
-- `out_of_scope`: Погода, анекдоты, стихи и т.д. (regex: `какая погода`, `напиши стих`...).
-- `rag`: Всё остальное → RAG Agent.
-
-### Verifier (Multi-Agent RAG)
-Проверяет черновик ответа по 6 критериям:
-1. Обоснованность (groundedness)
-2. Релевантность
-3. Полнота
-4. Непротиворечивость
-5. Точность цитирования
-6. Краевые случаи (logic leaps, missing entities)

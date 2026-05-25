@@ -1,9 +1,6 @@
 # Управление промптами (Prompt Management)
 
-> ⚠️ **Область действия:** этот документ описывает Jinja2-реестр промптов, который
-> используется **легаси-путём** `agents/multiagent_rag.py`. Основной V7-пайплайн его
-> НЕ использует — V7-промпты (генерация, верификация, rewrite, expand) живут
-> хардкод-строками в `src/v7/bridge.py` (`_GENERATE_SYSTEM_PROMPT` и др.).
+> ⚠️ **Область действия:** этот документ описывает Jinja2-реестр промптов для `applicability_retriever` и term glossary. Основной V7-пайплайн его НЕ использует — V7-промпты (генерация, верификация, rewrite, expand) живут хардкод-строками в `src/v7/bridge.py` (`_GENERATE_SYSTEM_PROMPT` и др.).
 
 ## 📌 Обзор
 
@@ -23,12 +20,10 @@
 prompts/
 ├── registry.yaml              # Глобальный реестр версий
 ├── common/                    # Общие шаблоны и фрагменты
-│   └── base_rules.j2          # BASE_RULES макрос (Multi-Agent RAG, 10 краевых случаев)
-├── agents/                    # Промпты для агентов
+│   └── base_rules.j2          # BASE_RULES макрос (10 краевых случаев)
+├── agents/                    # Промпты для retriever'ов
 │   ├── query_expansion_v1.j2  # Query Expansion v1 (legacy)
-│   ├── query_expansion_v2.j2  # Query Expansion v2 (без хардкода) ← active
-│   ├── rag_agent_v1.j2        # RAG Agent (единый ReAct-агент с условной декомпозицией) ← active
-│   └── verifier_v2.j2         # Verifier v2 (6 критериев, JSON) ← active
+│   └── query_expansion_v2.j2  # Query Expansion v2 (без хардкода) ← active
 └── chains/                    # Промпты для RAG-цепочек
     └── ultimate_v1.j2
 ```
@@ -42,11 +37,6 @@ prompts/
 Этот файл связывает логический `prompt_id` с конкретными версиями шаблонов.
 
 ```yaml
-multiagent_rag_agent:
-  active_version: "v1"
-  versions:
-    v1: "agents/rag_agent_v1.j2"  # Единый ReAct-агент
-
 applicability_retriever:
   active_version: "v2"
   versions:
@@ -122,8 +112,8 @@ Python-код агентов автоматически парсит эти те
 - **Found Terms**: Ответ строится только по терминам, найденным в нормах.
 - **Not Found Terms**: Если в вопросе есть "бытовой шум" (фамилии, неофициальные названия), агент явно указывает на отсутствие требований для них, не делая логических скачков (Logic Leaps).
 
-### 3. BASE_RULES макрос (Multi-Agent RAG)
-`prompts/common/base_rules.j2` — общий макрос `{% macro base_rules() %}`, импортируемый в `rag_agent_v1.j2`. Содержит:
+### 3. BASE_RULES макрос
+`prompts/common/base_rules.j2` — общий макрос `{% macro base_rules() %}`. Содержит:
 - Абсолютные запреты (нет галлюцинаций, нет экстраполяции)
 - Предобработка запроса (суть vs идентификаторы)
 - Правила visual_proof (когда analyze vs show)
@@ -133,7 +123,7 @@ Python-код агентов автоматически парсит эти те
 ### 3a. Доменный глоссарий (Term Glossary)
 `config/term_glossary.yaml` — YAML-словарь неофициальных доменных сокращений. Логика
 расширения вынесена в общий модуль `src/glossary.py` (`expand_query_with_glossary`),
-который используют и V7-роутер, и легаси `multiagent_rag`. Применяется детерминированно:
+который использует V7-роутер. Применяется детерминированно:
 - Морфологический матчинг: слова >4 букв — по стему, аббревиатуры ≤4 букв — целым словом
 - К запросу дописывается блок `[Глоссарий: термин → расшифровка]`
 - Агент использует расшифровку для поиска и ответа (BASE_RULES case 9)
@@ -155,7 +145,7 @@ FOUND / NOT_FOUND / PARTIAL
 Verifier v2 использует `response_mime_type="application/json"` для гарантированного JSON-вывода. Fallback-парсер обрабатывает markdown code blocks и raw JSON.
 
 ### 6. Стабилизация циклов
-- **Multi-Agent RAG**: MAX_REVISIONS=1 цикл ревизии. При ревизии агент получает предыдущий `draft_answer` + feedback верификатора.
+- V7 LLM Verifier: один цикл ревизии (rewriter → rag_simple). При ревизии запрос переформулируется с защитой идентификаторов документов.
 
 ---
 

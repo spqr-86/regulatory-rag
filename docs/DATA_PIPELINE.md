@@ -6,19 +6,19 @@
 
 ```mermaid
 graph TD
-    Raw[Сырые файлы<br>PDF/DOCX/MD] -->|src/file_handler.py| Processor[DocumentProcessor]
+    Raw[Сырые файлы<br>PDF/DOCX/MD] -->|src/indexing/file_handler.py| Processor[DocumentProcessor]
     Processor -->|Docling| Markdown[Чистый Markdown]
     Markdown -->|Regex| Preprocess[Нормализация заголовков]
     Preprocess -->|Context Injection| Chunks[Обогащенные чанки]
     Chunks -->|RecursiveSplitter| FinalChunks[Финальные фрагменты]
-    FinalChunks -->|src/vector_store.py| Embed[Embeddings]
+    FinalChunks -->|src/indexing/vector_store.py| Embed[Embeddings]
     Embed -->|ChromaDB| Index[Векторный индекс]
 ```
 
 ## 🛠 Этапы обработки (Pipeline Stages)
 
 ### 1. Загрузка и Конвертация (Ingestion)
-**Модуль**: `src.file_handler.DocumentProcessor`
+**Модуль**: `src.indexing.file_handler.DocumentProcessor`
 **Инструмент**: [Docling](https://github.com/DS4SD/docling)
 
 Docling используется для высококачественной конвертации PDF и DOCX документов в Markdown. Это позволяет сохранить структуру документа (заголовки, списки, таблицы), которая часто теряется при простом извлечении текста.
@@ -74,14 +74,6 @@ md = re.sub(r'^(\d+)\.\s*$', r'### Пункт \1', md, flags=re.MULTILINE)
 **Хранилище**: ChromaDB
 
 Обработанные чанки превращаются в векторные эмбеддинги и сохраняются в ChromaDB. Параллельно создается индекс для BM25 (поиск по ключевым словам).
-
-## ⚠️ Известная проблема
-
-Логика группировки чанков в `src/file_handler.py` (`_process_docling_document`)
-может **выронить целые элементы документа** из индекса. Подтверждено: пункт нормы
-«Повторный инструктаж проводится не реже одного раза в 6 месяцев» есть в исходном
-PDF и чисто извлекается Docling, но в ChromaDB отсутствует. Прямо ограничивает eval
-correctness. Подробности и план фикса — `docs/plans/backlog.md` [P1].
 
 ## 🚀 Как запустить
 
