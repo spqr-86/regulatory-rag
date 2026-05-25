@@ -49,11 +49,5 @@ class Settings(BaseSettings):
     MAX_VISUAL_PROOF_CALLS: int = 1
     MAX_VISUAL_PROOFS: int = 3
 
-    def model_post_init(self, __context) -> None:
-        if self.CHROMA_DB_PATH == "./chroma_db":
-            object.__setattr__(
-                self, "CHROMA_DB_PATH", f"chroma_db_{self.SIMPLE_LLM_PROVIDER.lower()}"
-            )
-
 
 settings = Settings()
