@@ -37,56 +37,37 @@ load_dotenv()
 # =========================
 #     PAGE CONFIG & UI
 # =========================
-st.set_page_config(
-    page_title="AI Safety Compliance Assistant", page_icon="🤖", layout="wide"
-)
+st.set_page_config(page_title="Regulatory RAG", page_icon="📚", layout="wide")
 
 # Верхний заголовок
-left, right = st.columns([0.8, 0.2], vertical_alignment="center")
-with left:
-    st.title("🤖 AI Safety Compliance Assistant")
-    st.caption(
-        "Ваш ИИ-помощник по нормативной и технической документации (ГОСТ, СНиП, СП, ТК РФ)."
-    )
-with right:
-    st.markdown(
-        f"""
-        <div style="text-align:right">
-            <div style="display:inline-block;padding:6px 10px;border-radius:8px;
-                        background:#eef2ff;border:1px solid #c7d2fe;font-size:12px;">
-                LLM: <b>{settings.LLM_PROVIDER}</b> · <b>{settings.MODEL_NAME}</b>
-            </div><br/>
-            <div style="display:inline-block;margin-top:6px;padding:6px 10px;border-radius:8px;
-                        background:#ecfeff;border:1px solid #a5f3fc;font-size:12px;">
-                Embeddings: <b>{getattr(settings, "EMBEDDING_PROVIDER", "?")}</b>
-                · <b>{getattr(settings, "EMBEDDING_MODEL_NAME", "?")}</b>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+st.title("📚 Regulatory RAG")
+st.caption("Поиск по нормативной базе: ГОСТ, СНиП, СП, ТК РФ и другие документы.")
 
 # =========================
 #        SIDEBAR
 # =========================
 with st.sidebar:
-    st.subheader("⚙️ Режим работы")
+    # V7 режим — без toggle, автоматически
+    v7_mode = V7_AVAILABLE and settings.USE_V7_GRAPH
 
-    # V7 — основной режим
-    if V7_AVAILABLE and settings.USE_V7_GRAPH:
-        v7_mode = st.toggle("🔬 V7 Graph (основной)", value=True)
-    else:
-        v7_mode = False
-        st.warning("V7 Graph недоступен.")
-
-    if v7_mode:
-        st.caption("Hybrid RAG → LangGraph → Gemini")
-    else:
-        st.caption("Classic RAG (legacy)")
+    st.markdown(
+        f"""
+        <div style="padding:8px 10px;border-radius:8px;background:#eef2ff;
+                    border:1px solid #c7d2fe;font-size:12px;margin-bottom:4px;">
+            LLM: <b>{settings.LLM_PROVIDER}</b> · <b>{settings.MODEL_NAME}</b>
+        </div>
+        <div style="padding:8px 10px;border-radius:8px;background:#ecfeff;
+                    border:1px solid #a5f3fc;font-size:12px;">
+            Embeddings: <b>{getattr(settings, "EMBEDDING_PROVIDER", "?")}</b>
+            · <b>{getattr(settings, "EMBEDDING_MODEL_NAME", "?")}</b>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.divider()
 
-    st.subheader("📚 Библиотека документов")
+    st.subheader("📄 Библиотека документов")
     st.caption(f"БД: `{settings.CHROMA_DB_PATH}`")
 
     # Кнопка пересоздания индекса
@@ -168,7 +149,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Здравствуйте! Задайте вопрос по нормативной документации, и я найду ответ (ГОСТ, СНиП, СП, ТК РФ).",
+            "content": "Привет! Задай вопрос — найду ответ по ГОСТ, СНиП, СП, ТК РФ.",
         }
     ]
 

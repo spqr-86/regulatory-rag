@@ -345,7 +345,7 @@ class TestInitV7FromChroma:
 
     @pytest.mark.unit
     @patch("src.v7.bridge.get_simple_llm")
-    @patch("src.v7.bridge.get_llm")
+    @patch("src.v7.bridge.get_complex_llm")
     @patch("src.v7.bridge.generate_answer_mod")
     @patch("src.v7.bridge.llm_verifier_mod")
     @patch("src.v7.bridge.rewriter_mod")
@@ -360,7 +360,7 @@ class TestInitV7FromChroma:
         mock_rewriter,
         mock_verifier,
         mock_generate,
-        mock_get_llm,
+        mock_get_complex_llm,
         mock_get_simple_llm,
     ):
         mock_store = MagicMock(spec=Chroma)
@@ -368,23 +368,23 @@ class TestInitV7FromChroma:
             "documents": ["d"],
             "metadatas": [{"source": "a.pdf"}],
         }
-        mock_get_llm.return_value = MagicMock()
+        mock_get_complex_llm.return_value = MagicMock()
         mock_get_simple_llm.return_value = MagicMock()
         init_v7_from_chroma(mock_store, llm_provider="gemini")
         mock_verifier.set_verify_fn.assert_called_once()
         mock_rewriter.set_rewrite_fn.assert_called_once()
         mock_generate.set_generate_fns.assert_called_once()
-        # Simple-path generate uses get_simple_llm; complex-path uses get_llm.
-        mock_get_simple_llm.assert_called_once()
-        # get_llm: verifier, rewriter, complex generator, expander = 4 calls.
-        assert mock_get_llm.call_count == 4
+        # simple generator + expander use get_simple_llm = 2 calls.
+        assert mock_get_simple_llm.call_count == 2
+        # get_complex_llm: verifier, rewriter, complex generator = 3 calls.
+        assert mock_get_complex_llm.call_count == 3
         # The two generators must be different LLM instances.
         kwargs = mock_generate.set_generate_fns.call_args.kwargs
         assert "simple" in kwargs and "complex_" in kwargs
         assert kwargs["simple"] is not kwargs["complex_"]
 
     @pytest.mark.unit
-    @patch("src.v7.bridge.get_llm", side_effect=ImportError("no gemini"))
+    @patch("src.v7.bridge.get_complex_llm", side_effect=ImportError("no gemini"))
     @patch("src.v7.bridge.generate_answer_mod")
     @patch("src.v7.bridge.llm_verifier_mod")
     @patch("src.v7.bridge.rewriter_mod")

@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from src.backends.vector_store import (
     VectorStoreBackend,
 )  # noqa: F401 — used in isinstance checks
-from src.infra.llm_factory import get_llm, get_simple_llm
+from src.infra.llm_factory import get_complex_llm, get_simple_llm  # noqa: F401
 from src.infra.parsers import (
     extract_text,
 )  # noqa: F401  # used by other make_*_fn
@@ -502,25 +502,25 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
     # Inject LLM-backed verify, rewrite, generate, and expand functions
     if llm_provider:
         try:
-            verifier_llm = get_llm(
+            verifier_llm = get_complex_llm(
                 thinking_budget=1024, response_mime_type="application/json"
             )
             llm_verifier_mod.set_verify_fn(make_verify_fn(verifier_llm))
 
-            rewriter_llm = get_llm(thinking_budget=1024)
+            rewriter_llm = get_complex_llm(thinking_budget=1024)
             rewriter_mod.set_rewrite_fn(make_rewrite_fn(rewriter_llm))
 
             # Split generators: cheap model for the simple path, full-quality
             # model for the complex path (where verifier/rewriter already paid
             # the latency tax — answer quality dominates CPS savings).
-            generator_llm_complex = get_llm(thinking_budget=4096)
+            generator_llm_complex = get_complex_llm(thinking_budget=4096)
             generator_llm_simple = get_simple_llm(thinking_budget=4096)
             generate_answer_mod.set_generate_fns(
                 simple=make_generate_fn(generator_llm_simple),
                 complex_=make_generate_fn(generator_llm_complex),
             )
 
-            expander_llm = get_llm(thinking_budget=0)
+            expander_llm = get_simple_llm(thinking_budget=0)
             rag_simple_mod.set_expand_fn(make_expand_fn(expander_llm))
 
             logger.info(

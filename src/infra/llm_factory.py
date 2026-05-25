@@ -189,22 +189,66 @@ def get_gemini_llm(
     return llm
 
 
-def get_simple_llm(**kwargs):
-    """LLM instance for the simple RAG path (cheaper model).
+def _resolve_provider_and_model(
+    provider_override: str,
+    model_override: str,
+    default_model_gemini: str,
+) -> tuple[str, str]:
+    """Return (provider, model) resolving overrides and fallbacks."""
+    provider = (provider_override or settings.LLM_PROVIDER).lower()
+    if model_override:
+        model = model_override
+    elif provider == "gemini":
+        model = default_model_gemini or settings.GEMINI_FAST_MODEL
+    else:
+        model = settings.MODEL_NAME
+    return provider, model
 
-    Reads ``settings.GEMINI_SIMPLE_MODEL``; falls back to
-    ``settings.GEMINI_FAST_MODEL`` when unset. Only meaningful for the gemini
-    provider — for other providers behaves like ``get_llm`` (model selection
-    is provider-specific).
+
+def get_simple_llm(**kwargs):
+    """LLM for the simple RAG path.
+
+    Configured via SIMPLE_LLM_PROVIDER + SIMPLE_MODEL_NAME.
+    Falls back to LLM_PROVIDER + GEMINI_FAST_MODEL.
     """
-    provider = settings.LLM_PROVIDER.lower()
+    provider, model = _resolve_provider_and_model(
+        settings.SIMPLE_LLM_PROVIDER,
+        settings.SIMPLE_MODEL_NAME,
+        settings.GEMINI_FAST_MODEL,
+    )
     if provider == "gemini":
-        model_name = (
-            getattr(settings, "GEMINI_SIMPLE_MODEL", "") or settings.GEMINI_FAST_MODEL
-        )
-        kwargs.setdefault("model_name", model_name)
+        kwargs.setdefault("model_name", model)
         return get_gemini_llm(**kwargs)
-    return get_llm(**kwargs)
+    factory = _LLM_PROVIDERS.get(provider)
+    if not factory:
+        available = ", ".join(sorted(_LLM_PROVIDERS.keys()))
+        raise ValueError(
+            f"Unknown SIMPLE_LLM_PROVIDER={provider!r}. Available: {available}"
+        )
+    return factory(**kwargs)
+
+
+def get_complex_llm(**kwargs):
+    """LLM for the complex RAG path (verifier, rewriter, generator-complex).
+
+    Configured via COMPLEX_LLM_PROVIDER + COMPLEX_MODEL_NAME.
+    Falls back to LLM_PROVIDER + GEMINI_FAST_MODEL.
+    """
+    provider, model = _resolve_provider_and_model(
+        settings.COMPLEX_LLM_PROVIDER,
+        settings.COMPLEX_MODEL_NAME,
+        settings.GEMINI_FAST_MODEL,
+    )
+    if provider == "gemini":
+        kwargs.setdefault("model_name", model)
+        return get_gemini_llm(**kwargs)
+    factory = _LLM_PROVIDERS.get(provider)
+    if not factory:
+        available = ", ".join(sorted(_LLM_PROVIDERS.keys()))
+        raise ValueError(
+            f"Unknown COMPLEX_LLM_PROVIDER={provider!r}. Available: {available}"
+        )
+    return factory(**kwargs)
 
 
 def get_vision_llm():

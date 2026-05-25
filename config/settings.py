@@ -50,12 +50,16 @@ class Settings(BaseSettings):
 
     SOURCE_DOCS_PATH: str = "./source_docs"
 
-    # Google Gemini settings
+    # Google Gemini
     GEMINI_API_KEY: str = ""
-    GEMINI_FAST_MODEL: str = "gemini-3-flash"
-    # Cheaper model used for the simple RAG path (rag_simple → generate).
-    # If empty, falls back to GEMINI_FAST_MODEL.
-    GEMINI_SIMPLE_MODEL: str = "gemini-2.5-flash"
+    GEMINI_FAST_MODEL: str = "gemini-3-flash"  # fallback if path-specific model not set
+
+    # Per-path provider/model — override to switch models independently.
+    # Falls back to LLM_PROVIDER + GEMINI_FAST_MODEL when empty.
+    SIMPLE_LLM_PROVIDER: str = "gemini"
+    SIMPLE_MODEL_NAME: str = "gemini-2.5-flash"
+    COMPLEX_LLM_PROVIDER: str = "gemini"
+    COMPLEX_MODEL_NAME: str = "gemini-3-flash-preview"
 
     # Agent workflow settings
     THINKING_BUDGET: int = 8192
