@@ -1,26 +1,33 @@
 # Паспорт проекта: AI Safety Compliance Assistant
 
-**Назначение:** Автоматизация проверки нормативной документации (СНиП, ГОСТ, ОТ, ПБ).
-**Стек:** LangGraph, Streamlit, ChromaDB, Docling, Google Gemini (`gemini-3-flash-preview`), OpenAI embeddings.
+**Назначение:** Автоматизация поиска по нормативной документации (ГОСТ, СНиП, СП, ТК РФ).
+**Стек:** LangGraph, Streamlit, FastAPI, ChromaDB, Docling, Gemini 2.5 Flash / Gemini 3 Flash, OpenAI embeddings.
 
 ## Особенности архитектуры
 - **V7 LangGraph Pipeline (основной):** детерминированный граф состояний без LLM-роутинга —
   `intent_gate → router → rag_simple → evaluate_triage → rag_complex → generate_answer`.
   Hard gates по числовым порогам, явный `abstain` при недостатке данных.
+- **Two-tier LLM:** Gemini 2.5 Flash на простом пути (~5s), Gemini 3 Flash с thinking_budget=4096 на сложном.
 - **Hybrid retrieval:** векторный поиск (ChromaDB) + BM25, RRF-слияние, FlashRank reranking, MMR.
-- **Multi-Agent RAG (legacy):** прежний ReAct-агентный пайплайн, заменён V7.
+- **Pluggable backends:** LLM и vector store абстрагированы через фабрики (`src/infra/llm_factory.py`, `src/backends/`).
+- **REST API:** FastAPI на порту 8503 — `POST /query`, `POST /query/gosts`, `GET /health`.
 
 ## Результаты
-- Eval через `eval/run_v7_eval.py` (golden-датасет, LLM-as-judge): faithfulness > 0.95,
-  correctness ~6.9/10 (цель 7.5 — в работе, упирается в баг чанкинга).
+- Eval через `eval/run_v7_eval.py` (50 вопросов, LLM-as-judge Gemini 2.5 Flash):
+  - Correctness: **7.9/10** (цель 7.5 ✅)
+  - Faithfulness: **0.988**
+  - False-sufficiency: 0.15
+  - Cost per query: **$0.0102** (baseline May 2026)
+- Corpus: 12 документов → **1 973 чанка** (после фикса bbox-бага v2.3-noise-clean)
 
 ## Вызовы (Challenges)
-- Баг чанкинга: `_process_docling_document` выроняет пункты норм из индекса.
-- Инфляция scores FlashRank в evaluate_complex.
-- Run-to-run вариативность LLM-судьи в eval.
+- False-sufficiency 15% — часть запросов некорректно классифицируется как sufficient на простом пути.
+- Run-to-run вариативность LLM-судьи в eval (~±0.3 correctness).
 
 ## Моя роль (как разработчика)
 - Проектирование и реализация V7-графа на LangGraph (тонкие ноды + hard gates).
-- Hybrid retrieval, reranking, доменный глоссарий.
+- Hybrid retrieval, RRF merge, MMR, FlashRank reranking.
+- Доменный глоссарий (морфологический матчинг, 0 латентности).
 - Eval-фреймворк с LLM-as-judge метриками.
-- Интеграция визуальных доказательств из PDF.
+- Security hardening: slowapi, pickle → JSON, threading.RLock.
+- src/ restructure: infra/, indexing/, backends/ (Board 1–5).
