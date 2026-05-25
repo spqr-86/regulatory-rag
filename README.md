@@ -219,3 +219,5 @@ Same pattern for vector stores — implement `VectorStoreBackend` protocol in `s
 ---
 
 **Author:** Petr Baldaev — [LinkedIn](https://linkedin.com/in/petr-baldaev-b1252b263/) · [GitHub](https://github.com/spqr-86)
+
+[Changelog →](./CHANGELOG.md)

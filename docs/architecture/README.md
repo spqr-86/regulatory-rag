@@ -1,6 +1,6 @@
 # Codebase Analysis
 
-> **Детальное объяснение V7 с hard gates:** [v7-how-it-works.md](./v7-how-it-works.md)
+> **Детальное объяснение V7 с hard gates:** [v7-how-it-works.md](./v7-how-it-works.md) · **Triage (evaluate_triage):** [triage-how-it-works.md](./triage-how-it-works.md)
 
 ## ⚡ TL;DR
 
