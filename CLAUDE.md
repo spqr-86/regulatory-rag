@@ -4,7 +4,7 @@
 
 **AI Safety Compliance Assistant** — RAG system for analyzing Russian workplace safety regulations (ГОСТ, СНиП, СП). Uses hybrid retrieval (semantic + BM25), FlashRank reranking, and deterministic LangGraph V7 pipeline.
 
-**Stack**: Python 3.11+, LangChain, LangGraph, ChromaDB, Docling, FlashRank, Streamlit, Google Gemini 2.5 Flash
+**Stack**: Python 3.11+, LangChain, LangGraph, ChromaDB, Docling, FlashRank, Streamlit, Gemini 2.5 Flash (simple path) + Gemini 3 Flash (complex path, thinking)
 
 ## Virtual Environment
 

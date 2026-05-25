@@ -168,7 +168,7 @@ Interactive docs: `http://localhost:8503/docs`
 | Layer | Technology |
 |-------|-----------|
 | Orchestration | LangGraph (V7 deterministic graph) |
-| LLM | Gemini 2.5 Flash (simple path, ~5s) + Pro/complex path, DeepSeek V3 (GOST) |
+| LLM | Gemini 2.5 Flash (simple path, ~5s) + Gemini 3 Flash (complex path, thinking), DeepSeek V3 (GOST) |
 | Embeddings | OpenAI text-embedding-3-small |
 | Vector store | ChromaDB |
 | Reranking | FlashRank Cross-Encoder |
