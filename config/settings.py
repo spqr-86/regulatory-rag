@@ -10,13 +10,13 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Параметры для LLM и векторного хранилища
+    # LLM (fallback provider when path-specific overrides not set)
     LLM_PROVIDER: str = "gemini"  # supported: gemini | openai
-    MODEL_NAME: str = "gpt-4o-mini"  # для OpenAI
+    MODEL_NAME: str = "gpt-4o-mini"  # used when LLM_PROVIDER=openai
     TEMPERATURE: float = 0.0
 
-    # Параметры для эмбеддингов
-    EMBEDDING_PROVIDER: str = "openai"  # варианты: openai, hf_api, nomic
+    # Embeddings
+    EMBEDDING_PROVIDER: str = "openai"  # варианты: openai, hf_api, local
     EMBEDDING_MODEL_NAME: str = "text-embedding-3-small"
 
     # Параметры для FlashRank
