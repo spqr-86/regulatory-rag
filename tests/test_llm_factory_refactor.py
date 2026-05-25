@@ -35,7 +35,7 @@ def test_get_gemini_llm_does_not_monkeypatch_build_request_config(monkeypatch):
 
     import src.infra.llm_factory as lf
 
-    monkeypatch.setattr(lf.settings, "GEMINI_API_KEY", "test-key", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     monkeypatch.setattr(lf.settings, "REQUEST_TIMEOUT", 60.0, raising=False)
 
     raw_instance = MagicMock(name="ChatGoogleGenerativeAI_instance")
