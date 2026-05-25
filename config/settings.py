@@ -41,7 +41,6 @@ class Settings(BaseSettings):
 
     # Google Gemini
     GEMINI_API_KEY: str = ""
-    GEMINI_FAST_MODEL: str = "gemini-3-flash"  # fallback if path-specific model not set
 
     # Per-path model config — change independently without touching other paths
     SIMPLE_LLM_PROVIDER: str = "gemini"

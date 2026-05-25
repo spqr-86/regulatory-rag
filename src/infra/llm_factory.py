@@ -132,7 +132,7 @@ def get_gemini_llm(
             "GEMINI_API_KEY not found. Set it in .env or environment variables."
         )
 
-    model = model_name or settings.GEMINI_FAST_MODEL
+    model = model_name or "gemini-3-flash-preview"
 
     max_output_tokens = (thinking_budget or 0) + _GEMINI_ANSWER_TOKEN_ALLOWANCE
     kwargs = dict(
@@ -169,13 +169,7 @@ def get_gemini_llm(
     return llm
 
 
-def _resolve_provider_and_model(
-    provider: str,
-    model: str,
-) -> tuple[str, str]:
-    """Return (provider, model), falling back to GEMINI_FAST_MODEL if model empty."""
-    if not model and provider == "gemini":
-        model = settings.GEMINI_FAST_MODEL
+def _resolve_provider_and_model(provider: str, model: str) -> tuple[str, str]:
     return provider.lower(), model
 
 
