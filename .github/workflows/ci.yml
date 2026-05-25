@@ -24,4 +24,4 @@ jobs:
         env:
           GEMINI_API_KEY: stub
           OPENAI_API_KEY: stub
-        run: pytest -m unit -v --tb=short
+        run: python -m pytest -m unit -v --tb=short
