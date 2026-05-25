@@ -25,8 +25,8 @@ class Settings(BaseSettings):
     MAX_TOTAL_SIZE: int = MAX_TOTAL_SIZE
     ALLOWED_TYPES: list[str] = ALLOWED_TYPES
     SOURCE_DOCS_PATH: str = "./source_docs"
-    CHUNK_SIZE: int = 1500
-    CHUNK_OVERLAP: int = 400
+    CHUNK_SIZE: int = 1200
+    CHUNK_OVERLAP: int = 150
     CACHE_DIR: str = "document_cache"
     CACHE_EXPIRE_DAYS: int = 7
 
@@ -34,7 +34,6 @@ class Settings(BaseSettings):
     CHROMA_DB_PATH: str = "./chroma_db"
     CHROMA_COLLECTION_NAME: str = "documents"
     VECTOR_STORE: str = "chroma"
-    VECTOR_SEARCH_K: int = 10
 
     # HTTP
     REQUEST_TIMEOUT: float = 120.0
