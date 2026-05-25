@@ -75,8 +75,9 @@ def _create_openai_llm(**kwargs):
             dropped=dropped,
             note="provider-specific kwargs ignored — may cause behavior drift",
         )
+    model = kwargs.pop("model_name", "gpt-4o-mini")
     return ChatOpenAI(
-        model=settings.MODEL_NAME,
+        model=model,
         temperature=settings.TEMPERATURE,
         timeout=settings.REQUEST_TIMEOUT,
         max_retries=3,
@@ -93,27 +94,6 @@ _LLM_PROVIDERS = {
     "openai": _create_openai_llm,
     "gemini": _create_gemini_llm,
 }
-
-
-def get_llm(**kwargs):
-    """Create LLM instance based on LLM_PROVIDER setting.
-
-    Currently supported providers (set via LLM_PROVIDER env var):
-      gemini — Google Gemini (GEMINI_FAST_MODEL, GEMINI_API_KEY).
-               Accepts thinking_budget, response_mime_type, model_name.
-      openai — OpenAI ChatGPT (MODEL_NAME, OPENAI_API_KEY).
-               Silently drops Gemini-specific kwargs.
-
-    All providers accept **kwargs — provider-specific kwargs that another
-    provider does not understand are dropped silently, so the same call site
-    can be reused across providers.
-    """
-    provider = settings.LLM_PROVIDER.lower()
-    factory = _LLM_PROVIDERS.get(provider)
-    if not factory:
-        available = ", ".join(sorted(_LLM_PROVIDERS.keys()))
-        raise ValueError(f"Unknown LLM_PROVIDER={provider!r}. Available: {available}")
-    return factory(**kwargs)
 
 
 # gemini-3 counts reasoning tokens inside max_output_tokens, so the cap must cover
@@ -190,31 +170,20 @@ def get_gemini_llm(
 
 
 def _resolve_provider_and_model(
-    provider_override: str,
-    model_override: str,
-    default_model_gemini: str,
+    provider: str,
+    model: str,
 ) -> tuple[str, str]:
-    """Return (provider, model) resolving overrides and fallbacks."""
-    provider = (provider_override or settings.LLM_PROVIDER).lower()
-    if model_override:
-        model = model_override
-    elif provider == "gemini":
-        model = default_model_gemini or settings.GEMINI_FAST_MODEL
-    else:
-        model = settings.MODEL_NAME
-    return provider, model
+    """Return (provider, model), falling back to GEMINI_FAST_MODEL if model empty."""
+    if not model and provider == "gemini":
+        model = settings.GEMINI_FAST_MODEL
+    return provider.lower(), model
 
 
 def get_simple_llm(**kwargs):
-    """LLM for the simple RAG path.
-
-    Configured via SIMPLE_LLM_PROVIDER + SIMPLE_MODEL_NAME.
-    Falls back to LLM_PROVIDER + GEMINI_FAST_MODEL.
-    """
+    """LLM for the simple RAG path (SIMPLE_LLM_PROVIDER + SIMPLE_MODEL_NAME)."""
     provider, model = _resolve_provider_and_model(
         settings.SIMPLE_LLM_PROVIDER,
         settings.SIMPLE_MODEL_NAME,
-        settings.GEMINI_FAST_MODEL,
     )
     if provider == "gemini":
         kwargs.setdefault("model_name", model)
@@ -229,15 +198,10 @@ def get_simple_llm(**kwargs):
 
 
 def get_complex_llm(**kwargs):
-    """LLM for the complex RAG path (verifier, rewriter, generator-complex).
-
-    Configured via COMPLEX_LLM_PROVIDER + COMPLEX_MODEL_NAME.
-    Falls back to LLM_PROVIDER + GEMINI_FAST_MODEL.
-    """
+    """LLM for the complex RAG path (COMPLEX_LLM_PROVIDER + COMPLEX_MODEL_NAME)."""
     provider, model = _resolve_provider_and_model(
         settings.COMPLEX_LLM_PROVIDER,
         settings.COMPLEX_MODEL_NAME,
-        settings.GEMINI_FAST_MODEL,
     )
     if provider == "gemini":
         kwargs.setdefault("model_name", model)

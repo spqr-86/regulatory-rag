@@ -10,9 +10,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # LLM fallback (used when SIMPLE_/COMPLEX_ overrides are empty)
-    LLM_PROVIDER: str = "gemini"  # supported: gemini | openai
-    MODEL_NAME: str = "gpt-4o-mini"  # used when LLM_PROVIDER=openai
     TEMPERATURE: float = 0.0
 
     # Embeddings
@@ -63,7 +60,7 @@ class Settings(BaseSettings):
     def model_post_init(self, __context) -> None:
         if self.CHROMA_DB_PATH == "./chroma_db":
             object.__setattr__(
-                self, "CHROMA_DB_PATH", f"chroma_db_{self.LLM_PROVIDER.lower()}"
+                self, "CHROMA_DB_PATH", f"chroma_db_{self.SIMPLE_LLM_PROVIDER.lower()}"
             )
 
 
