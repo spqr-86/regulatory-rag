@@ -112,7 +112,7 @@ def get_gemini_llm(
     Factory for Gemini LLM with model selection and thinking budget.
 
     Args:
-        model_name: Model to use (default: GEMINI_FAST_MODEL from settings)
+        model_name: Model to use (default: gemini-3-flash-preview)
         temperature: Temperature for generation (default: 0.0)
         thinking_budget: Token budget for Gemini thinking mode (None = disabled)
         response_mime_type: Response format, e.g. "application/json" (None = text)

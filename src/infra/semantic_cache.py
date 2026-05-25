@@ -21,8 +21,7 @@ class SemanticCache(BaseCache):
     entries cached under one llm_string are never returned for another.
 
     Backward-compatible `get(query) -> str | None` and `add(query, answer)` are
-    kept as thin wrappers (used by agents/multiagent_rag.py); they operate in
-    a default namespace (llm_string="").
+    thin wrappers that operate in a default namespace (llm_string="").
     """
 
     _DEFAULT_NAMESPACE = ""
@@ -189,7 +188,7 @@ class SemanticCache(BaseCache):
         self.save()
 
     # ------------------------------------------------------------------ #
-    # Backward-compatible legacy API (used by agents/multiagent_rag.py)
+    # Backward-compatible simple API
     # ------------------------------------------------------------------ #
     def get(self, query: str) -> Optional[str]:
         """Legacy: return a plain string answer (default namespace)."""
