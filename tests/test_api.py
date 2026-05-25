@@ -16,13 +16,9 @@ def _make_client(pipeline_app=None):
     """Return a TestClient with app.state pre-populated (no lifespan startup)."""
     import api as api_module
 
-    # Set app.state attributes so health / query work without lifespan
     pipeline_stub = pipeline_app or MagicMock()
     api_module.app.state.pipeline = pipeline_stub
-    api_module.app.state.gosts_pipeline = None
-    api_module.app.state.gosts_ready = False
 
-    # Use TestClient without lifespan (lifespan_startup=False requires HTTPX>=0.23)
     client = TestClient(api_module.app, raise_server_exceptions=False)
     return client, api_module
 
@@ -78,12 +74,9 @@ class TestExceptionHiding:
         body = response.json()
         detail = body.get("detail", "")
 
-        # Must not leak internal path or exception text
         assert "secret internal path" not in detail
         assert "/home/user/venv" not in detail
         assert "RuntimeError" not in detail
-
-        # Must contain request_id
         assert "request_id=" in detail
 
     def test_500_request_id_matches_header(self):
@@ -95,9 +88,9 @@ class TestExceptionHiding:
         assert response.status_code == 500
         rid_header = response.headers.get("x-request-id", "")
         detail = response.json().get("detail", "")
-        assert (
-            rid_header in detail
-        ), f"request_id in header ({rid_header!r}) not found in detail ({detail!r})"
+        assert rid_header in detail, (
+            f"request_id in header ({rid_header!r}) not found in detail ({detail!r})"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -116,19 +109,6 @@ class TestGenericErrorMessages:
         detail = response.json().get("detail", "")
         assert "chroma" not in detail.lower()
         assert "pipeline" not in detail.lower() or detail == "not ready"
-
-    def test_gosts_503_is_generic(self):
-        import api as api_module
-
-        api_module.app.state.pipeline = MagicMock()  # main pipeline ready
-        api_module.app.state.gosts_ready = False
-        api_module.app.state.gosts_pipeline = None
-        client = TestClient(api_module.app, raise_server_exceptions=False)
-        response = client.post("/query/gosts", json={"question": "test"})
-        assert response.status_code == 503
-        detail = response.json().get("detail", "")
-        assert "index_gosts" not in detail
-        assert "chroma_db_gosts" not in detail
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +130,6 @@ class TestInputLengthCap:
         client, _ = _make_client(pipeline_app=mock_pipeline)
         question = "A" * 2000
         response = client.post("/query", json={"question": question})
-        # Should not be 422
         assert response.status_code != 422
 
     def test_empty_question_returns_422(self):
@@ -173,13 +152,10 @@ class TestRateLimitHandler:
         mock_pipeline = MagicMock()
         mock_pipeline.invoke.return_value = {"answer": "ok", "final_passages": []}
         api_module.app.state.pipeline = mock_pipeline
-        api_module.app.state.gosts_ready = False
 
-        # Directly invoke the exception handler
         from starlette.requests import Request as StarletteRequest
         import asyncio
 
-        # Simulate a RateLimitExceeded by calling the handler directly
         async def call_handler():
             scope = {
                 "type": "http",
@@ -198,5 +174,4 @@ class TestRateLimitHandler:
 
         body = json.loads(response.body)
         assert "rate limit" in body["detail"].lower()
-        # No internal limit details leaked
         assert "10/minute" not in body["detail"]

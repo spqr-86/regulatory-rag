@@ -46,8 +46,6 @@ async def lifespan(app: FastAPI):
     /query return 503 instead of crashing the process.
     """
     app.state.pipeline = None
-    app.state.gosts_pipeline = None
-    app.state.gosts_ready = False
 
     logger.info("api.startup: loading vector store and v7 pipeline")
     try:
@@ -63,31 +61,15 @@ async def lifespan(app: FastAPI):
         logger.error(
             "api.startup: main pipeline init failed", error=str(exc), exc_info=True
         )
-        # leave pipeline=None; /query returns 503, /health returns 503, process stays alive
-
-    # Gosts pipeline (ers_rag fork: V7 graph + DeepSeek LLM поверх chroma_db_gosts/wta_gosts)
-    # Старый src/gosts_pipeline.py оставлен на месте на случай отката.
-    try:
-        from src.ers_rag import build_graph as _ers_build_graph
-        from src.ers_rag import init_ers_rag_from_chroma as _ers_init
-
-        _ers_init()
-        app.state.gosts_pipeline = _ers_build_graph().compile()
-        app.state.gosts_ready = True
-        logger.info("api.startup: gosts (ers_rag) pipeline ready")
-    except Exception as exc:
-        logger.warning("api.startup: gosts pipeline not available", error=str(exc))
 
     yield
     app.state.pipeline = None
-    app.state.gosts_pipeline = None
-    app.state.gosts_ready = False
     logger.info("api.shutdown: pipeline cleared")
 
 
 app = FastAPI(
-    title="Safety Incident Analyzer API",
-    description="RAG API for Russian workplace safety regulations (ГОСТ, СНиП, ТК РФ, etc.)",
+    title="Regulatory RAG API",
+    description="RAG API for Russian regulatory documents (ГОСТ, СНиП, ТК РФ, etc.)",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -133,7 +115,7 @@ class QueryResponse(BaseModel):
 @app.post("/query", response_model=QueryResponse)
 @limiter.limit("10/minute")
 def query(request: Request, req: QueryRequest) -> QueryResponse:
-    """Ask a question about workplace safety regulations."""
+    """Ask a question about regulatory documents."""
     pipeline_app = request.app.state.pipeline
     if pipeline_app is None:
         raise HTTPException(status_code=503, detail="pipeline not initialized")
@@ -155,7 +137,6 @@ def query(request: Request, req: QueryRequest) -> QueryResponse:
         ) from exc
     elapsed = round(time.perf_counter() - t0, 2)
 
-    # Extract answer
     if result.get("clarify_message"):
         answer = result["clarify_message"]
     elif result.get("abstain_reason"):
@@ -163,7 +144,6 @@ def query(request: Request, req: QueryRequest) -> QueryResponse:
     else:
         answer = result.get("answer") or ""
 
-    # Extract passages
     raw_passages = result.get("final_passages") or []
     passages = [
         Passage(
@@ -174,7 +154,6 @@ def query(request: Request, req: QueryRequest) -> QueryResponse:
         for p in raw_passages
     ]
 
-    # Infer path from state flags
     path = _infer_path(result)
 
     logger.info(
@@ -187,63 +166,6 @@ def query(request: Request, req: QueryRequest) -> QueryResponse:
     )
     return QueryResponse(
         answer=answer, passages=passages, path=path, elapsed_sec=elapsed
-    )
-
-
-@app.post("/query/gosts", response_model=QueryResponse)
-@limiter.limit("10/minute")
-def query_gosts(request: Request, req: QueryRequest) -> QueryResponse:
-    """Ask a question about technical standards (ГОСТ, СНиП, СП) for water treatment."""
-    gosts_app = request.app.state.gosts_pipeline
-    if not request.app.state.gosts_ready or gosts_app is None:
-        raise HTTPException(status_code=503, detail="not ready")
-
-    rid = getattr(request.state, "request_id", "no-rid")
-    t0 = time.perf_counter()
-    try:
-        result = gosts_app.invoke({"query": req.question.strip()})
-    except Exception as exc:
-        logger.error(
-            "api.gosts: pipeline error",
-            request_id=rid,
-            question=req.question[:80],
-            error=str(exc),
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=500, detail=f"internal error (request_id={rid})"
-        ) from exc
-    elapsed = round(time.perf_counter() - t0, 2)
-
-    if result.get("clarify_message"):
-        answer = result["clarify_message"]
-    elif result.get("abstain_reason"):
-        answer = f"Не могу ответить: {result['abstain_reason']}"
-    else:
-        answer = result.get("answer") or ""
-
-    raw_passages = result.get("final_passages") or result.get("fallback_passages") or []
-    passages = [
-        Passage(
-            text=p.get("text", ""),
-            source=p.get("metadata", {}).get("source", ""),
-            score=float(p.get("score", 0.0)),
-        )
-        for p in raw_passages
-    ]
-    path = _infer_path(result)
-    logger.info(
-        "api.gosts: done",
-        request_id=rid,
-        question=req.question[:80],
-        passages=len(passages),
-        elapsed_sec=elapsed,
-    )
-    return QueryResponse(
-        answer=answer,
-        passages=passages,
-        path=path,
-        elapsed_sec=elapsed,
     )
 
 
