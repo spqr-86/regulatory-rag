@@ -1,7 +1,10 @@
 import os
 
-import streamlit as st
 from dotenv import load_dotenv
+
+load_dotenv()
+
+import streamlit as st
 
 # Must happen before any langchain_google_genai import (occurs inside src modules).
 from src.infra.llm_factory import apply_ipv6_patch_for_googleapis
@@ -30,8 +33,6 @@ try:
 except Exception as e:
     logger.warning(f"Index module not importable: {e}")
     INDEX_AVAILABLE = False
-
-load_dotenv()
 
 # =========================
 #     PAGE CONFIG & UI
@@ -127,6 +128,10 @@ if v7_app is None:
 # =========================
 #     CHAT HISTORY INIT
 # =========================
+if "session_id" not in st.session_state:
+    import uuid
+
+    st.session_state.session_id = str(uuid.uuid4())[:8]
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {

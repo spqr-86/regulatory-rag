@@ -86,10 +86,11 @@ def _legacy_triage(state: RAGState) -> RAGState:
     result = check_full_triage(original_q, active_q, last.get("passages", []), plan)
 
     if result["triage"] == "sufficient":
+        passages = last.get("passages", [])
+
         # Crossref escalation: many cross-references in retrieved chunks indicate
         # the answer is distributed across multiple document sections.
         # Save as fallback and escalate to rag_complex for fuller coverage.
-        passages = last.get("passages", [])
         crossref_hits = _count_crossref_hits(passages)
         if crossref_hits >= _CROSSREF_ESCALATION_THRESHOLD:
             return {
@@ -98,6 +99,19 @@ def _legacy_triage(state: RAGState) -> RAGState:
                 "fallback_passages": passages,
                 "fallback_score": result["top_score"],
             }
+
+        # Zero-overlap escalation: none of the original query keywords appear in
+        # any retrieved chunk. Topic was found (active_query overlap ok) but the
+        # specific answer is missing — escalate to rag_complex for broader search.
+        kw_original = result["keyword_overlap_original"]
+        if kw_original == 0.0:
+            return {
+                "sufficient": False,
+                "sufficiency_details": result,
+                "fallback_passages": passages,
+                "fallback_score": result["top_score"],
+            }
+
         return {
             "sufficient": True,
             "final_passages": passages,
