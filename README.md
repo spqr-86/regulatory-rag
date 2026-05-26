@@ -3,10 +3,10 @@
 **Production RAG pipeline for Russian regulatory documents (GOST, SNiP, Labour Code) — answers questions with citations or explicitly abstains when uncertain.**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
-[![CI](https://github.com/spqr-86/safety-incident-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/safety-incident-analyzer/actions/workflows/ci.yml)
+[![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Correctness: 7.9/10 · Faithfulness: 0.988 · Cost: $0.01/query**
+**Overall score: 0.80 · Faithfulness: 0.988 · Cost: $0.01/query**
 
 [Russian README →](./README_RU.md)
 
@@ -32,7 +32,7 @@ router               — query plan + domain glossary expansion
 rag_simple           — hybrid retrieval (BM25 + vectors, top-12) + FlashRank rerank
     ↓
 evaluate_triage      — deterministic hard gates (no LLM scoring)
-    ├── sufficient   → generate_answer (Gemini, thinking_budget=4096)
+    ├── sufficient   → generate_answer (OpenAI GPT-4o)
     ├── borderline   → llm_verifier → rewrite → rag_simple (one retry)
     └── clearly_bad  → rag_complex (top-60 + MMR) → evaluate_complex
                             ├── pass  → generate_answer
@@ -50,24 +50,25 @@ Key design decisions:
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| Correctness (LLM-as-judge, 0–10) | **7.9** | > 7.5 |
+| Overall score (LLM-as-judge, 0–1) | **0.80** | > 0.85 |
+| In-scope correctness | **0.72** | > 0.80 |
+| OOS abstain rate | **1.00** | > 0.90 |
+| False-premise detection | **0.87** | > 0.85 |
 | Faithfulness (no hallucinations) | **0.988** | > 0.85 |
-| Answer Relevance | **0.85+** | > 0.85 |
-| False-sufficiency rate | **15%** | < 10% |
 | Cost per query | **$0.0102** | — |
-| Avg latency | 21.9 sec (complex path) / 4.9 sec (simple path) | — |
+| Avg latency | ~8s (simple path) | — |
 
-Eval: 50-question golden dataset, `eval/run_v7_eval.py`. LLM judge: Gemini 2.5 Flash.
+Eval: 57-question golden dataset, `eval/run_v7_eval.py`. LLM judge: GPT-4o.
 
 ---
 
 ## Quick start
 
 ```bash
-git clone https://github.com/spqr-86/safety-incident-analyzer.git
-cd safety-incident-analyzer
+git clone https://github.com/spqr-86/regulatory-rag.git
+cd regulatory-rag
 pip install -r requirements.txt
-cp .env.example .env  # add GEMINI_API_KEY (LLM) + OPENAI_API_KEY (embeddings)
+cp .env.example .env  # add OPENAI_API_KEY (LLM + embeddings)
 ```
 
 Drop your PDF/DOCX regulatory documents into `source_docs/`, then:
@@ -99,7 +100,7 @@ flowchart TD
         Gate -->|domain| Router[router + glossary]
         Router --> Simple[rag_simple hybrid top-12 + FlashRank]
         Simple --> Triage{evaluate_triage hard gates}
-        Triage -->|sufficient| Gen[generate_answer Gemini]
+        Triage -->|sufficient| Gen[generate_answer OpenAI]
         Triage -->|borderline| Verifier[llm_verifier]
         Triage -->|clearly_bad| Complex[rag_complex top-60 + MMR]
         Verifier -->|ok| Gen
@@ -168,7 +169,7 @@ Interactive docs: `http://localhost:8503/docs`
 | Layer | Technology |
 |-------|-----------|
 | Orchestration | LangGraph (V7 deterministic graph) |
-| LLM | Gemini 2.5 Flash (simple path, ~5s) + Gemini 3 Flash (complex path, thinking), DeepSeek V3 (GOST) |
+| LLM | GPT-4o-mini (simple path, ~8s) + GPT-4o (complex path), configurable via `SIMPLE/COMPLEX_LLM_PROVIDER` |
 | Embeddings | OpenAI text-embedding-3-small |
 | Vector store | ChromaDB |
 | Reranking | FlashRank Cross-Encoder |
@@ -231,7 +232,7 @@ No code changes needed — edit the YAML and restart.
 - ✅ V7 LangGraph pipeline — all nodes, deterministic routing
 - ✅ Hybrid retrieval — BM25 + semantic, two-stage (simple/complex path)
 - ✅ Hard gate thresholds — score-based, no LLM decisions in routing
-- ✅ Eval framework — 50-question golden dataset, correctness 7.9/10
+- ✅ Eval framework — 57-question golden dataset, overall score 0.80
 - ✅ GOST RAG — 108 docs, 9,344 chunks, separate ChromaDB collection
 - ✅ Deployed on VPS (port 8502, Streamlit)
 - 🔄 Expanding test dataset
