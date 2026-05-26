@@ -25,6 +25,7 @@ from src.infra.llm_factory import get_complex_llm, get_simple_llm  # noqa: F401
 from src.infra.parsers import (
     extract_text,
 )  # noqa: F401  # used by other make_*_fn
+from src.infra.prompt_manager import PromptManager
 from src.v7.nlp_core import init_bm25_index
 from src.v7.nodes import generate_answer as generate_answer_mod
 from src.v7.nodes import llm_verifier as llm_verifier_mod
@@ -37,6 +38,7 @@ from src.v7.nodes.utils import extract_doc_identifiers
 from src.v7.state_types import VerificationResult
 
 logger = structlog.get_logger()
+_pm = PromptManager()
 
 # Module-level RLock protecting init_v7_from_chroma.
 # Concurrent calls serialize to prevent readers observing a half-initialized
@@ -325,14 +327,6 @@ def make_rewrite_fn(llm) -> Callable[..., str]:
     return _rewrite
 
 
-_EXPAND_SYSTEM_PROMPT = (
-    "Ты — эксперт по нормативным документам в области охраны труда. "
-    "Сгенерируй альтернативные формулировки поискового запроса для поиска в базе нормативных актов. "
-    "Используй синонимы, смежные термины и другие углы зрения на тот же вопрос. "
-    "Верни ровно N формулировок — по одной на строке, без нумерации и пояснений."
-)
-
-
 def make_expand_fn(llm, n: int = 3) -> Callable[[str, int], List[str]]:
     """Create an LLM-backed query expansion function for V8 multi-query expand.
 
@@ -341,12 +335,7 @@ def make_expand_fn(llm, n: int = 3) -> Callable[[str, int], List[str]]:
     """
 
     def _expand(query: str, n: int = n) -> List[str]:
-        prompt = (
-            f"{_EXPAND_SYSTEM_PROMPT}\n\n"
-            f"Исходный запрос: {query}\n"
-            f"Количество альтернатив: {n}\n\n"
-            "Альтернативные формулировки:"
-        )
+        prompt = _pm.render("query_expand", query=query, n=n)
         try:
             response = llm.invoke([HumanMessage(content=prompt)])
             raw = extract_text(response.content).strip()
@@ -358,37 +347,6 @@ def make_expand_fn(llm, n: int = 3) -> Callable[[str, int], List[str]]:
 
     return _expand
 
-
-_GENERATE_SYSTEM_PROMPT = """\
-Ты отвечаешь СТРОГО на основе предоставленных фрагментов нормативных документов.
-Всё что не написано явно в тексте фрагментов — не используй и не додумывай.
-
-ПРАВИЛА (обязательны):
-1. Ссылки: каждое утверждение сопровождай ссылкой [Фрагмент N: Документ, п. X.X].
-   Если пункт не указан в тексте фрагмента — пиши [Фрагмент N: Документ, без пункта].
-2. Цитирование: ключевые формулировки нормы (требования, сроки, цифры) цитируй дословно \
-в кавычках. Остальное можно пересказывать.
-3. Три варианта ответа:
-   a) Полный — фрагменты покрывают вопрос: дай ответ со ссылками.
-   b) Частичный — покрывают часть: ответь на покрытое, затем "Не покрыто: [что именно]."
-      Если вопрос не содержит данных для применения нормы (вид работ, категория, должность) — \
-дай ответ для наиболее типового сценария, явно пометив: "Допущение: [что предполагается]. \
-Для других сценариев ответ может отличаться." Перечисли недостающие параметры.
-   c) Нет ответа — фрагменты не содержат нужной информации: \
-"В фрагментах ответа нет. Не хватает: [что именно]."
-4. Противоречия: если фрагменты противоречат — укажи оба источника и оба варианта. \
-Если в тексте фрагментов видны даты документов — укажи их. \
-Окончательный выбор оставь пользователю.
-5. Терминология: сохраняй термины первоисточника дословно — классификации, категории, \
-группы (напр. "3.3", "1Б группа", "класс В1").
-6. Фрагменты с низкой релевантностью (помечены LOW) используй только при отсутствии \
-фрагментов с высокой или средней релевантностью.
-
-ФОРМАТ ОТВЕТА:
-Вывод: [прямой ответ в минимальном объёме — одна фраза для да/нет, список для перечней, \
-без преамбул и повторения вопроса]
-Обоснование: [детали с обязательными ссылками [Фрагмент N: Документ, п. X.X]]
-Первоисточники: [только если источников больше двух — список в конце; иначе пропусти раздел]"""
 
 # Паттерны для русских ссылок на пункты/статьи НПА
 _REF_PATTERNS = [
@@ -520,12 +478,11 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
             f"[{i + 1}] ({_score_label(p.get('score', 0.0))}) [Источник: {_short_source(p)}]\n{p.get('text', '')}"
             for i, p in enumerate(top_passages)
         )
-        prompt = (
-            f"{_GENERATE_SYSTEM_PROMPT}\n\n"
-            f"Вопрос: {query}\n\n"
-            f"Фрагменты (отсортированы по релевантности, {len(top_passages)} шт.):\n"
-            f"{passages_text}\n\n"
-            "Ответ:"
+        prompt = _pm.render(
+            "generate_answer",
+            query=query,
+            context=passages_text,
+            passages_count=len(top_passages),
         )
         try:
             return _call_llm(prompt)

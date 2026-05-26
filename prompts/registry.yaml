@@ -18,3 +18,13 @@ rag_complex:
   active_version: "v1"
   versions:
     v1: "agents/rag_complex_v1.j2"
+
+query_expand:
+  active_version: "v1"
+  versions:
+    v1: "agents/query_expand_v1.j2"
+
+generate_answer:
+  active_version: "v1"
+  versions:
+    v1: "agents/generate_answer_v1.j2"
