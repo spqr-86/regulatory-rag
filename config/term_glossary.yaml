@@ -1,10 +1,18 @@
-# Глоссарий доменных сокращений → официальные термины
-# Используется для детерминированного расширения запросов перед RAG-агентами.
+# Domain term glossary — Russian occupational safety & labor law abbreviations
+# Used for deterministic query expansion before the RAG pipeline processes the query.
 #
-# Формат: "неофициальный термин (lowercase)" → official: "официальное название"
-# Поиск — case-insensitive подстрока в запросе пользователя.
-# При совпадении к запросу дописывается: (официально: <official>)
+# When a user query contains a known abbreviation or informal term, it is expanded
+# with the official full name so BM25 and vector search can match the indexed text.
 #
+# Format: "informal term (lowercase)" → official: "official full name"
+# Matching: case-insensitive substring in the user query.
+# On match: appends "(официально: <official>)" to the query.
+#
+# These are publicly defined terms from Russian federal regulations (ТК РФ, НПА).
+# To customize for your domain: replace or extend the entries below.
+#
+# ---
+# Глоссарий доменных сокращений → официальные термины (охрана труда, ТК РФ)
 # Добавляйте новые термины по мере обнаружения.
 
 terms:

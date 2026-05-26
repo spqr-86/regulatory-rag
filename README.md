@@ -205,6 +205,27 @@ Same pattern for vector stores — implement `VectorStoreBackend` protocol in `s
 
 ---
 
+## Adapting to your domain
+
+The system ships tuned for Russian regulatory documents, but domain-specific knowledge is isolated and easy to swap.
+
+**Term glossary** (`config/term_glossary.yaml`) — maps informal abbreviations to their official full names so BM25 and vector search can match indexed text. Ships with Russian occupational safety terms (ТК РФ, Постановление 2464, etc.). To extend:
+
+```yaml
+terms:
+  "your abbreviation":
+    official: "Full official term from your documents"
+    source: "Regulation / standard reference (optional)"
+```
+
+No code changes needed — edit the YAML and restart.
+
+**Prompts** (`prompts/`) — Jinja2 templates, versioned. Switch the active version via env var or `prompts/registry.yaml`.
+
+**Corpus** — drop your PDFs into `source_docs/` and run `python index.py`. The chunker and embeddings are language-agnostic (OpenAI `text-embedding-3-small`).
+
+---
+
 ## Project status
 
 - ✅ V7 LangGraph pipeline — all nodes, deterministic routing
