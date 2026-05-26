@@ -5,16 +5,12 @@ import io
 import json
 import os
 import re
+import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Union, Any
 
 from docling.document_converter import DocumentConverter
-from docling_core.types.doc.document import (
-    SectionHeaderItem,
-    TextItem,
-    ListItem,
-)
 from langchain_core.documents import Document
 
 from config import constants
@@ -26,7 +22,7 @@ FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
 # ⚙️ Обновляем версию, так как формат хранения кардинально меняется
 # v2.2-grouped: bbox-фильтр больше не отбрасывает текст (только зануляет bbox);
 # MAX_CHUNK_SIZE из settings; смена страницы flushит чанк.
-PIPELINE_VERSION = "v2.4-sentence-overlap"
+PIPELINE_VERSION = "v3.0-hybrid"
 
 # --- Константы для фильтрации и группировки ---
 # Порог высоты bbox: ниже него bbox считается мусором (визуальные артефакты, footer).
@@ -49,9 +45,9 @@ _NOISE_PATTERNS = re.compile(
 
 
 def _clean_noise(text: str) -> str:
-    """Удаляет URL-водяные знаки, маркеры страниц и временны́е штампы."""
+    """Удаляет шум: нормализует кириллицу, убирает URL/маркеры страниц/timestamps."""
+    text = unicodedata.normalize("NFC", text)
     cleaned = _NOISE_PATTERNS.sub("", text)
-    # Убираем лишние пробелы/переносы, оставшиеся после удаления
     cleaned = re.sub(r" {2,}", " ", cleaned)
     return cleaned.strip()
 
@@ -83,6 +79,9 @@ class DocumentProcessor:
 
         # Ленивая инициализация Docling
         self._docling = DocumentConverter()
+        from docling_core.transforms.chunker import HybridChunker
+
+        self._chunker = HybridChunker(max_tokens=400, merge_peers=True)
 
     # ---------- публичные методы ----------
 
@@ -171,216 +170,41 @@ class DocumentProcessor:
             return self._process_docling_document(res.document, source_name)
 
     def _process_docling_document(self, doc: Any, source: str) -> List[Document]:
-        """
-        Итерация по структуре документа Docling.
-        Сохраняем каждый элемент как Document с metadata.
-        Реализована группировка (Grouping) мелких элементов.
-        """
         chunks = []
+        for chunk in self._chunker.chunk(doc):
+            text = _clean_noise(chunk.text.strip())
+            if not text:
+                continue
+            if any(p in text for p in BLACKLIST_PHRASES):
+                continue
 
-        # Безопасное получение списка элементов
-        items = []
-        if hasattr(doc, "texts"):
-            if callable(doc.texts):
-                items = list(doc.texts())
-            else:
-                items = list(doc.texts)
-        elif hasattr(doc, "body") and hasattr(doc.body, "children"):
-            items = self._flatten_items(doc.body.children)
+            headings = chunk.meta.headings or []
+            parent_section = headings[-1] if headings else "Начало документа"
+            heading_path = " > ".join(headings) if headings else ""
 
-        current_section = "Начало документа"
-
-        # Буфер для группировки
-        current_chunk_text = []
-        current_chunk_bbox = None  # [l, t, r, b]
-        current_chunk_page = None
-        last_chunk_tail = ""  # overlap: конец предыдущего чанка
-
-        CHUNK_OVERLAP = 150  # символов overlap между чанками
-
-        def finalize_chunk(idx_for_id):
-            nonlocal \
-                current_chunk_text, \
-                current_chunk_bbox, \
-                current_chunk_page, \
-                last_chunk_tail
-            if not current_chunk_text:
-                return
-
-            full_text = "\n".join(current_chunk_text)
-
-            meta = {
+            meta: dict = {
                 "source": source,
-                "type": "grouped_text",
-                "chunk_id": idx_for_id,
-                "parent_section": current_section,
+                "type": "hybrid_chunk",
+                "parent_section": parent_section,
+                "heading_path": heading_path,
             }
+            if chunk.meta.doc_items:
+                item = chunk.meta.doc_items[0]
+                if hasattr(item, "prov") and item.prov:
+                    prov = item.prov[0]
+                    if hasattr(prov, "page_no"):
+                        meta["page_no"] = prov.page_no
+                    if hasattr(prov, "bbox") and prov.bbox:
+                        bbox = (
+                            prov.bbox.as_tuple()
+                            if hasattr(prov.bbox, "as_tuple")
+                            else prov.bbox
+                        )
+                        if abs(bbox[3] - bbox[1]) >= MIN_BBOX_HEIGHT:
+                            meta["bbox"] = json.dumps(bbox)
 
-            if current_chunk_bbox:
-                meta["bbox"] = json.dumps(current_chunk_bbox)
-            if current_chunk_page:
-                meta["page_no"] = current_chunk_page
-
-            chunks.append(Document(page_content=full_text, metadata=meta))
-
-            # Сохраняем хвост для overlap следующего чанка
-            last_chunk_tail = (
-                full_text[-CHUNK_OVERLAP:]
-                if len(full_text) > CHUNK_OVERLAP
-                else full_text
-            )
-
-            # Сброс
-            current_chunk_text = []
-            current_chunk_bbox = None
-            current_chunk_page = None
-
-        def update_bbox(new_bbox, new_page):
-            nonlocal current_chunk_bbox, current_chunk_page
-            if not new_bbox:
-                return
-
-            # Принимаем только bbox с той же страницы. Если страница сменилась — это сложный кейс.
-            # Для простоты: если страница сменилась, мы, возможно, захотим закрыть чанк.
-            # Но пока будем обновлять страницу на последнюю актуальную.
-            if current_chunk_page is not None and current_chunk_page != new_page:
-                # Если страница поменялась, это сигнал закрыть чанк,
-                # иначе bbox будет некорректным (координаты с разных страниц).
-                return False
-
-            current_chunk_page = new_page
-
-            if current_chunk_bbox is None:
-                current_chunk_bbox = list(new_bbox)
-            else:
-                # Merge: [min_l, min_t, max_r, max_b]
-                # Docling bbox обычно: left, bottom, right, top (или top-left origin? Проверим ниже)
-                # Обычно Docling возвращает [l, b, r, t] (bottom-up) или [l, t, r, b] (top-down)
-                # В коде visual_proof мы уже обрабатываем это. Здесь просто берем min/max.
-
-                # Предполодим [x0, y0, x1, y1] где x0<x1. Порядок Y зависит от системы координат.
-                # Просто берем min для 0,1 и max для 2,3 — это безопасно для охвата.
-                current_chunk_bbox[0] = min(current_chunk_bbox[0], new_bbox[0])
-                current_chunk_bbox[1] = min(current_chunk_bbox[1], new_bbox[1])
-                current_chunk_bbox[2] = max(current_chunk_bbox[2], new_bbox[2])
-                current_chunk_bbox[3] = max(current_chunk_bbox[3], new_bbox[3])
-            return True
-
-        for i, item in enumerate(items):
-            text = item.text.strip()
-            if not text:
-                continue
-
-            # 1. Blacklist Filter
-            if any(phrase in text for phrase in BLACKLIST_PHRASES):
-                continue
-
-            # 1b. Noise Cleanup — URL-watermarks, page markers, timestamps
-            text = _clean_noise(text)
-            if not text:
-                continue
-
-            # 2. BBox Extraction & Height Filter
-            item_bbox = None
-            item_page = None
-            if hasattr(item, "prov") and item.prov:
-                prov = item.prov[0]
-                if hasattr(prov, "bbox") and prov.bbox:
-                    bbox_tuple = (
-                        prov.bbox.as_tuple()
-                        if hasattr(prov.bbox, "as_tuple")
-                        else prov.bbox
-                    )
-                    # Проверка высоты: bbox мусорный → зануляем, текст оставляем.
-                    height = abs(bbox_tuple[3] - bbox_tuple[1])
-                    if height >= MIN_BBOX_HEIGHT:
-                        item_bbox = bbox_tuple
-
-                if hasattr(prov, "page_no"):
-                    item_page = prov.page_no
-
-            # 3. Handling Headers (Explicit Break)
-            if isinstance(item, SectionHeaderItem):
-                # Закрываем предыдущий чанк
-                finalize_chunk(i)
-                current_section = text
-
-                # Заголовок сам по себе тоже может быть чанком, или началом нового.
-                # Обычно заголовок полезно иметь как отдельный короткий чанк или начало.
-                # Давайте добавим его как отдельный чанк для навигации,
-                # ИЛИ просто обновим контекст.
-                # Лучше: Заголовок — это контекст. Мы его не добавляем как текст,
-                # если только он не содержит полезной инфы.
-                # Но часто заголовок — это и есть инфа.
-                # Добавим заголовок как отдельный чанк.
-                chunks.append(
-                    Document(
-                        page_content=text,
-                        metadata={
-                            "source": source,
-                            "type": "header",
-                            "chunk_id": i,
-                            "parent_section": current_section,
-                            "bbox": json.dumps(item_bbox) if item_bbox else None,
-                            "page_no": item_page,
-                        },
-                    )
-                )
-                continue
-
-            # 4. Grouping Logic
-            # Страница сменилась — НЕ флашим: норма может продолжаться на следующей странице.
-            # Просто обновляем трекинг страницы для bbox-координат.
-            if (
-                current_chunk_page is not None
-                and item_page is not None
-                and current_chunk_page != item_page
-            ):
-                # Сбрасываем bbox (координаты с разных страниц некорректны),
-                # но текст продолжаем в том же чанке.
-                current_chunk_bbox = None
-                current_chunk_page = item_page
-
-            # Если размер превышен — закрываем чанк по sentence boundary
-            current_len = sum(len(t) for t in current_chunk_text)
-            if current_len + len(text) > MAX_CHUNK_SIZE:
-                finalize_chunk(i)
-                # Overlap: начинаем новый чанк с хвоста предыдущего
-                if last_chunk_tail:
-                    current_chunk_text = [last_chunk_tail]
-
-            # Добавляем в буфер
-            if item_bbox:
-                if not update_bbox(item_bbox, item_page):
-                    # bbox с другой страницы — сбрасываем bbox, текст продолжаем
-                    current_chunk_bbox = None
-                    current_chunk_page = item_page
-                    update_bbox(item_bbox, item_page)
-            elif item_page and current_chunk_page is None:
-                current_chunk_page = item_page
-            current_chunk_text.append(text)
-
-        # Finalize last chunk
-        finalize_chunk(len(items))
-
+            chunks.append(Document(page_content=text, metadata=meta))
         return chunks
-
-    def _flatten_items(self, children: List[Any]) -> List[Any]:
-        """Рекурсивно собирает текстовые элементы."""
-        result = []
-        for child in children:
-            if isinstance(child, (TextItem, ListItem, SectionHeaderItem)):
-                result.append(child)
-            if hasattr(child, "children"):
-                result.extend(self._flatten_items(child.children))
-        return result
-
-    def _get_item_type(self, item: Any) -> str:
-        if isinstance(item, SectionHeaderItem):
-            return "header"
-        if isinstance(item, ListItem):
-            return "list_item"
-        return "text"
 
     # ---------- кэш и утилиты (без изменений логики) ----------
 

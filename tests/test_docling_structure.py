@@ -1,96 +1,96 @@
 from unittest.mock import MagicMock
-import json
+import pytest
 from src.indexing.file_handler import DocumentProcessor
 
-# Correct imports based on inspection
-from docling.datamodel.document import SectionHeaderItem, TextItem
-from docling.datamodel.base_models import BoundingBox
-from docling_core.types.doc.document import ProvenanceItem
+
+def _make_chunk(text, headings=None, page_no=None, bbox=None):
+    """Создаёт мок HybridChunker chunk."""
+    chunk = MagicMock()
+    chunk.text = text
+    chunk.meta.headings = headings or []
+    if page_no is not None or bbox is not None:
+        item = MagicMock()
+        prov = MagicMock()
+        prov.page_no = page_no
+        if bbox is not None:
+            prov.bbox = MagicMock()
+            prov.bbox.as_tuple.return_value = bbox
+        else:
+            prov.bbox = None
+        item.prov = [prov]
+        chunk.meta.doc_items = [item]
+    else:
+        chunk.meta.doc_items = []
+    return chunk
 
 
-def test_extract_chunks_real_types():
+def _make_processor_with_chunks(chunks_data):
+    """Создаёт DocumentProcessor с замоканным _chunker."""
     processor = DocumentProcessor()
+    processor._chunker = MagicMock()
+    processor._chunker.chunk.return_value = iter(chunks_data)
+    return processor
 
-    # Create real objects
-    bbox = BoundingBox(l=10, b=30, r=200, t=50)
-    prov = ProvenanceItem(page_no=1, bbox=bbox, charspan=[0, 10])
 
-    # Create items with provenance
-    header = SectionHeaderItem(
-        text="Chapter 1",
-        orig="Chapter 1",
-        label="section_header",
-        self_ref="#/header1",
-        parent=None,
-        children=[],
-        prov=[prov],
-    )
-
-    text = TextItem(
-        text="Content",
-        orig="Content",
-        label="text",
-        self_ref="#/text1",
-        parent=None,
-        children=[],
-        prov=[prov],
-    )
-
-    doc = MagicMock()
-    # Mock texts() iterator to return our items
-    doc.texts.return_value = iter([header, text])
-
-    chunks = processor._process_docling_document(doc, "test.pdf")
+@pytest.mark.unit
+def test_extract_chunks_hybrid():
+    chunks_data = [
+        _make_chunk(
+            "Chapter 1",
+            headings=["Chapter 1"],
+            page_no=1,
+            bbox=(10.0, 50.0, 200.0, 30.0),
+        ),
+        _make_chunk(
+            "Content", headings=["Chapter 1"], page_no=1, bbox=(10.0, 50.0, 200.0, 30.0)
+        ),
+    ]
+    processor = _make_processor_with_chunks(chunks_data)
+    chunks = processor._process_docling_document(MagicMock(), "test.pdf")
 
     assert len(chunks) == 2
-
-    # Check Header
-    assert chunks[0].metadata["type"] == "header"
-    assert "Chapter 1" in chunks[0].page_content
-    # Check context injection (now in metadata)
+    assert chunks[0].metadata["type"] == "hybrid_chunk"
+    assert chunks[0].page_content == "Chapter 1"
     assert chunks[0].metadata["parent_section"] == "Chapter 1"
-    # assert "[Chapter 1]" in chunks[0].page_content # Old behavior removed
-
-    # Check BBox
-    bbox_json = chunks[0].metadata["bbox"]
-    # Docling returns [l, t, r, b] where t=50, b=30 (PDF coords)
-    assert json.loads(bbox_json) == [10.0, 50.0, 200.0, 30.0]
-
-    # Check Text
-    assert chunks[1].metadata["type"] == "grouped_text"  # Now it's grouped_text
+    assert chunks[1].metadata["type"] == "hybrid_chunk"
     assert "Content" in chunks[1].page_content
-    # Context should NOT be in content anymore, but in metadata
-    assert "[Chapter 1]" not in chunks[1].page_content
     assert chunks[1].metadata["parent_section"] == "Chapter 1"
 
 
+@pytest.mark.unit
 def test_short_bbox_keeps_text_drops_bbox():
-    """Регрессия: короткий bbox (< MIN_BBOX_HEIGHT) не должен ронять текст из индекса.
-
-    Раньше items с bbox_h < 7 выбрасывались целиком — это роняло однострочные
-    пункты норм (напр. «Повторный инструктаж ... 6 месяцев» из ППРФ 2464).
-    Теперь текст остаётся, bbox просто отсутствует.
-    """
-    processor = DocumentProcessor()
-
-    short_bbox = BoundingBox(l=10, b=44, r=200, t=50)  # height=6, < 7
-    prov_short = ProvenanceItem(page_no=4, bbox=short_bbox, charspan=[0, 10])
-
-    item = TextItem(
-        text="Повторный инструктаж проводится не реже 1 раза в 6 месяцев.",
-        orig="Повторный инструктаж проводится не реже 1 раза в 6 месяцев.",
-        label="text",
-        self_ref="#/text-short",
-        parent=None,
-        children=[],
-        prov=[prov_short],
+    """Регрессия: короткий bbox (< MIN_BBOX_HEIGHT) не должен ронять текст из индекса."""
+    chunk = _make_chunk(
+        "Повторный инструктаж проводится не реже 1 раза в 6 месяцев.",
+        headings=[],
+        page_no=4,
+        bbox=(10.0, 50.0, 200.0, 44.0),  # height = abs(44-50) = 6 < 7
     )
-
-    doc = MagicMock()
-    doc.texts.return_value = iter([item])
-
-    chunks = processor._process_docling_document(doc, "2464.pdf")
+    processor = _make_processor_with_chunks([chunk])
+    chunks = processor._process_docling_document(MagicMock(), "2464.pdf")
 
     assert len(chunks) == 1
     assert "Повторный инструктаж" in chunks[0].page_content
     assert chunks[0].metadata.get("bbox") is None
+
+
+@pytest.mark.unit
+def test_blacklist_phrase_filtered():
+    """Чанки с blacklist-фразами должны отфильтровываться."""
+    chunk = _make_chunk("Скачано с https://example.com", headings=[])
+    processor = _make_processor_with_chunks([chunk])
+    chunks = processor._process_docling_document(MagicMock(), "test.pdf")
+
+    assert len(chunks) == 0
+
+
+@pytest.mark.unit
+def test_heading_path_populated():
+    """heading_path должен содержать весь путь заголовков через ' > '."""
+    chunk = _make_chunk("Body text", headings=["Chapter 1", "Section 1.1"])
+    processor = _make_processor_with_chunks([chunk])
+    chunks = processor._process_docling_document(MagicMock(), "test.pdf")
+
+    assert len(chunks) == 1
+    assert chunks[0].metadata["parent_section"] == "Section 1.1"
+    assert chunks[0].metadata["heading_path"] == "Chapter 1 > Section 1.1"
