@@ -218,3 +218,4 @@ REVIEW_*.md
 CLAUDE.md
 models/
 chroma_db_gosts/
+source_docs/
