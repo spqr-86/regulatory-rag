@@ -169,7 +169,7 @@ Interactive docs: `http://localhost:8503/docs`
 | Layer | Technology |
 |-------|-----------|
 | Orchestration | LangGraph (V7 deterministic graph) |
-| LLM | GPT-4o-mini (simple path, ~8s) + GPT-4o (complex path), configurable via `SIMPLE/COMPLEX_LLM_PROVIDER` |
+| LLM | Gemini, OpenAI, DeepSeek — configurable per path via `SIMPLE/COMPLEX_LLM_PROVIDER` in `.env` |
 | Embeddings | OpenAI text-embedding-3-small |
 | Vector store | ChromaDB |
 | Reranking | FlashRank Cross-Encoder |
@@ -185,7 +185,7 @@ LLM and vector store are accessed through factory layers (`src/infra/llm_factory
 
 | Layer | Shipped | Configurable via | Roadmap |
 |-------|---------|------------------|---------|
-| LLM   | Gemini, OpenAI | `LLM_PROVIDER` | Anthropic, DeepSeek |
+| LLM   | Gemini, OpenAI, DeepSeek | `LLM_PROVIDER` | Anthropic |
 | Vector store | Chroma | `VECTOR_STORE` | Qdrant, pgvector |
 | Embeddings | OpenAI, local (sentence-transformers), hf_api | `EMBEDDING_PROVIDER` | — |
 
