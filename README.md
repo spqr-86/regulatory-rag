@@ -232,11 +232,14 @@ No code changes needed — edit the YAML and restart.
 - ✅ V7 LangGraph pipeline — all nodes, deterministic routing
 - ✅ Hybrid retrieval — BM25 + semantic, two-stage (simple/complex path)
 - ✅ Hard gate thresholds — score-based, no LLM decisions in routing
+- ✅ HybridChunker v3 — structure-aware chunking aligned to document sections/articles
+- ✅ Cross-reference expansion — auto-fetches referenced clauses (e.g. "пункт 46") from same source
+- ✅ Multi-query expansion — LLM generates 3 query variants, RRF merge
 - ✅ Eval framework — 57-question golden dataset, overall score 0.80
 - ✅ GOST RAG — 108 docs, 9,344 chunks, separate ChromaDB collection
 - ✅ Deployed on VPS (port 8502, Streamlit)
-- 🔄 Expanding test dataset
-- 🔄 False-sufficiency reduction (target < 10%)
+- 🔄 Contextual retrieval (+35-49% recall expected)
+- 🔄 Corpus expansion (SOAT methodology, fire safety details)
 
 ---
 
