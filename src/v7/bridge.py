@@ -10,6 +10,7 @@ Responsibilities:
 
 from __future__ import annotations
 
+import re
 import threading
 from typing import Callable, List, Literal
 
@@ -389,14 +390,96 @@ _GENERATE_SYSTEM_PROMPT = """\
 Обоснование: [детали с обязательными ссылками [Фрагмент N: Документ, п. X.X]]
 Первоисточники: [только если источников больше двух — список в конце; иначе пропусти раздел]"""
 
+# Паттерны для русских ссылок на пункты/статьи НПА
+_REF_PATTERNS = [
+    re.compile(r"пункт\w*\s+(\d+)", re.IGNORECASE),
+    re.compile(r'подпункт\w*\s+[«"]?([а-яё])[»"]?', re.IGNORECASE),
+    re.compile(r"стать\w+\s+(\d+)", re.IGNORECASE),
+]
 
-def make_generate_fn(llm) -> Callable[[str, str, List[dict]], str]:
+
+def _extract_refs(text: str) -> list[str]:
+    """Извлечь ссылки на пункты/статьи из текста чанка."""
+    found: list[str] = []
+    for pattern in _REF_PATTERNS:
+        for m in pattern.finditer(text):
+            ref = m.group(1)
+            if ref not in found:
+                found.append(ref)
+    return found
+
+
+def expand_cross_references(
+    passages: list[dict],
+    backend,
+    query: str = "",
+) -> list[dict]:
+    """Подтянуть чанки, связанные с найденными passages через cross-reference.
+
+    Два механизма:
+    1. Явные ссылки: ищет "пункт N", "статью N" в тексте passage и тянет чанки
+       из того же source, где встречается этот номер.
+    2. BM25-доиск: для каждого уникального source из passages запускает bm25_search
+       по запросу и добавляет чанки из этого source (улавливает обратные ссылки,
+       когда п.60 ссылается на п.46.в, а не наоборот).
+    """
+    if not passages:
+        return passages
+
+    existing_texts = {p["text"] for p in passages}
+    extra: list[dict] = []
+
+    def _add(text: str, metadata: dict) -> None:
+        if text and text not in existing_texts:
+            existing_texts.add(text)
+            extra.append(
+                {"text": text, "score": 0.0, "metadata": metadata, "cross_ref": True}
+            )
+
+    # ── Mechanism 1: explicit refs in passage text ────────────────────────────
+    for passage in passages:
+        source = passage.get("metadata", {}).get("source", "")
+        if not source:
+            continue
+        refs = _extract_refs(passage.get("text", ""))
+        for ref in refs:
+            try:
+                docs = backend.get_by_filter(
+                    where={"source": source},
+                    limit=100,
+                )
+                for doc in docs:
+                    if ref in doc.page_content:
+                        _add(doc.page_content, doc.metadata)
+            except Exception:
+                continue
+
+    # ── Mechanism 2: BM25 re-search within same sources ───────────────────────
+    if query:
+        try:
+            from src.v7.nlp_core import bm25_search
+
+            unique_sources = {
+                p.get("metadata", {}).get("source", "") for p in passages
+            } - {""}
+            bm25_results = bm25_search(query, top_k=30)
+            for r in bm25_results:
+                if r.get("metadata", {}).get("source") in unique_sources:
+                    _add(r.get("text", ""), r.get("metadata", {}))
+        except Exception:
+            pass
+
+    return passages + extra
+
+
+def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]:
     """Create an LLM-backed answer generation function for v7 generate_answer node.
 
     Signature: fn(query, active_query, passages) -> answer_text.
     Relies on ChatGoogleGenerativeAI's built-in retry (max_retries=3 in
     ``get_gemini_llm``) for transient 5xx / 429 errors. On final failure
     falls back to a stub (concatenated top passages).
+    If backend is provided, cross-reference expansion is applied before generation.
     """
 
     def _call_llm(prompt: str) -> str:
@@ -424,9 +507,14 @@ def make_generate_fn(llm) -> Callable[[str, str, List[dict]], str]:
     def _generate(query: str, active_query: str, passages: List[dict]) -> str:
         if not passages:
             return ""
+        expanded = (
+            expand_cross_references(passages, backend, query=query)
+            if backend
+            else passages
+        )
         # final_passages is already capped at 24 upstream (merge_all_passages);
         # re-truncating below that drops answer-bearing passages that ranked low.
-        top_passages = passages[:24]
+        top_passages = expanded[:24]
         passages_text = "\n\n".join(
             f"[{i + 1}] ({_score_label(p.get('score', 0.0))}) [Источник: {_short_source(p)}]\n{p.get('text', '')}"
             for i, p in enumerate(top_passages)
@@ -515,9 +603,12 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
             # the latency tax — answer quality dominates CPS savings).
             generator_llm_complex = get_complex_llm(thinking_budget=4096)
             generator_llm_simple = get_simple_llm(thinking_budget=4096)
+            xref_backend = (
+                vector_store if isinstance(vector_store, VectorStoreBackend) else None
+            )
             generate_answer_mod.set_generate_fns(
-                simple=make_generate_fn(generator_llm_simple),
-                complex_=make_generate_fn(generator_llm_complex),
+                simple=make_generate_fn(generator_llm_simple, backend=xref_backend),
+                complex_=make_generate_fn(generator_llm_complex, backend=xref_backend),
             )
 
             expander_llm = get_simple_llm(thinking_budget=0)
