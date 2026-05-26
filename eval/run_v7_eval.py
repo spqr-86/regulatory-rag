@@ -29,6 +29,14 @@ from typing import Any
 # Make project root importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from src.infra.llm_factory import apply_ipv6_patch_for_googleapis  # noqa: E402
+
+apply_ipv6_patch_for_googleapis()
+
 from eval.advanced_generation_metrics import (
     evaluate_answer_relevance,
     evaluate_faithfulness,

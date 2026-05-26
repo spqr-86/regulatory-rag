@@ -433,7 +433,7 @@ def expand_cross_references(
         if text and text not in existing_texts:
             existing_texts.add(text)
             extra.append(
-                {"text": text, "score": 0.0, "metadata": metadata, "cross_ref": True}
+                {"text": text, "score": 0.35, "metadata": metadata, "cross_ref": True}
             )
 
     # ── Mechanism 1: explicit refs in passage text ────────────────────────────
@@ -446,7 +446,7 @@ def expand_cross_references(
             try:
                 docs = backend.get_by_filter(
                     where={"source": source},
-                    limit=100,
+                    limit=500,
                 )
                 for doc in docs:
                     if ref in doc.page_content:
@@ -513,8 +513,9 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
             else passages
         )
         # final_passages is already capped at 24 upstream (merge_all_passages);
-        # re-truncating below that drops answer-bearing passages that ranked low.
-        top_passages = expanded[:24]
+        # cross-reference expansion appends extra passages — allow up to 30 so
+        # low-ranked but answer-bearing cross-refs (e.g. п.60 for программа В) are included.
+        top_passages = expanded[:30]
         passages_text = "\n\n".join(
             f"[{i + 1}] ({_score_label(p.get('score', 0.0))}) [Источник: {_short_source(p)}]\n{p.get('text', '')}"
             for i, p in enumerate(top_passages)
