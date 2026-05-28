@@ -30,7 +30,7 @@ class TestExtractKeyPhrases:
         assert phrases == set()
 
     def test_lemmatizes_russian(self):
-        # "инструктажи" → lemma "инструктаж", "проводятся" → "проводить"
+        # "инструктажи" → lemma "инструктаж", "проводятся" → "проводить" (lemmatization)
         phrases = extract_key_phrases("инструктажи проводятся ежегодно")
         assert "инструктаж" in phrases
 
@@ -55,7 +55,7 @@ class TestComputeCompleteness:
         assert score == 0.0
 
     def test_empty_ground_truth_returns_1(self):
-        # Нет ключевых фраз → нечего проверять → completeness = 1.0
+        # No key phrases → nothing to check → completeness = 1.0
         score = compute_completeness("", "любой ответ")
         assert score == 1.0
 
@@ -161,7 +161,7 @@ class TestComputeCorrectAbstainRate:
 
     def test_no_oos_queries(self):
         results = [{"answer": "ответ", "is_oos": False}]
-        assert compute_correct_abstain_rate(results) == 1.0  # нет OOS → считаем 100%
+        assert compute_correct_abstain_rate(results) == 1.0  # no OOS → treated as 100%
 
     def test_empty_list(self):
         assert compute_correct_abstain_rate([]) == 1.0

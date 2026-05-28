@@ -134,15 +134,15 @@ class TestCheckHardGates:
 
     @pytest.mark.unit
     def test_dual_overlap(self):
-        """active_query и original_query дают разный overlap."""
+        """active_query and original_query produce different overlap."""
         passages = [
             {"text": "пожарная безопасность здание", "score": 0.8},
             {"text": "пожарная безопасность нормы", "score": 0.7},
             {"text": "безопасность здание проект", "score": 0.65},
         ]
         result = check_hard_gates(
-            "ограждение лестница",  # original — мало overlap с passages
-            "пожарная безопасность",  # active — хороший overlap
+            "ограждение лестница",  # original — low overlap with passages
+            "пожарная безопасность",  # active — good overlap
             passages,
             self.PLAN,
         )
@@ -199,7 +199,7 @@ class TestCheckFullTriage:
 
     @pytest.mark.unit
     def test_borderline_score_in_zone(self):
-        """Score между borderline и threshold → borderline."""
+        """Score between borderline and threshold → borderline."""
         passages = [
             {"text": "ограждение лестница", "score": 0.50, "doc_id": "d1"},
             {"text": "ограждение балкон", "score": 0.45, "doc_id": "d2"},
@@ -228,7 +228,7 @@ class TestCheckFullTriage:
         assert result["escalation_hint"] is False
         assert (
             result["diversity_ok"] is False
-        )  # diversity_ok=False, но это не эскалация
+        )  # diversity_ok=False, but this is not an escalation
 
     @pytest.mark.unit
     def test_borderline_due_to_diversity_when_multi_required(self):

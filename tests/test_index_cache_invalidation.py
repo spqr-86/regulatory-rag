@@ -1,6 +1,6 @@
-"""Регрессия: index.main() должен инвалидировать BM25-cache и Docling-cache.
+"""Regression: index.main() must invalidate BM25-cache and Docling-cache.
 
-Без этого после destructive reindex поиск идёт по удалённым чанкам.
+Without this, after a destructive reindex search operates on deleted chunks.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import pytest
 
 @pytest.fixture
 def fake_caches(tmp_path, monkeypatch):
-    """Подменяет CACHE_DIR/CHROMA_DB_PATH/cwd и создаёт фейковые кэши."""
+    """Replaces CACHE_DIR/CHROMA_DB_PATH/cwd and creates fake caches."""
     cache_dir = tmp_path / "document_cache"
     chroma_dir = tmp_path / "chroma_db"
     src_dir = tmp_path / "source_docs"
@@ -43,7 +43,7 @@ def test_main_clears_bm25_and_docling_cache(fake_caches):
 
 
 def test_main_handles_missing_caches_gracefully(tmp_path, monkeypatch):
-    """Если кэшей нет — main() не должен падать."""
+    """If caches are absent — main() must not raise."""
     from config.settings import settings
 
     src_dir = tmp_path / "source_docs"

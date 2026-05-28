@@ -10,7 +10,7 @@ from src.v7.nodes.generate_answer import generate_answer, set_generate_fn
 class TestGenerateAnswer:
     @pytest.mark.unit
     def test_generates_answer_from_passages(self):
-        """Когда есть final_passages — stub генерирует ответ."""
+        """When final_passages are present — stub generates an answer."""
         state = {
             "query": "требования к пожарному извещателю",
             "active_query": "требования к пожарному извещателю",
@@ -29,7 +29,7 @@ class TestGenerateAnswer:
 
     @pytest.mark.unit
     def test_returns_empty_when_no_passages(self):
-        """Без passages — ответ пустой / fallback."""
+        """Without passages — answer is empty / fallback."""
         state = {
             "query": "вопрос",
             "active_query": "вопрос",
@@ -40,7 +40,7 @@ class TestGenerateAnswer:
 
     @pytest.mark.unit
     def test_returns_empty_when_passages_missing(self):
-        """final_passages не задан — не падает, возвращает answer."""
+        """final_passages not set — does not raise, returns answer."""
         state = {
             "query": "вопрос",
             "active_query": "вопрос",
@@ -50,7 +50,7 @@ class TestGenerateAnswer:
 
     @pytest.mark.unit
     def test_stub_includes_passage_text(self):
-        """Stub содержит текст из passages в ответе."""
+        """Stub includes passage text in the answer."""
         passages = [{"text": "Уникальный текст АБВГД", "score": 0.9}]
         state = {
             "query": "q",
@@ -62,7 +62,7 @@ class TestGenerateAnswer:
 
     @pytest.mark.unit
     def test_injectable_generate_fn(self):
-        """set_generate_fn заменяет реализацию."""
+        """set_generate_fn replaces the implementation."""
         called_with = {}
 
         def my_fn(query, active_query, passages):

@@ -1,4 +1,4 @@
-"""Unit тесты для eval/metrics.py — inversion и citation метрики."""
+"""Unit tests for eval/metrics.py — inversion and citation metrics."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ class TestComputeInversionDetected:
         )
 
     def test_partial_match(self):
-        # "30%" встречается в ответе среди других цифр
+        # "30%" appears in the answer among other numbers
         assert compute_inversion_detected("30%", "СИЗ: не менее 30% практики") is True
 
     def test_spaces_in_pattern_are_stripped(self):
@@ -98,7 +98,7 @@ class TestComputeInversionRate:
             {"must_not_contain": "8 часов", "inversion_detected": False},
             {"must_not_contain": "", "inversion_detected": False},
         ]
-        # 1 инверсия из 2 проверяемых (третья строка без must_not_contain не считается)
+        # 1 inversion out of 2 checkable rows (third row without must_not_contain is excluded)
         assert compute_inversion_rate(results) == pytest.approx(0.5)
 
     def test_all_inversions(self):
@@ -172,7 +172,7 @@ class TestCitationRate:
         assert rate == 0.0
 
     def test_partial(self):
-        # 2 из 3 предложений имеют ссылки
+        # 2 out of 3 sentences have citations
         rate = compute_citation_rate(_ANSWER_WITH_CITATIONS)
         assert 0.0 < rate < 1.0
 
@@ -182,13 +182,15 @@ class TestCitationRate:
 
 class TestCitationInRetrieval:
     def test_all_in_range(self):
-        # citations 1 и 3, passages имеет 3 элемента → оба валидны
+        # citations 1 and 3, passages has 3 elements → both valid
         rate = compute_citation_in_retrieval(_ANSWER_WITH_CITATIONS, _PASSAGES)
         assert rate == pytest.approx(1.0)
 
     def test_citation_out_of_range(self):
         answer = "Текст [Фрагмент 10: Doc, п. 1]."
-        rate = compute_citation_in_retrieval(answer, _PASSAGES)  # passages len=3, N=10
+        rate = compute_citation_in_retrieval(
+            answer, _PASSAGES
+        )  # passages len=3, N=10 → out of range
         assert rate == 0.0
 
     def test_no_citations(self):
@@ -201,19 +203,19 @@ class TestCitationInRetrieval:
 
 class TestCitationDocMatch:
     def test_doc_matches_source(self):
-        # Фрагмент 1: "Трудовой кодекс" → source[0] = "Трудовой кодекс РФ..."
+        # Fragment 1: "Трудовой кодекс" → source[0] = "Трудовой кодекс РФ..."
         answer = "Текст [Фрагмент 1: Трудовой кодекс, п. 1]."
         rate = compute_citation_doc_match(answer, _PASSAGES)
         assert rate == pytest.approx(1.0)
 
     def test_doc_matches_by_number(self):
-        # Фрагмент 2: "2464" → source[1] = "2464.pdf"
+        # Fragment 2: "2464" → source[1] = "2464.pdf"
         answer = "Текст [Фрагмент 2: 2464, п. 3]."
         rate = compute_citation_doc_match(answer, _PASSAGES)
         assert rate == pytest.approx(1.0)
 
     def test_doc_mismatch(self):
-        # Фрагмент 1: "ПБ" → source[0] = "Трудовой кодекс РФ..." — не совпадает
+        # Fragment 1: "ПБ" → source[0] = "Трудовой кодекс РФ..." — no match
         answer = "Текст [Фрагмент 1: ПБ, п. 1]."
         rate = compute_citation_doc_match(answer, _PASSAGES)
         assert rate == 0.0

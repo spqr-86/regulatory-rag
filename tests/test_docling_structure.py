@@ -4,7 +4,7 @@ from src.indexing.file_handler import DocumentProcessor
 
 
 def _make_chunk(text, headings=None, page_no=None, bbox=None):
-    """Создаёт мок HybridChunker chunk."""
+    """Creates a mock HybridChunker chunk."""
     chunk = MagicMock()
     chunk.text = text
     chunk.meta.headings = headings or []
@@ -25,7 +25,7 @@ def _make_chunk(text, headings=None, page_no=None, bbox=None):
 
 
 def _make_processor_with_chunks(chunks_data):
-    """Создаёт DocumentProcessor с замоканным _chunker."""
+    """Creates a DocumentProcessor with a mocked _chunker."""
     processor = DocumentProcessor()
     processor._chunker = MagicMock()
     processor._chunker.chunk.return_value = iter(chunks_data)
@@ -59,7 +59,7 @@ def test_extract_chunks_hybrid():
 
 @pytest.mark.unit
 def test_short_bbox_keeps_text_drops_bbox():
-    """Регрессия: короткий bbox (< MIN_BBOX_HEIGHT) не должен ронять текст из индекса."""
+    """Regression: short bbox (< MIN_BBOX_HEIGHT) must not drop text from the index."""
     chunk = _make_chunk(
         "Повторный инструктаж проводится не реже 1 раза в 6 месяцев.",
         headings=[],
@@ -76,7 +76,7 @@ def test_short_bbox_keeps_text_drops_bbox():
 
 @pytest.mark.unit
 def test_blacklist_phrase_filtered():
-    """Чанки с blacklist-фразами должны отфильтровываться."""
+    """Chunks with blacklist phrases must be filtered out."""
     chunk = _make_chunk("Скачано с https://example.com", headings=[])
     processor = _make_processor_with_chunks([chunk])
     chunks = processor._process_docling_document(MagicMock(), "test.pdf")
@@ -86,7 +86,7 @@ def test_blacklist_phrase_filtered():
 
 @pytest.mark.unit
 def test_heading_path_populated():
-    """heading_path должен содержать весь путь заголовков через ' > '."""
+    """heading_path must contain the full heading path joined with ' > '."""
     chunk = _make_chunk("Body text", headings=["Chapter 1", "Section 1.1"])
     processor = _make_processor_with_chunks([chunk])
     chunks = processor._process_docling_document(MagicMock(), "test.pdf")

@@ -20,17 +20,17 @@ from src.v7.nlp_core import (
 class TestExtractKeywords:
     @pytest.mark.unit
     def test_basic_lemmatization(self):
-        """Лемматизация русских словоформ."""
+        """Lemmatization of Russian word forms."""
         keywords = extract_keywords("Проверка ограждений на соответствие требованиям")
         assert "проверка" in keywords
         assert "ограждение" in keywords
-        # "соответствие" и "требование" в стоп-словах — не должны попасть
+        # "соответствие" and "требование" are stop words — must not appear
         assert "соответствие" not in keywords
         assert "требование" not in keywords
 
     @pytest.mark.unit
     def test_lemmatization_equivalence(self):
-        """Разные словоформы дают одну лемму."""
+        """Different word forms produce the same lemma."""
         kw1 = extract_keywords("ограждения")
         kw2 = extract_keywords("ограждение")
         kw3 = extract_keywords("ограждений")
@@ -38,20 +38,20 @@ class TestExtractKeywords:
 
     @pytest.mark.unit
     def test_preserves_document_numbers(self):
-        """Номера нормативных документов сохраняются как есть."""
+        """Regulatory document numbers are preserved as-is."""
         keywords = extract_keywords("СП 1.13130 и ГОСТ 12.1.004-91")
         assert "1.13130" in keywords
         assert "12.1.004-91" in keywords
 
     @pytest.mark.unit
     def test_returns_set(self):
-        """Возвращает set, не list."""
+        """Returns a set, not a list."""
         result = extract_keywords("тест")
         assert isinstance(result, set)
 
     @pytest.mark.unit
     def test_filters_short_words(self):
-        """Слова короче 3 символов отфильтровываются."""
+        """Words shorter than 3 characters are filtered out."""
         keywords = extract_keywords("на в из по от до")
         assert len(keywords) == 0
 
@@ -62,7 +62,7 @@ class TestExtractKeywords:
 
     @pytest.mark.unit
     def test_stop_words_filtered(self):
-        """Стоп-слова не попадают в результат."""
+        """Stop words do not appear in the result."""
         keywords = extract_keywords("для этого также можно быть")
         assert "мочь" not in keywords
         assert "быть" not in keywords
@@ -99,7 +99,7 @@ class TestBM25Index:
 
     @pytest.mark.unit
     def test_build_and_search(self, corpus):
-        """BM25Index строится и возвращает результаты."""
+        """BM25Index builds and returns results."""
         index = BM25Index(corpus)
         results = index.search("ограждения", top_k=2)
         assert len(results) <= 2
@@ -107,7 +107,7 @@ class TestBM25Index:
 
     @pytest.mark.unit
     def test_relevance_order(self, corpus):
-        """Результаты отсортированы по bm25_score desc."""
+        """Results are sorted by bm25_score descending."""
         index = BM25Index(corpus)
         results = index.search("ограждения", top_k=4)
         scores = [r["bm25_score"] for r in results]
@@ -115,7 +115,7 @@ class TestBM25Index:
 
     @pytest.mark.unit
     def test_lemmatized_matching(self, corpus):
-        """Разные словоформы находят одни и те же документы."""
+        """Different word forms retrieve the same documents."""
         index = BM25Index(corpus)
         r1 = index.search("ограждения", top_k=4)
         r2 = index.search("ограждение", top_k=4)
@@ -125,7 +125,7 @@ class TestBM25Index:
 
     @pytest.mark.unit
     def test_filter_by_doc_id(self, corpus):
-        """Фильтрация по metadata полям."""
+        """Filtering by metadata fields."""
         index = BM25Index(corpus)
         results = index.search("ограждения", top_k=4, filters={"doc_id": "d1"})
         assert all(r["doc_id"] == "d1" for r in results)
@@ -138,7 +138,7 @@ class TestBM25Index:
 
     @pytest.mark.unit
     def test_score_field_set(self, corpus):
-        """score = bm25_score если score не был в исходном passage."""
+        """score equals bm25_score when score was absent in the source passage."""
         index = BM25Index(corpus)
         results = index.search("пожарная безопасность", top_k=2)
         for r in results:
@@ -151,7 +151,7 @@ class TestBM25Index:
 class TestRRFMerge:
     @pytest.mark.unit
     def test_merge_two_rankings(self):
-        """RRF корректно сливает два ранжирования."""
+        """RRF correctly merges two rankings."""
         list1 = [
             {"chunk_id": "a", "text": "doc a"},
             {"chunk_id": "b", "text": "doc b"},
@@ -168,7 +168,7 @@ class TestRRFMerge:
 
     @pytest.mark.unit
     def test_dedup_by_chunk_id(self):
-        """Один chunk_id не дублируется в результате."""
+        """A single chunk_id is not duplicated in the result."""
         list1 = [{"chunk_id": "x", "text": "same"}]
         list2 = [{"chunk_id": "x", "text": "same"}]
         merged = rrf_merge(list1, list2, top_k=5, k=60)
@@ -187,7 +187,7 @@ class TestRRFMerge:
 
     @pytest.mark.unit
     def test_uses_config_k_by_default(self):
-        """При k=None берётся из v7_config.RRF_K."""
+        """When k=None, the value is taken from v7_config.RRF_K."""
         list1 = [{"chunk_id": "a", "text": "test"}]
         merged = rrf_merge(list1, top_k=5)
         assert len(merged) == 1
@@ -213,7 +213,7 @@ class TestMMRSelect:
 
     @pytest.mark.unit
     def test_diversity_penalty(self):
-        """Документы из разных doc_id предпочтительнее повторов."""
+        """Documents from different doc_ids are preferred over duplicates."""
         passages = [
             {"doc_id": "d1", "score": 0.9, "chunk_id": "c1"},
             {"doc_id": "d1", "score": 0.85, "chunk_id": "c2"},
@@ -221,7 +221,7 @@ class TestMMRSelect:
         ]
         result = mmr_select(passages, top_k=2, lambda_param=0.5)
         doc_ids = [r["doc_id"] for r in result]
-        # С lambda=0.5 diversity penalty значительна, d2 должен попасть
+        # With lambda=0.5 diversity penalty is significant, d2 must be selected
         assert "d2" in doc_ids
 
 
@@ -243,7 +243,7 @@ class TestComputeKeywordOverlap:
 
     @pytest.mark.unit
     def test_empty_query_returns_one(self):
-        """Пустой запрос → 1.0 (нет ключевых слов для проверки)."""
+        """Empty query → 1.0 (no keywords to check)."""
         score = compute_keyword_overlap("", [{"text": "test"}])
         assert score == 1.0
 
