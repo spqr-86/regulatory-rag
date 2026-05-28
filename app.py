@@ -25,7 +25,7 @@ except Exception as e:
     logger.warning(f"V7 Graph is not available: {e}")
     V7_AVAILABLE = False
 
-# Индексация «по кнопке»
+# On-demand reindex button
 try:
     import index as index_module
 

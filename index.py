@@ -29,28 +29,26 @@ def main():
         logger.info(f"Удаление старой базы данных из: {settings.CHROMA_DB_PATH}...")
         shutil.rmtree(settings.CHROMA_DB_PATH, ignore_errors=True)
 
-    # Инвалидация кэшей, привязанных к содержимому индекса.
-    # Без этого BM25/Docling-pkl переживают destructive reindex и поиск идёт
-    # по «призракам» удалённых чанков.
+    # Invalidate caches tied to index contents.
+    # Without this, BM25/Docling caches survive a destructive reindex and
+    # search operates on ghost chunks from the deleted collection.
     if os.path.exists(settings.CACHE_DIR):
-        logger.info(f"Очистка Docling-cache: {settings.CACHE_DIR}")
+        logger.info(f"Clearing Docling cache: {settings.CACHE_DIR}")
         shutil.rmtree(settings.CACHE_DIR, ignore_errors=True)
     # .bm25_cache.pkl no longer produced (CARD-2.1b: BM25 rebuilt on startup).
     # Kept here as a no-op cleanup for any stale files from older deployments.
     bm25_cache = ".bm25_cache.pkl"
     if os.path.exists(bm25_cache):
-        logger.info(f"Удаление устаревшего BM25-cache: {bm25_cache}")
+        logger.info(f"Removing stale BM25 cache: {bm25_cache}")
         os.remove(bm25_cache)
 
-    # Собираем все файлы допустимых типов
+    # Collect all files of allowed types
     file_paths = _collect_paths(settings.SOURCE_DOCS_PATH, settings.ALLOWED_TYPES)
     if not file_paths:
-        logger.warning(
-            f"В папке {settings.SOURCE_DOCS_PATH} не найдено подходящих файлов."
-        )
+        logger.warning(f"No suitable files found in {settings.SOURCE_DOCS_PATH}.")
         return
 
-    # Обработка через новый DocumentProcessor
+    # Process via DocumentProcessor
     processor = DocumentProcessor()
     chunks = processor.process(file_paths)
 
