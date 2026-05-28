@@ -87,7 +87,10 @@ def intent_gate(state: RAGState) -> RAGState:
         return {"intent": "noise"}
 
     threshold = v7_config.DOMAIN_GATE_THRESHOLD
-    if threshold > 0.0:
+    # Short/ambiguous queries (< 3 tokens) bypass the domain gate and go to the router,
+    # which returns a clarification request. Domain-gate cosine similarity is unreliable
+    # for ultra-short inputs because their embeddings sit near the origin.
+    if threshold > 0.0 and len(q.split()) >= 3:
         from src.infra.llm_factory import get_embedding_model
 
         embedding_model = get_embedding_model()

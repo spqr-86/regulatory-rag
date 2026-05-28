@@ -46,17 +46,20 @@ def evaluate_complex(state: RAGState) -> RAGState:
             "sufficiency_details": make_sufficiency(hard, passages),
         }
 
-    # 3. Fallback (fast-path)
+    # 3. Fallback (fast-path): only accept if fallback passages actually pass hard gates.
+    # Without this check, OOS queries whose rag_simple fallback had non-zero score
+    # would slip through as sufficient even when kw_overlap=0.
     fallback = state.get("fallback_passages")
     fallback_score = state.get("fallback_score", 0.0)
     if fallback and fallback_score > 0:
         fb_hard = check_hard_gates(original_q, active_q, fallback, plan)
-        return {
-            "sufficient": True,
-            "final_passages": fallback,
-            "final_score": fallback_score,
-            "sufficiency_details": make_sufficiency(fb_hard, fallback),
-        }
+        if fb_hard["sufficient"]:
+            return {
+                "sufficient": True,
+                "final_passages": fallback,
+                "final_score": fallback_score,
+                "sufficiency_details": make_sufficiency(fb_hard, fallback),
+            }
 
     # 4. Full failure
     return {
