@@ -13,7 +13,6 @@ from typing import Iterable, List, Optional, Tuple, Union, Any
 from docling.document_converter import DocumentConverter
 from langchain_core.documents import Document
 
-from config import constants
 from config.settings import settings
 from utils.logging import logger
 
@@ -72,7 +71,6 @@ class DocumentProcessor:
             List[Tuple[str, str]]
         ] = None,  # Deprecated, kept for interface compat
         chunk_size: Optional[int] = None,  # Deprecated
-        chunk_overlap: Optional[int] = None,  # Deprecated
     ):
         self.cache_dir = Path(settings.CACHE_DIR)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -94,9 +92,9 @@ class DocumentProcessor:
                 continue
             total += size
 
-        if total and total > constants.MAX_TOTAL_SIZE:
+        if total and total > settings.MAX_TOTAL_SIZE:
             raise ValueError(
-                f"Total size exceeds {constants.MAX_TOTAL_SIZE // 1024 // 1024}MB limit "
+                f"Total size exceeds {settings.MAX_TOTAL_SIZE // 1024 // 1024}MB limit "
                 f"({total // 1024 // 1024}MB provided)."
             )
 
@@ -232,7 +230,7 @@ class DocumentProcessor:
         if not cache_path.exists():
             return False
         cache_age = datetime.now() - datetime.fromtimestamp(cache_path.stat().st_mtime)
-        max_age = timedelta(days=getattr(settings, "CACHE_EXPIRE_DAYS", 7))
+        max_age = timedelta(days=settings.CACHE_EXPIRE_DAYS)
         return cache_age < max_age
 
     def _safe_sizeof(self, f: FileLike) -> Optional[int]:

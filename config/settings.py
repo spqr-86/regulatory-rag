@@ -1,7 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .constants import ALLOWED_TYPES, MAX_FILE_SIZE, MAX_TOTAL_SIZE
-
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -21,12 +19,11 @@ class Settings(BaseSettings):
     FLASHRANK_CACHE_DIR: str = ".flashrank_cache"
 
     # Indexing
-    MAX_FILE_SIZE: int = MAX_FILE_SIZE
-    MAX_TOTAL_SIZE: int = MAX_TOTAL_SIZE
-    ALLOWED_TYPES: list[str] = ALLOWED_TYPES
+    MAX_FILE_SIZE: int = 50 * 1024 * 1024
+    MAX_TOTAL_SIZE: int = 200 * 1024 * 1024
+    ALLOWED_TYPES: list[str] = [".txt", ".pdf", ".docx", ".md"]
     SOURCE_DOCS_PATH: str = "./source_docs"
     CHUNK_SIZE: int = 1200
-    CHUNK_OVERLAP: int = 150
     CACHE_DIR: str = "document_cache"
     CACHE_EXPIRE_DAYS: int = 7
 
@@ -34,7 +31,6 @@ class Settings(BaseSettings):
     CHROMA_DB_PATH: str = "./chroma_db"
     CHROMA_COLLECTION_NAME: str = "documents"
     VECTOR_STORE: str = "chroma"
-    GOSTS_DB_PATH: str = "./chroma_db_gosts"
 
     # HTTP
     REQUEST_TIMEOUT: float = 120.0
