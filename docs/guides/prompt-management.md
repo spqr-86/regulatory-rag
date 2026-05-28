@@ -1,64 +1,59 @@
-# Управление промптами (Prompt Management)
+# Prompt Management
 
-> ⚠️ **Область действия:** этот документ описывает Jinja2-реестр промптов для `applicability_retriever` и term glossary. Основной V7-пайплайн его НЕ использует — V7-промпты (генерация, верификация, rewrite, expand) живут хардкод-строками в `src/v7/bridge.py` (`_GENERATE_SYSTEM_PROMPT` и др.).
+## Overview
 
-## 📌 Обзор
+All V7 pipeline prompts (generation, verification, rewrite, expand) are stored as versioned
+Jinja2 templates and loaded at runtime via `PromptManager`. This separates prompt text from
+Python code and enables version switching without deploys.
 
-В проекте внедрена система централизованного управления промптами. Это позволяет:
-- Отделить текст промптов от Python-кода.
-- Версионировать промпты независимо от логики приложения.
-- Проводить A/B тестирование промптов без изменения кода (через конфиги).
-- Использовать мощь Jinja2 (циклы, условия) для генерации сложных инструкций.
+- **Templates:** `prompts/` directory (Jinja2 `.j2` files)
+- **Registry:** `prompts/registry.yaml` — maps logical `prompt_id` to versioned file paths
+- **Related:** `config/term_glossary.yaml` — deterministic domain abbreviation expansion (not Jinja2, but part of prompt engineering)
 
 ---
 
-## 📂 Структура
-
-Все ресурсы находятся в директории `prompts/`:
+## Directory Structure
 
 ```text
 prompts/
-├── registry.yaml              # Глобальный реестр версий
-├── common/                    # Общие шаблоны и фрагменты
-│   └── base_rules.j2          # BASE_RULES макрос (10 краевых случаев)
-├── agents/                    # Промпты для retriever'ов
-│   ├── query_expansion_v1.j2  # Query Expansion v1 (legacy)
-│   └── query_expansion_v2.j2  # Query Expansion v2 (без хардкода) ← active
-└── chains/                    # Промпты для RAG-цепочек
-    └── ultimate_v1.j2
+├── registry.yaml              # Global version registry
+├── common/
+│   └── base_rules.j2          # BASE_RULES macro (10 edge cases)
+├── agents/
+│   ├── generate_answer_v1.j2  # Generate answer prompt (active)
+│   ├── query_expand_v1.j2     # Query expansion prompt (active)
+│   └── ...
+└── chains/
+    └── ...
 ```
-
-**Связанный файл:** `config/term_glossary.yaml` — доменный глоссарий для детерминированного расширения запросов (не Jinja2, но часть prompt engineering).
 
 ---
 
-## ⚙️ Реестр (`registry.yaml`)
+## Registry (`registry.yaml`)
 
-Этот файл связывает логический `prompt_id` с конкретными версиями шаблонов.
+Maps a logical `prompt_id` to concrete versioned templates.
 
 ```yaml
 applicability_retriever:
   active_version: "v2"
   versions:
     v1: "agents/query_expansion_v1.j2"
-    v2: "agents/query_expansion_v2.j2"  # Без хардкода маппингов
+    v2: "agents/query_expansion_v2.j2"
 ```
 
 ---
 
-## 🛠 Как использовать в коде
+## Usage in Code
 
-Для загрузки промпта используется класс `PromptManager`.
+Load prompts via `PromptManager`:
 
 ```python
-from src.prompt_manager import PromptManager
+from src.infra.prompt_manager import PromptManager
 
 manager = PromptManager()
 
-# Рендеринг промпта
 prompt_text = manager.render(
     prompt_id="research_agent",
-    # Переменные, которые пойдут в шаблон:
     question="Что такое СИЗ?",
     documents=[doc1, doc2]
 )
@@ -66,92 +61,69 @@ prompt_text = manager.render(
 llm.invoke(prompt_text)
 ```
 
-**Важно:** Система использует `StrictUndefined`. Если вы забудете передать переменную, которая есть в шаблоне (например, `question`), код выбросит исключение. Это защищает от отправки "битых" промптов в LLM.
+`PromptManager` uses `StrictUndefined` — if a template variable is missing, it raises an
+exception immediately rather than sending a broken prompt to the LLM.
 
 ---
 
-## 🚀 Версионирование и A/B тесты
+## Version Switching (Pinning)
 
-### Переключение версий (Pinning)
-Вы можете принудительно заставить приложение использовать конкретную версию промпта, не меняя код и `registry.yaml`. Для этого используйте переменную окружения:
+Override the active version for a specific prompt via environment variable without touching code or registry:
 
 ```bash
-# Формат: PROMPT_{PROMPT_ID}_VERSION={VERSION}
+# Format: PROMPT_{PROMPT_ID}_VERSION={VERSION}
 export PROMPT_RESEARCH_AGENT_VERSION=v2
 python app.py
 ```
 
-Это идеально подходит для:
-- Локальной отладки новой версии.
-- Запуска A/B тестов в CI/CD.
-- Быстрого отката (Rollback) в продакшене.
+Use cases:
+- Local debugging of a new prompt version
+- A/B testing in CI
+- Quick rollback in production
 
 ---
 
-## 🛡 Безопасность и Логирование
+## Security and Logging
 
-1. **Path Traversal Protection:** Реестр запрещает использование абсолютных путей или `..`, чтобы нельзя было прочитать произвольный файл с диска.
-2. **Privacy First Logging:**
-   - По умолчанию в логи пишется только SHA256 хеш промпта и список ключей переменных.
-   - Текст промпта (который может содержать PII) **не логируется**.
-   - Чтобы увидеть полный текст промпта в логах (для дебага), установите `DEBUG_PROMPTS=true`.
-
-## 🧩 Продвинутые техники (v2+)
-
-В версии промптов `v2` и выше используются следующие техники:
-
-### 1. Chain-of-Thought (XML Tagging)
-Для улучшения логики ответа используется разделение на "рассуждения" и "ответ".
-- `<thought>`: Модель описывает процесс анализа, сопоставляет пункты.
-- `<answer>`: Чистовой ответ для пользователя.
-
-Python-код агентов автоматически парсит эти теги, позволяя UI отображать рассуждения отдельно в выпадающих блоках.
-
-### 2. Философия "Нормативного зеркала"
-Агент не должен пытаться "домыслить" ответ за пользователя. Внедрен принцип строгой релевантности:
-- **Found Terms**: Ответ строится только по терминам, найденным в нормах.
-- **Not Found Terms**: Если в вопросе есть "бытовой шум" (фамилии, неофициальные названия), агент явно указывает на отсутствие требований для них, не делая логических скачков (Logic Leaps).
-
-### 3. BASE_RULES макрос
-`prompts/common/base_rules.j2` — общий макрос `{% macro base_rules() %}`. Содержит:
-- Абсолютные запреты (нет галлюцинаций, нет экстраполяции)
-- Предобработка запроса (суть vs идентификаторы)
-- Правила visual_proof (когда analyze vs show)
-- 10 краевых случаев (устаревшие ссылки, пересечения документов, негативные вопросы, интеграция с глоссарием, fallback для неизвестных сокращений и т.д.)
-- Формат ответа (прямой ответ, дословные цитаты)
-
-### 3a. Доменный глоссарий (Term Glossary)
-`config/term_glossary.yaml` — YAML-словарь неофициальных доменных сокращений. Логика
-расширения вынесена в общий модуль `src/glossary.py` (`expand_query_with_glossary`),
-который использует V7-роутер. Применяется детерминированно:
-- Морфологический матчинг: слова >4 букв — по стему, аббревиатуры ≤4 букв — целым словом
-- К запросу дописывается блок `[Глоссарий: термин → расшифровка]`
-- Агент использует расшифровку для поиска и ответа (BASE_RULES case 9)
-- Для терминов вне глоссария — fallback через LLM-инструкцию (BASE_RULES case 10)
-
-### 4. ReAct-агент со статусными блоками
-RAG Agent возвращает структурированный вывод:
-```
-===STATUS===
-FOUND / NOT_FOUND / PARTIAL
-===ANSWER===
-<текст ответа>
-===UNANSWERED===
-- подвопрос (если есть)
-```
-Статус используется верификатором и форматирующим узлом графа.
-
-### 5. Форматированный JSON-вывод
-Verifier v2 использует `response_mime_type="application/json"` для гарантированного JSON-вывода. Fallback-парсер обрабатывает markdown code blocks и raw JSON.
-
-### 6. Стабилизация циклов
-- V7 LLM Verifier: один цикл ревизии (rewriter → rag_simple). При ревизии запрос переформулируется с защитой идентификаторов документов.
+1. **Path traversal protection:** The registry blocks absolute paths and `..` — cannot read arbitrary files from disk.
+2. **Privacy-first logging:** By default only the SHA256 hash of the prompt and variable key names are logged. Prompt text (which may contain PII) is not logged. Set `DEBUG_PROMPTS=true` to log full prompt text for debugging.
 
 ---
 
-## ✅ Валидация
+## Advanced Techniques
 
-В CI/CD встроен скрипт `scripts/validate_prompts.py`, который проверяет:
-- Валидность YAML структуры реестра.
-- Существование всех файлов, указанных в реестре.
-- Отсутствие дубликатов версий.
+### Chain-of-Thought (XML Tagging)
+
+Templates use `<thought>` / `<answer>` XML tags to separate reasoning from the final answer.
+Agent code parses these tags and the UI can display reasoning in a collapsible block.
+
+### BASE_RULES Macro
+
+`prompts/common/base_rules.j2` — shared macro `{% macro base_rules() %}`. Contains:
+- Absolute prohibitions (no hallucinations, no extrapolation)
+- Query preprocessing rules (substance vs. identifiers)
+- 10 edge cases (outdated references, document overlaps, negative questions, glossary integration, fallback for unknown abbreviations, etc.)
+- Answer format rules (direct answer, verbatim citations)
+
+### Term Glossary
+
+`config/term_glossary.yaml` — YAML dictionary of unofficial domain abbreviations.
+Expansion logic is in `src/glossary.py` (`expand_query_with_glossary`), used by the V7 router.
+Applied deterministically:
+- Words > 4 letters matched by morphological stem; abbreviations ≤ 4 letters matched as whole word
+- A `[Глоссарий: term → expansion]` block is appended to the query
+- Fallback: LLM instruction for terms not in the glossary (BASE_RULES case 10)
+
+---
+
+## Validation
+
+`scripts/validate_prompts.py` checks:
+- YAML structure of the registry
+- Existence of all files referenced in the registry
+- No duplicate version keys
+
+Run after any prompt changes:
+```bash
+python scripts/validate_prompts.py
+```

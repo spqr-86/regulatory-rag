@@ -1,10 +1,10 @@
-# Как работает V7 Pipeline
+# How V7 Pipeline Works
 
-> Детальное объяснение логики — для интервью, ревью, онбординга.
+> Detailed explanation of the logic — for interviews, code review, onboarding.
 
 ---
 
-## Используемые техники
+## Techniques Used
 
 ### Retrieval
 - **Гибридный поиск** — векторный (ChromaDB, cosine similarity 0–1) + BM25 (ключевые слова, бесшкальный)
@@ -13,22 +13,22 @@
 - **Query Expansion** — дополнительные термины из найденных документов (в RAG Complex)
 - **Multi-attempt merge** — слияние результатов нескольких попыток поиска, top_k=24
 
-### Качество ответов
+### Answer Quality
 - **Hard Gates** — детерминированные пороги (score, кол-во чанков, keyword overlap) без LLM-решений
 - **3-way Triage** — маршрутизация по уверенности: sufficient / borderline / clearly_bad
 - **Document Diversity** — защита от ответа только из одного источника (max_doc_ratio ≤ 0.7)
 - **Abstain** — явный отказ при недостатке данных вместо галлюцинации
 
-### NLP и безопасность
+### NLP and Security
 - **Term Glossary** — расшифровка доменных аббревиатур (`src/glossary.py`); применяется в ноде `router`. Слова >4 букв матчатся по морфологическому стему, аббревиатуры ≤4 букв — целым словом
 - **Prompt Injection фильтр** — `sanitize_for_llm()` удаляет "ignore previous instructions" и подобное
 - **NoSQL Injection whitelist** — валидация фильтров ChromaDB через `ALLOWED_FILTER_KEYS`
 
-### Chunking и индексация
+### Chunking and Indexing
 - **Docling** — парсинг PDF/DOCX с сохранением структуры документа
-- **Chunk 1500 / overlap 400** (`config/settings.py`) — параметры подобраны под нормативные тексты (длинные абзацы с определениями)
+- **HybridChunker(max_tokens=400)** — structural chunking by document headings/clauses (docling_core); replaces RecursiveSplitter
 
-### LLM и оркестрация
+### LLM and Orchestration
 - **Gemini (thinking_budget=4096)** — управляемая глубина рассуждений; модель из `GEMINI_FAST_MODEL`
 - **Dependency Injection (bridge.py)** — LLM и vector search инжектятся в граф, не захардкожены → легко менять провайдера
 - **LangGraph StateGraph** — детерминированный граф состояний
@@ -38,16 +38,16 @@
 
 ---
 
-## Зачем V7?
+## Why V7?
 
-Проблема предыдущих версий: система всегда отвечала, даже если ничего не нашла.
-Нужна была детерминированная логика: "нашли достаточно → отвечаем, не нашли → честно говорим что не знаем".
+Previous versions always answered, even when nothing relevant was found.
+The goal was deterministic logic: "found enough → answer; did not find → honestly say so".
 
-V7 решает это через **hard gates** — числовые пороги без LLM-решений. Граф детерминирован: при одинаковом запросе и базе путь всегда одинаковый.
+V7 achieves this through **hard gates** — numeric thresholds with no LLM decisions. The graph is deterministic: given the same query and index, the path is always the same.
 
 ---
 
-## Схема пути запроса
+## Request Flow
 
 ```
 Запрос
@@ -69,13 +69,13 @@ V7 решает это через **hard gates** — числовые порог
 
 ---
 
-## Hard Gates — что это и как работают
+## Hard Gates
 
-Hard gate — это функция `check_hard_gates()` в `src/v7/hard_gates.py`.
+A hard gate is `check_hard_gates()` in `src/v7/hard_gates.py`.
 
-Она принимает список найденных фрагментов (passages) и план (пороги) и проверяет **три условия одновременно**. Все три должны быть True — иначе `sufficient=False`.
+It takes the list of retrieved passages and a plan (thresholds) and checks **three conditions simultaneously**. All three must be True, otherwise `sufficient=False`.
 
-### Три условия
+### Three Conditions
 
 | Условие | Что проверяет | Порог (rag_simple) | Порог (rag_complex) |
 |---|---|---|---|
@@ -92,21 +92,21 @@ sufficient = all([
 ])
 ```
 
-### Откуда берётся score?
+### Where Does the Score Come From?
 
-Score — это **cosine similarity** из ChromaDB (диапазон 0–1). **Важно:** BM25 scores не используются для порогов — они бесшкальные (0–20+). В `rag_simple.py` `top_score` берётся только из `vector_results`, не из merged.
+Score is **cosine similarity** from ChromaDB (range 0–1). BM25 scores are not used for thresholds — they are unscaled (0–20+). In `rag_simple.py`, `top_score` is taken only from `vector_results`, not from the merged list.
 
-### Почему два разных порога?
+### Why Two Different Thresholds?
 
-`rag_simple` — быстрый путь. Порог 0.50 — высокий, значит нашли что-то явно релевантное.
+`rag_simple` is the fast path. Threshold 0.50 is high — means we found something clearly relevant.
 
-`rag_complex` — fallback. Порог 0.35 — ниже, но добавляются требования к количеству чанков (8+) и keyword overlap (20%+). Смысл: если score чуть ниже, компенсируем объёмом и лексическим покрытием.
+`rag_complex` is the fallback. Threshold 0.35 is lower, but compensated by stricter requirements on passage count (8+) and keyword overlap (20%+). If the score is slightly lower, volume and lexical coverage make up for it.
 
 ---
 
-## Triage — три категории после RAG Simple
+## Triage — Three Categories After RAG Simple
 
-После `rag_simple` нода `evaluate_triage` классифицирует результат:
+After `rag_simple`, the `evaluate_triage` node classifies the result:
 
 | Категория | Условие | Что происходит |
 |---|---|---|
@@ -114,25 +114,26 @@ Score — это **cosine similarity** из ChromaDB (диапазон 0–1). *
 | `borderline` | score в зоне 0.38–0.50 | → LLM Verifier (решает: ответить / переформулировать / эскалировать) |
 | `clearly_bad` | score < 0.38 или мало чанков | → RAG Complex |
 
-Зона borderline (0.38–0.50) — "может найдём лучше": `llm_verifier` смотрит passages и
-решает — ответ годен (→ generate), нужна переформулировка (→ `rewriter` → RAG Simple)
-или эскалация (→ RAG Complex). Ниже 0.38 — явно плохо, сразу в Complex.
+The borderline zone (0.38–0.50) means "maybe we can do better": `llm_verifier` examines
+the passages and decides — answer is good enough (→ generate), needs reformulation
+(→ `rewriter` → RAG Simple), or escalation (→ RAG Complex). Below 0.38 — clearly bad, goes
+straight to Complex.
 
 ---
 
-## RAG Complex — что делает иначе
+## RAG Complex — What It Does Differently
 
-`src/v7/nodes/rag_complex.py` запускает поиск по-другому:
+`src/v7/nodes/rag_complex.py` runs search differently:
 
-1. **Расширение запроса через BM25** — дополнительные термины из топ-документов
-2. **Несколько попыток** — с разными параметрами (разный top_k, разные фильтры)
-3. **Merge всех попыток** — `merge_all_passages(attempts, top_k=24)` в `evaluate_complex`
+1. **Query expansion via BM25** — additional terms extracted from top documents
+2. **Multiple attempts** — with different parameters (different top_k, different filters)
+3. **Merge all attempts** — `merge_all_passages(attempts, top_k=24)` in `evaluate_complex`
 
-`top_k=24` — важный параметр. Раньше было 12 — ответы были неполными (система находила 3 из 8 категорий). После увеличения до 24 — все категории в ответе.
+`top_k=24` matters. Previously it was 12 — answers were incomplete (the system found 3 out of 8 categories). After increasing to 24, all categories appear in the answer.
 
 ---
 
-## Дополнительные защиты
+## Additional Safeguards
 
 ### Prompt Injection (в `hard_gates.py`)
 ```python
@@ -146,19 +147,19 @@ Score — это **cosine similarity** из ChromaDB (диапазон 0–1). *
 Фильтры для ChromaDB проходят whitelist-валидацию — только разрешённые ключи (`ALLOWED_FILTER_KEYS`). Произвольные where-clause не проходят.
 
 ### Document Diversity
-Если все 8+ чанков из одного документа — это `max_doc_ratio > 0.7`, escalation_hint = True. При multi-doc запросах это делает hard gate провальным (diversity — hard требование, а не совет).
+If all 8+ chunks come from a single document, `max_doc_ratio > 0.7` and `escalation_hint = True`. For multi-doc queries this makes the hard gate fail (diversity is a hard requirement, not a hint).
 
 ---
 
-## Visual Enrichment — визуальные доказательства
+## Visual Enrichment
 
-Нода `src/v7/nodes/visual_enrichment.py` вставлена **перед `generate_answer`** — после evaluate_triage/verifier/evaluate_complex.
+The node `src/v7/nodes/visual_enrichment.py` is inserted **before `generate_answer`** — after evaluate_triage/verifier/evaluate_complex.
 
-Цель: добавить к текстовым чанкам визуальный контекст (скриншоты таблиц, страниц), чтобы Gemini мог ответить точнее на вопросы где важна структура документа.
+Goal: add visual context (table screenshots, page images) to text chunks, so Gemini can answer more accurately on questions where document structure matters.
 
-### Когда срабатывает
+### Triggers
 
-Нода анализирует каждый passage из найденных чанков и принимает решение по триггерам:
+The node inspects each passage and decides based on triggers:
 
 | Триггер | Условие | Действие |
 |---|---|---|
@@ -166,25 +167,25 @@ Score — это **cosine similarity** из ChromaDB (диапазон 0–1). *
 | Короткий чанк | `len(text) < 150` | `mode=show` — передаёт image_path, пусть модель видит оригинал |
 | Неполный текст | `detect_incomplete_chunk()` — обрыв на ":" или "№" | `mode=show` — текст явно обрезан, нужен оригинал |
 
-### Ограничения
+### Constraints
 
-- **MAX_VISUAL_PROOFS = 3** — не более 3 визуальных доказательств на запрос (экономия токенов)
-- Нода **no-op** если не инжектирована `visual_proof_fn` — безопасно в окружениях без VLM
-- Исключения на отдельном passage не останавливают остальные
+- **MAX_VISUAL_PROOFS = 3** — at most 3 visual proofs per query (token budget)
+- Node is **no-op** if `visual_proof_fn` is not injected — safe in environments without VLM
+- Exceptions on individual passages do not stop the rest
 
 ### Dependency Injection
 
 ```python
-# bridge.py — init_v7_from_chroma()
-visual_proof_fn = make_visual_proof_fn()          # без аргументов; None если agent_tools недоступен
+# bridge.py — init_v7_pipeline()
+visual_proof_fn = make_visual_proof_fn()          # returns None if agent_tools unavailable
 if visual_proof_fn is not None:
     visual_enrichment_mod.set_visual_proof_fn(visual_proof_fn)
 ```
 
-На VPS нет `agent_tools` (VLM не настроен) → `make_visual_proof_fn()` возвращает None,
-нода пропускается без ошибок.
+On VPS, `agent_tools` is not configured → `make_visual_proof_fn()` returns None,
+node is skipped silently.
 
-### Пример в трассировке
+### Trace Example
 
 ```
 [visual_enrichment] passage 0: element_type=Table → analyze → добавлен visual_context
@@ -194,22 +195,22 @@ if visual_proof_fn is not None:
 
 ---
 
-## Generate Answer — что внутри
+## Generate Answer
 
-`src/v7/nodes/generate_answer.py` вызывает `make_generate_fn()` из `bridge.py`.
+`src/v7/nodes/generate_answer.py` calls `make_generate_fn()` from `bridge.py`.
 
-Bridge инжектит Gemini с `thinking_budget=4096`. Модель получает:
-- Финальные passages (до 24 чанков; `make_generate_fn` берёт `final_passages[:24]`)
-- Запрос пользователя
-- Промпт `_GENERATE_SYSTEM_PROMPT` (хардкод-строка в `bridge.py`): "отвечай только по документам, цитируй источники"
+Bridge injects Gemini with `thinking_budget=4096`. The model receives:
+- Final passages (up to 24 chunks; `make_generate_fn` takes `final_passages[:24]`)
+- The user query
+- Prompt loaded from Jinja2 template via PromptManager (`prompts/agents/generate_answer_v1.j2`): instructs the model to answer strictly from documents and cite sources
 
-**Retry:** если Gemini вернул 503 — `tenacity` делает 3 попытки с экспоненциальным backoff (2→4→8s). Только после всех ретраев возвращается stub (сырые тексты чанков без синтеза).
+**Retry:** if Gemini returns 503, `tenacity` retries 3 times with exponential backoff (2→4→8s). Only after all retries does it fall back to a stub (raw chunk texts without synthesis).
 
 ---
 
-## Конфигурация порогов
+## Threshold Configuration
 
-Все пороги в `src/v7/config.py`, переопределяются через env:
+All thresholds are in `src/v7/config.py`, overridable via env:
 
 ```env
 V7_HARD_GATE_THRESHOLD=0.50       # порог для rag_simple

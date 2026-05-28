@@ -1,263 +1,44 @@
-# 📚 Как добавить вопросы из статьи в датасет
+# Adding Questions to the Dataset
 
-## Проблема
+The evaluation dataset lives in `tests/dataset.csv`. It is a plain UTF-8 CSV with two columns:
 
-Статья https://coko1.ru/articles/protection/voprosy-po-ohrane-truda-top-25-za-2025-god/amp/ содержит топ-25 актуальных вопросов по охране труда, но сайт блокирует автоматическую загрузку (403 error).
+```
+question,ground_truth
+```
 
-## Решение: Ручное извлечение + автоматизированное добавление
+## How to Add Questions
 
-### Вариант 1: Интерактивный режим (рекомендуется для начала)
+Open `tests/dataset.csv` in any text editor and append rows. Each row needs:
 
-Самый простой способ - добавлять вопросы по одному в интерактивном режиме:
+- `question` — the question as a user would type it
+- `ground_truth` — the correct answer, specific and grounded in the normative documents
+
+**Good ground truth:** includes concrete requirements, deadlines, or references.  
+**Bad ground truth:** vague ("depends on the situation") or too short ("yes, required").
+
+## Example Row
+
+```
+Как часто проводится повторный инструктаж по охране труда?,Повторный инструктаж проводится не реже одного раза в 6 месяцев (п. 15 Приказа 2464).
+```
+
+## Question Categories
+
+Aim for a mix of:
+- In-scope questions (answer exists in the corpus)
+- Out-of-scope questions (system should abstain)
+- False-premise questions (system should correct the premise)
+
+## After Adding Questions
+
+Run a quick eval to check the new questions:
 
 ```bash
-python scripts/add_questions_to_dataset.py --interactive
+python eval/run_v7_eval.py --skip-judge --limit 10
 ```
 
-**Процесс:**
-1. Откройте статью в браузере
-2. Запустите скрипт
-3. Копируйте вопрос из статьи → вставьте в терминал
-4. Копируйте ответ эксперта → вставьте в терминал
-5. Нажмите Enter дважды для сохранения
-6. Повторите для следующих вопросов
-
-**Пример:**
-```
-❓ Вопрос: Кто должен проходить обучение по охране труда в 2025 году?
-
-💡 Эталонный ответ:
-Согласно новым требованиям, обучение обязательно для всех работников,
-включая руководителей организаций. Программа обучения должна учитывать
-специфику деятельности и условия труда.
-
-✅ Добавлено (всего вопросов: 17)
-```
-
-### Вариант 2: Batch режим (для массового добавления)
-
-Если хотите добавить сразу много вопросов:
-
-**Шаг 1: Создайте JSON файл**
-
-Используйте шаблон:
-```bash
-cat scripts/questions_from_article_template.json
-```
-
-**Шаг 2: Заполните вопросы**
-
-Отредактируйте файл `scripts/questions_from_article_template.json`:
-
-```json
-[
-  {
-    "question": "Какие работники подлежат обучению по охране труда?",
-    "ground_truth": "Все работники организации, включая руководителя, должны проходить обучение по охране труда. Обучение проводится по программам, разработанным с учетом специфики деятельности.",
-    "source": "coko1.ru - Топ-25 вопросов 2025",
-    "category": "обучение"
-  },
-  {
-    "question": "Как часто нужно проводить проверку знаний по охране труда?",
-    "ground_truth": "Периодическая проверка знаний проводится не реже одного раза в год. Внеплановая проверка требуется при изменении законодательства или условий труда.",
-    "source": "coko1.ru - Топ-25 вопросов 2025",
-    "category": "проверка знаний"
-  }
-]
-```
-
-**Шаг 3: Импортируйте в датасет**
+Or test a single question manually:
 
 ```bash
-python scripts/add_questions_to_dataset.py --input scripts/questions_from_article_template.json
+python scripts/trace_v7.py "ваш вопрос здесь"
 ```
-
-### Вариант 3: Экспорт из браузера
-
-Если в статье есть структурированный список:
-
-1. Откройте статью в браузере
-2. Откройте Developer Tools (F12)
-3. Выполните в консоли:
-
-```javascript
-// Извлекаем вопросы и ответы (ПРИМЕР - нужно адаптировать под структуру сайта)
-const questions = [];
-document.querySelectorAll('.question-block').forEach(block => {
-    const q = block.querySelector('.question-text')?.innerText;
-    const a = block.querySelector('.answer-text')?.innerText;
-    if (q && a) {
-        questions.push({
-            question: q,
-            ground_truth: a,
-            source: "coko1.ru - Топ-25 вопросов 2025"
-        });
-    }
-});
-
-// Скопировать результат
-console.log(JSON.stringify(questions, null, 2));
-```
-
-4. Скопируйте JSON из консоли в файл
-5. Импортируйте: `python scripts/add_questions_to_dataset.py --input extracted.json`
-
----
-
-## Рекомендации по качеству ответов
-
-При добавлении вопросов следите за:
-
-### ✅ Хорошие эталонные ответы
-
-1. **Полнота**: Ответ содержит всю необходимую информацию
-2. **Конкретика**: Указаны конкретные требования, сроки, условия
-3. **Цитаты**: Если ответ основан на документах, добавьте `[cite: номер]`
-4. **Актуальность**: Информация соответствует текущему законодательству 2025
-
-**Пример хорошего ответа:**
-```
-Работодатель обязан организовать обучение по охране труда для всех работников,
-включая руководителей [cite: 219]. Периодичность обучения - не реже одного раза
-в три года [cite: 220]. Программы обучения должны учитывать специфику трудовой
-деятельности работников [cite: 221].
-```
-
-### ❌ Плохие эталонные ответы
-
-1. Слишком короткие: "Да, обязательно"
-2. Неконкретные: "Зависит от ситуации"
-3. Без контекста: "Согласно законодательству"
-4. Устаревшие: Ссылки на отмененные нормативы
-
----
-
-## Проверка добавленных вопросов
-
-После добавления проверьте датасет:
-
-```bash
-# Посмотреть все вопросы
-python scripts/add_questions_to_dataset.py --show
-
-# Проверить формат
-head -n 20 tests/dataset.csv
-
-# Подсчитать количество
-wc -l tests/dataset.csv
-```
-
-Целевое количество: **50-100 вопросов** для надежной оценки
-
----
-
-## Быстрый тест новых вопросов
-
-После добавления 5-10 вопросов запустите быструю оценку:
-
-```bash
-# Быстрая оценка (укажите --limit)
-python eval/run_v7_eval.py --limit 10
-
-# Или протестируйте вручную
-streamlit run app.py
-```
-
-В Streamlit UI введите один из новых вопросов и проверьте:
-- ✅ Корректность ответа
-- ✅ Наличие цитат
-- ✅ Соответствие эталонному ответу
-
----
-
-## Альтернативные источники вопросов
-
-Помимо статьи coko1.ru, можно использовать:
-
-### 1. Реальные запросы пользователей
-Если у вас есть логи вопросов от реальных пользователей системы.
-
-### 2. Экспертные источники
-- Консультации специалистов по охране труда
-- FAQ на профильных сайтах
-- Учебные материалы и курсы
-
-### 3. Автоматическая генерация
-```bash
-# Генерация вопросов из ваших документов
-python scripts/generate_questions.py --num-questions 20
-```
-
-### 4. Типовые сценарии
-Создайте вопросы для типовых рабочих ситуаций:
-- Прием на работу нового сотрудника
-- Проведение инструктажа
-- Расследование несчастного случая
-- Проверка контролирующими органами
-
----
-
-## Структура датасета
-
-После расширения ваш датасет будет выглядеть так:
-
-```
-tests/dataset.csv
-- 16 базовых вопросов (уже есть)
-- 25 вопросов из статьи coko1.ru (новые)
-- 9-59 дополнительных вопросов (до целевых 50-100)
-```
-
-**Категории вопросов** (рекомендуемое распределение):
-- Обучение и инструктаж: 20-25%
-- Медосмотры и психосвидетельствование: 15-20%
-- СИЗ и спецодежда: 15-20%
-- Расследование несчастных случаев: 15-20%
-- Документация и учет: 15-20%
-- Общие требования: 10-15%
-
----
-
-## Следующие шаги
-
-После расширения датасета:
-
-1. **Запустить полную оценку:**
-   ```bash
-   python eval/run_v7_eval.py
-   ```
-
-2. **Проверить метрики:**
-   ```bash
-   python scripts/check_target_metrics.py
-   ```
-
-3. **Создать новый baseline:**
-   ```bash
-   # Если метрики хорошие, сохраните как новый baseline
-   python -c "
-   import json
-   with open('benchmarks/results_history.jsonl', 'r') as f:
-       latest = json.loads(f.readlines()[-1])
-
-   baseline = {
-       'date': latest['timestamp'],
-       'version': 'v1.1.0',
-       'dataset': 'expanded-golden-50',
-       'dataset_size': latest['dataset_size'],
-       'metrics': latest['aggregate_metrics']
-   }
-
-   with open('benchmarks/baseline.json', 'w') as f:
-       json.dump(baseline, f, indent=2, ensure_ascii=False)
-
-   print('✅ Baseline обновлен!')
-   "
-   ```
-
-4. **Commit изменений:**
-   ```bash
-   git add tests/dataset.csv benchmarks/baseline.json
-   git commit -m "Expand golden dataset to 50+ questions from expert sources"
-   git push -u origin feature/eval-system
-   ```

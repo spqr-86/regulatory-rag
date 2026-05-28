@@ -1,30 +1,34 @@
-# Руководство по тестированию документации (Testing Docs)
+# Testing Guide
 
-Этот документ описывает процедуру проверки документации проекта. Регулярная проверка документации помогает поддерживать ее актуальность и полезность.
+How to verify that documentation and code are accurate and up to date.
 
-## 📋 Что проверяем
+## What to Check
 
-### 1. Ссылки и референсы
-*   **Внутренние ссылки:** Проверьте, что все ссылки на файлы внутри репозитория (например, `[code](src/main.py)`) рабочие и ведут на существующие файлы.
-*   **Внешние ссылки:** Проверьте, что все URL (например, ссылки на библиотеки, статьи) открываются и ведут на актуальные ресурсы.
-*   **Изображения:** Убедитесь, что все изображения отображаются корректно.
+### 1. Links and References
 
-### 2. Примеры кода
-*   **Команды установки:** Выполните команды установки зависимостей (например, `pip install -r requirements.txt`) в чистом окружении, чтобы убедиться в их работоспособности.
-*   **Примеры запуска:** Запустите примеры кода из README и других инструкций. Они должны работать "из коробки" без ошибок.
-*   **Конфигурация:** Проверьте, что примеры конфигурационных файлов (например, `.env.example`) актуальны и содержат все необходимые параметры.
+- **Internal links:** Verify that all file references in docs (e.g., `[code](src/main.py)`) point to existing files.
+- **External links:** Check that URLs open and lead to current resources.
+- **Images:** Confirm that all images render correctly.
 
-### 3. Версии и зависимости
-*   **Соответствие версий:** Убедитесь, что версии библиотек, указанные в документации, соответствуют версиям в `pyproject.toml` или `requirements.txt`.
-*   **Совместимость:** Проверьте, что указанные требования к версии Python и ОС актуальны.
+### 2. Code Examples
 
-### 4. Структура проекта
-*   **Актуальность дерева файлов:** Если в документации приведена структура проекта, сравните ее с реальной структурой файлов. Удаленные или перемещенные файлы должны быть отражены в документации.
-*   **Описание модулей:** Убедитесь, что описание назначения файлов и директорий соответствует действительности.
+- **Install commands:** Run dependency installation (`pip install -r requirements.txt`) in a clean environment to confirm it works.
+- **Run examples:** Execute code examples from README and guides. They should work without errors.
+- **Config:** Check that example config files (e.g., `.env.example`) are current and contain all required parameters.
 
-## Процедура проверки
+### 3. Versions and Dependencies
 
-1.  Прочитайте измененные или новые файлы документации.
-2.  Пройдитесь по чек-листу выше.
-3.  Используйте инструменты автоматической проверки ссылок (если настроены) или проверьте ссылки вручную/скриптом.
-4.  При обнаружении неточностей создайте задачу на их исправление или исправьте их сразу.
+- **Version consistency:** Ensure library versions mentioned in docs match `pyproject.toml` or `requirements.txt`.
+- **Compatibility:** Confirm that Python version and OS requirements are up to date.
+
+### 4. Project Structure
+
+- **File tree:** If docs include a directory structure, compare it with the actual file layout. Deleted or moved files should be reflected in docs.
+- **Module descriptions:** Confirm that descriptions of files and directories match reality.
+
+## Procedure
+
+1. Read the changed or new documentation files.
+2. Go through the checklist above.
+3. Use automated link checkers if configured, or verify manually.
+4. For any inaccuracies found, either fix them immediately or create a backlog item.

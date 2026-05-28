@@ -1,98 +1,90 @@
-# 🚀 Quick Start
+# Quick Start
 
-Установка и первый запуск проекта локально.
-
-## Требования
+## Requirements
 
 - Python 3.11+
-- API-ключи: OpenAI (эмбеддинги + опционально LLM) и Google Gemini (генерация в V7)
+- OpenAI API key (embeddings via `text-embedding-3-small` + LLM judge `gpt-4o-mini`)
+- Gemini API key (generation: Gemini 2.5 Flash / Gemini 3 Flash)
 
-## 1. Установка
+## Install
 
 ```bash
-git clone https://github.com/spqr-86/safety-incident-analyzer.git
-cd safety-incident-analyzer
+git clone https://github.com/spqr-86/regulatory-rag.git
+cd regulatory-rag
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## 2. Настройка окружения
+## Configure .env
 
-Скопируйте `.env.example` → `.env` и заполните ключи:
+Copy `.env.example` to `.env` and fill in your keys:
 
 ```env
-# LLM / эмбеддинги
-LLM_PROVIDER=openai
-OPENAI_API_KEY=your_openai_key
-EMBEDDING_PROVIDER=openai          # openai | hf_api | local
-
-# Gemini — генерация (V7, thinking_budget=4096) и LLM-судьи
 GEMINI_API_KEY=your_gemini_key
-GEMINI_FAST_MODEL=gemini-2.5-flash
-
-# DeepSeek — GOST RAG генерация (POST /query/gosts)
-DEEPSEEK_API_KEY=your_deepseek_key
-
-# Включить V7-граф в UI
-USE_V7_GRAPH=true
+OPENAI_API_KEY=your_openai_key
 ```
 
-Ключевые настройки — в `config/settings.py` (общие) и `src/v7/config.py` (пороги V7,
-env-префикс `V7_`).
+Optional overrides (defaults are set in `config/settings.py` and `src/v7/config.py`):
 
-## 3. Индексация документов
+```env
+# LLM providers (default: gemini)
+# SIMPLE_LLM_PROVIDER=gemini
+# COMPLEX_LLM_PROVIDER=gemini
 
-Положите нормативные документы (PDF / DOCX / MD) в `source_docs/` и запустите:
+# ChromaDB path (default: ./chroma_db)
+# CHROMA_DB_PATH=./chroma_db
+
+# LangSmith tracing (optional)
+# LANGSMITH_API_KEY=your_key
+# LANGSMITH_TRACING_V2=true
+# LANGSMITH_PROJECT=regulatory-rag
+```
+
+## Index Documents
+
+Place PDF/DOCX files in `source_docs/` and run:
 
 ```bash
 python index.py
 ```
 
-> ⚠️ `index.py` **destructive** — дропает текущую коллекцию ChromaDB перед переиндексацией.
+> WARNING: `index.py` is destructive — it drops the entire ChromaDB collection before reindexing.
 
-Пайплайн индексации: Docling → препроцессинг → chunking (1500 / 400) → OpenAI
-embeddings → ChromaDB. Подробно — [DATA_PIPELINE.md](../DATA_PIPELINE.md).
+The indexer uses HybridChunker (docling_core, max_tokens=400) to chunk documents by structural headings and clauses. Current corpus: 11 PDFs, index not yet rebuilt after v3.0-hybrid.
 
-Текущий корпус (v2.3-noise-clean): 12 PDF, 1973 чанка.
-GOST RAG корпус индексируется отдельно через `python index_gosts.py`: 108 DOCX, 9344 чанков (коллекция `wta_gosts`).
-
-## 4. Запуск приложения
+## Run the UI
 
 ```bash
 streamlit run app.py --server.port 8502
 ```
 
-Откройте `http://localhost:8502`, задайте вопрос в чате — система пройдёт V7-граф
-(`intent_gate → router → rag_simple → evaluate_triage → rag_complex → generate_answer`)
-и вернёт ответ со ссылками на источники.
+Open `http://localhost:8502`. The query goes through the V7 graph:
+`intent_gate → router → rag_simple → evaluate_triage → [llm_verifier/rag_complex] → generate_answer`
 
-Опционально — запустить FastAPI (порт 8503):
+## Run the API
+
 ```bash
 uvicorn api:app --port 8503
 ```
-Эндпоинты: `POST /query` (V7 pipeline), `POST /query/gosts` (GOST RAG / DeepSeek V3), `GET /health`.
 
-## 5. Прогон eval (опционально)
+Endpoints:
+- `POST /query` — V7 pipeline, body: `{"query": "..."}`
+- `GET /health` — health check
 
-```bash
-python eval/run_v7_eval.py                 # весь golden-датасет
-python eval/run_v7_eval.py --limit 5       # быстрый smoke-тест
-python eval/run_v7_eval.py --output benchmarks/eval_v7_custom.jsonl
-```
-
-Метрики и формат отчёта — [docs/evaluation/README.md](../evaluation/README.md).
-
-## 6. Тесты
+## Eval
 
 ```bash
-pytest                       # все (~400 unit tests)
-pytest -m unit               # только unit
-python scripts/trace_v7.py "для кого проводится повторный инструктаж?"   # E2E-трассировка
+python eval/run_v7_eval.py --skip-judge    # pipeline only, no LLM judge (~$0)
+python eval/run_v7_eval.py                 # full eval with gpt-4o-mini judge
+python eval/run_v7_eval.py --limit 5       # smoke test
 ```
 
-## Куда дальше
+Results written to `benchmarks/eval_v7_{date}.jsonl`. See [evaluation/README.md](../evaluation/README.md).
 
-- [Архитектура](../architecture/README.md) · [Как работает V7](../architecture/v7-how-it-works.md)
-- [Eval framework](../evaluation/README.md)
-- [Добавление вопросов в датасет](./adding-questions.md)
+## Tests
+
+```bash
+pytest -m unit          # 237 unit tests
+pytest                  # all tests (3 pre-existing failures in test_evaluate_triage.py)
+```
