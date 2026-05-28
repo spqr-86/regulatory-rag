@@ -7,7 +7,7 @@ Runs the golden dataset through the V7 graph and measures:
   - false_sufficiency_rate — % of simple-path answers that scored badly (< threshold)
 
 Usage:
-    cd /home/petr/projects/safety-incident-analyzer
+    cd /home/petr/projects/ai/regulatory-rag
     source venv/bin/activate
     python eval/run_v7_eval.py
     python eval/run_v7_eval.py --limit 5          # quick smoke test

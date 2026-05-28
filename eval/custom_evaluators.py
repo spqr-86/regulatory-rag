@@ -10,26 +10,26 @@ from src.infra.llm_factory import get_llm
 
 def check_correctness(run, example):
     """
-    Оценщика для проверки корректности.
+    LangSmith-style correctness evaluator.
     """
-    print("--- Запуск финального оценщика ---")
+    print("--- Running final evaluator ---")
 
-    # 1. Получаем данные из 'example' (эталон)
+    # 1. Extract data from 'example' (ground truth)
     input_question = example.inputs.get("question")
     reference_answer = example.outputs.get("ground_truth")
 
-    # 2. Надежно извлекаем ответ модели из 'run'
+    # 2. Safely extract model answer from 'run'
     prediction = None
     if run.outputs:
         if isinstance(run.outputs, dict):
             prediction = run.outputs.get("output")
 
-    # 3. Проверяем, удалось ли извлечь ответ
+    # 3. Check that we could extract an answer
     if not prediction:
-        print("ОШИБКА ОЦЕНЩИКА: Не удалось извлечь ответ модели из run.outputs.")
+        print("EVALUATOR ERROR: Failed to extract model answer from run.outputs.")
         return {
             "score": 0,
-            "comment": "Не удалось извлечь ответ модели из run.outputs.",
+            "comment": "Failed to extract model answer from run.outputs.",
         }
 
     # 4. Вызываем LLM-судью для оценки
@@ -64,7 +64,7 @@ def check_correctness(run, example):
         }
     )
 
-    # 5. Парсим результат (убираем markdown обёртку если есть)
+    # 5. Parse result (strip markdown wrapper if present)
     try:
         # Strip markdown code block wrapper if present
         clean_response = response_str.strip()
@@ -72,21 +72,21 @@ def check_correctness(run, example):
             # Remove ```json or ``` at start and ``` at end
             lines = clean_response.split("\n")
             if lines[0].startswith("```"):
-                lines = lines[1:]  # Remove first line with ```json
+                lines = lines[1:]  # remove opening ``` or ```json
             if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]  # Remove last line with ```
+                lines = lines[:-1]  # remove closing ```
             clean_response = "\n".join(lines)
 
         result = json.loads(clean_response)
         print(
-            f"Оценка получена: Score - {result.get('score')}, Reasoning - '{result.get('reasoning')}'"
+            f"Score received: {result.get('score')}, Reasoning: '{result.get('reasoning')}'"
         )
         return {"score": result.get("score"), "comment": result.get("reasoning")}
     except (json.JSONDecodeError, AttributeError, TypeError):
         print(
-            f"ОШИБКА ОЦЕНЩИКА: Не удалось распарсить JSON от судьи. Ответ судьи: {response_str}"
+            f"EVALUATOR ERROR: Failed to parse JSON from judge. Judge response: {response_str}"
         )
         return {
             "score": 0,
-            "comment": f"Ошибка парсинга ответа от судьи. Ответ: {response_str}",
+            "comment": f"Failed to parse judge response. Response: {response_str}",
         }

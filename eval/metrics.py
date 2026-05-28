@@ -23,7 +23,7 @@ import re
 
 from src.v7.nlp_core import extract_keywords
 
-# Regex for [Фрагмент N: Документ, п. X.X] or [Фрагмент N: Документ, без пункта]
+# Regex for [Фрагмент N: Document, п. X.X] or [Фрагмент N: Document, без пункта]
 _CITATION_RE = re.compile(
     r"\[Фрагмент\s+(\d+):\s*([^,\]]+?)(?:,\s*п\.\s*([^\]]+?)|,\s*без\s+пункта)?\s*\]",
     re.IGNORECASE,
@@ -32,20 +32,20 @@ _SENTENCE_SPLIT_RE = re.compile(r"[.!?]+(?:\s+|$)")
 
 
 def extract_key_phrases(text: str) -> set[str]:
-    """Ключевые леммы из текста (обёртка над nlp_core.extract_keywords)."""
+    """Key lemmas from text (wrapper around nlp_core.extract_keywords)."""
     return extract_keywords(text)
 
 
 def compute_completeness(ground_truth: str, answer: str) -> float:
-    """Доля ключевых фраз ground_truth, найденных в ответе.
+    """Fraction of ground_truth key phrases found in the answer.
 
-    Алгоритм:
-    1. Извлечь ключевые леммы из ground_truth
-    2. Извлечь ключевые леммы из answer
+    Algorithm:
+    1. Extract key lemmas from ground_truth
+    2. Extract key lemmas from answer
     3. completeness = |intersection| / |gt_lemmas|
 
     Returns:
-        float in [0.0, 1.0]. 1.0 если ground_truth пустой (нечего проверять).
+        float in [0.0, 1.0]. 1.0 if ground_truth is empty (nothing to check).
     """
     gt_lemmas = extract_key_phrases(ground_truth)
     if not gt_lemmas:
@@ -58,17 +58,17 @@ def compute_completeness(ground_truth: str, answer: str) -> float:
 
 
 def _is_abstained(result: dict) -> bool:
-    """True если ответ отсутствует или явно помечен как abstained."""
+    """True if the answer is missing or explicitly marked as abstained."""
     if result.get("abstained") is True:
         return True
     return not bool(result.get("answer", "").strip())
 
 
 def compute_abstain_rate(results: list[dict]) -> float:
-    """Доля запросов, на которые система отказала отвечать.
+    """Fraction of requests for which the system declined to answer.
 
     Args:
-        results: список dict с полями "answer" (str) и опционально "abstained" (bool)
+        results: list of dicts with fields "answer" (str) and optionally "abstained" (bool)
 
     Returns:
         float in [0.0, 1.0]
@@ -80,13 +80,13 @@ def compute_abstain_rate(results: list[dict]) -> float:
 
 
 def compute_false_abstain_rate(results: list[dict]) -> float:
-    """Доля domain-запросов (is_oos=False), на которые система отказала.
+    """Fraction of in-domain queries (is_oos=False) for which the system abstained.
 
-    False abstain = система промолчала на вопрос который должна была ответить.
-    Цель: = 0.
+    False abstain = system stayed silent on a question it should have answered.
+    Target: = 0.
 
     Args:
-        results: список dict с полями "answer", "is_oos" (bool)
+        results: list of dicts with fields "answer", "is_oos" (bool)
     """
     if not results:
         return 0.0
@@ -98,35 +98,35 @@ def compute_false_abstain_rate(results: list[dict]) -> float:
 
 
 def compute_correct_abstain_rate(results: list[dict]) -> float:
-    """Доля OOS-запросов (is_oos=True), на которые система корректно отказала.
+    """Fraction of OOS queries (is_oos=True) for which the system correctly abstained.
 
-    Цель: = 1.0 (система всегда молчит на "как приготовить борщ").
+    Target: = 1.0 (system always stays silent on out-of-scope questions).
 
     Args:
-        results: список dict с полями "answer", "is_oos" (bool)
+        results: list of dicts with fields "answer", "is_oos" (bool)
     """
     if not results:
         return 1.0
     oos_results = [r for r in results if r.get("is_oos", False)]
     if not oos_results:
-        return 1.0  # нет OOS → условие выполнено тривиально
+        return 1.0  # no OOS rows → condition trivially satisfied
     correct = sum(1 for r in oos_results if _is_abstained(r))
     return correct / len(oos_results)
 
 
 def compute_inversion_detected(must_not_contain: str, answer: str) -> bool:
-    """True если ответ содержит запрещённый паттерн (инверсия нормы).
+    """True if the answer contains a forbidden pattern (norm inversion).
 
-    Инверсия = система указала неверное числовое значение или норму.
-    Пример: "повторный инструктаж раз в год" вместо "раз в 6 месяцев".
+    Inversion = system stated an incorrect numeric value or regulatory norm.
+    Example: "repeat briefing once a year" instead of "once every 6 months".
 
     Args:
-        must_not_contain: паттерны через '|' (case-insensitive substring match).
-                          Пустая строка → проверка не выполняется.
-        answer: ответ системы.
+        must_not_contain: patterns separated by '|' (case-insensitive substring match).
+                          Empty string → check is skipped.
+        answer: system answer.
 
     Returns:
-        True = инверсия обнаружена (плохо). False = всё чисто или проверка не нужна.
+        True = inversion detected (bad). False = all clear or check not applicable.
     """
     if not must_not_contain or not must_not_contain.strip() or not answer:
         return False
@@ -136,15 +136,15 @@ def compute_inversion_detected(must_not_contain: str, answer: str) -> bool:
 
 
 def compute_inversion_rate(results: list[dict]) -> float:
-    """Доля ответов с инверсиями среди строк с заполненным must_not_contain.
+    """Fraction of answers with inversions among rows where must_not_contain is set.
 
-    Строки без must_not_contain не учитываются.
+    Rows without must_not_contain are excluded.
 
     Args:
-        results: список dict с полями "must_not_contain" (str) и "inversion_detected" (bool).
+        results: list of dicts with fields "must_not_contain" (str) and "inversion_detected" (bool).
 
     Returns:
-        float in [0.0, 1.0]. 0.0 если нет проверяемых строк.
+        float in [0.0, 1.0]. 0.0 if no checkable rows exist.
     """
     checkable = [r for r in results if r.get("must_not_contain", "").strip()]
     if not checkable:
@@ -154,13 +154,13 @@ def compute_inversion_rate(results: list[dict]) -> float:
 
 
 def parse_citations(answer: str) -> list[dict]:
-    """Извлечь ссылки формата [Фрагмент N: Документ, п. X.X] из ответа.
+    """Extract citations in the format [Фрагмент N: Document, п. X.X] from the answer.
 
     Returns:
-        Список dict с ключами:
-            n (int)       — номер фрагмента
-            doc (str)     — название документа
-            section (str) — номер пункта или "" если "без пункта"
+        List of dicts with keys:
+            n (int)       — fragment number
+            doc (str)     — document name
+            section (str) — section number or "" if "без пункта"
     """
     if not answer:
         return []
@@ -177,12 +177,12 @@ def parse_citations(answer: str) -> list[dict]:
 
 
 def _split_sentences(text: str) -> list[str]:
-    """Разбить текст на предложения, не разрезая содержимое [...].
+    """Split text into sentences without cutting inside [...] brackets.
 
-    Маскируем цитаты перед split чтобы точки внутри [Фрагмент N: Doc, п. X.X]
-    не ломали границы предложений.
+    Citations are masked before splitting so dots inside [Фрагмент N: Doc, п. X.X]
+    do not break sentence boundaries.
     """
-    # Заменяем каждый символ внутри [...] на 'X' (длина сохраняется)
+    # Replace each character inside [...] with 'X' (length preserved)
     masked = re.sub(r"\[[^\]]*\]", lambda m: "X" * len(m.group()), text)
     parts: list[str] = []
     last = 0
@@ -198,12 +198,12 @@ def _split_sentences(text: str) -> list[str]:
 
 
 def compute_citation_rate(answer: str) -> float:
-    """Доля предложений с хотя бы одной ссылкой.
+    """Fraction of sentences that contain at least one citation.
 
-    Предложения определяются по знакам .!? вне квадратных скобок.
+    Sentences are delimited by .!? outside square brackets.
 
     Returns:
-        float in [0.0, 1.0]. 0.0 если нет предложений или ответ пустой.
+        float in [0.0, 1.0]. 0.0 if there are no sentences or answer is empty.
     """
     if not answer:
         return 0.0
@@ -215,16 +215,16 @@ def compute_citation_rate(answer: str) -> float:
 
 
 def compute_citation_in_retrieval(answer: str, passages: list[dict]) -> float:
-    """Доля ссылок где N находится в диапазоне [1, len(passages)].
+    """Fraction of citations where N is within [1, len(passages)].
 
-    Защита от выдуманных номеров фрагментов (N > кол-ва реальных пассажей).
+    Guards against hallucinated fragment numbers (N > number of actual passages).
 
     Args:
-        answer: ответ системы.
-        passages: список пассажей, возвращённых из final_passages.
+        answer: system answer.
+        passages: list of passages returned from final_passages.
 
     Returns:
-        float in [0.0, 1.0]. 0.0 если нет ссылок или passages пустой.
+        float in [0.0, 1.0]. 0.0 if there are no citations or passages is empty.
     """
     citations = parse_citations(answer)
     if not citations or not passages:
@@ -235,17 +235,17 @@ def compute_citation_in_retrieval(answer: str, passages: list[dict]) -> float:
 
 
 def compute_citation_doc_match(answer: str, passages: list[dict]) -> float:
-    """Доля ссылок где название документа совпадает с источником фрагмента N.
+    """Fraction of citations where the document name matches the source of fragment N.
 
-    Matching: cited_doc является подстрокой source (case-insensitive).
-    Пропускает ссылки с N вне диапазона passages.
+    Matching: cited_doc is a substring of source (case-insensitive).
+    Skips citations with N outside the passages range.
 
     Args:
-        answer: ответ системы.
-        passages: список пассажей с metadata.source.
+        answer: system answer.
+        passages: list of passages with metadata.source.
 
     Returns:
-        float in [0.0, 1.0]. 0.0 если нет проверяемых ссылок.
+        float in [0.0, 1.0]. 0.0 if there are no checkable citations.
     """
     citations = parse_citations(answer)
     if not citations or not passages:
@@ -263,13 +263,13 @@ def compute_citation_doc_match(answer: str, passages: list[dict]) -> float:
 
 
 def compute_retrieval_stats(results: list[dict]) -> dict:
-    """Средние показатели retrieval по всем запросам.
+    """Average retrieval stats across all queries.
 
     Args:
-        results: список dict с полями "top_score" (float), "passage_count" (int)
+        results: list of dicts with fields "top_score" (float), "passage_count" (int)
 
     Returns:
-        dict с ключами "avg_top_score", "avg_passage_count"
+        dict with keys "avg_top_score", "avg_passage_count"
     """
     if not results:
         return {"avg_top_score": 0.0, "avg_passage_count": 0.0}

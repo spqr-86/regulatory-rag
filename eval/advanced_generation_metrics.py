@@ -1,12 +1,12 @@
 """
-Расширенные метрики для оценки качества генерации ответов в RAG системе.
+LLM-based generation quality metrics for the RAG pipeline.
 
-Метрики:
-- Faithfulness: Все ли утверждения в ответе подтверждены контекстом
-- Answer Relevance: Релевантен ли ответ вопросу
-- Context Relevance: Релевантен ли предоставленный контекст вопросу
-- Completeness: Полнота ответа
-- Citation Quality: Корректность и полнота цитирования источников
+Metrics:
+- Faithfulness: are all claims in the answer supported by the context?
+- Answer Relevance: does the answer address the question?
+- Context Relevance: is the provided context relevant to the question?
+- Completeness: how complete is the answer compared to a reference?
+- Citation Quality: correctness and coverage of source citations
 """
 
 from __future__ import annotations
@@ -19,13 +19,13 @@ import json
 
 
 def clean_json_response(text: str) -> str:
-    """Очищает JSON от Markdown-разметки и лишнего текста."""
-    # Пытаемся найти блок кода ```json ... ``` или ``` ... ```
+    """Strip Markdown formatting and surrounding text from a JSON response."""
+    # Try to find a ```json ... ``` or ``` ... ``` code block
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if match:
         return match.group(1).strip()
 
-    # Если блоков нет, пытаемся найти просто первую и последнюю фигурные скобки
+    # Fall back to extracting the first {...} object
     match = re.search(r"(\{.*\})", text, re.DOTALL)
     if match:
         return match.group(1).strip()
@@ -37,16 +37,16 @@ def evaluate_faithfulness(
     question: str, context: str, answer: str, llm
 ) -> Dict[str, Any]:
     """
-    Оценка Faithfulness (Groundedness): подтверждены ли все утверждения контекстом.
+    Faithfulness (Groundedness): are all claims in the answer supported by the context?
 
     Args:
-        question: Вопрос пользователя
-        context: Предоставленный контекст
-        answer: Сгенерированный ответ
-        llm: LLM для оценки
+        question: User question
+        context: Retrieved context
+        answer: Generated answer
+        llm: LLM used for evaluation
 
     Returns:
-        Dict с score (0-1) и reasoning
+        Dict with score (0-1) and reasoning
     """
     prompt = ChatPromptTemplate.from_template(
         """Ты - строгий, но справедливый ИИ-судья. Оцени, подтвержден ли Ответ предоставленным Контекстом.
@@ -93,22 +93,22 @@ JSON:"""
         )
         return {
             "faithfulness_score": 0.0,
-            "faithfulness_reasoning": f"Ошибка парсинга: {response}",
+            "faithfulness_reasoning": f"Parse error: {response}",
             "ungrounded_statements": [],
         }
 
 
 def evaluate_answer_relevance(question: str, answer: str, llm) -> Dict[str, Any]:
     """
-    Оценка релевантности ответа вопросу.
+    Answer relevance: does the answer address the question?
 
     Args:
-        question: Вопрос пользователя
-        answer: Сгенерированный ответ
-        llm: LLM для оценки
+        question: User question
+        answer: Generated answer
+        llm: LLM used for evaluation
 
     Returns:
-        Dict с score и reasoning
+        Dict with score and reasoning
     """
     prompt = ChatPromptTemplate.from_template(
         """Оцени, насколько Ответ релевантен Вопросу.
@@ -144,21 +144,21 @@ JSON:"""
         )
         return {
             "answer_relevance_score": 0.0,
-            "answer_relevance_reasoning": f"Ошибка парсинга: {response}",
+            "answer_relevance_reasoning": f"Parse error: {response}",
         }
 
 
 def evaluate_context_relevance(question: str, context: str, llm) -> Dict[str, Any]:
     """
-    Оценка релевантности предоставленного контекста вопросу.
+    Context relevance: is the retrieved context relevant to the question?
 
     Args:
-        question: Вопрос пользователя
-        context: Предоставленный контекст
-        llm: LLM для оценки
+        question: User question
+        context: Retrieved context
+        llm: LLM used for evaluation
 
     Returns:
-        Dict с score и reasoning
+        Dict with score and reasoning
     """
     prompt = ChatPromptTemplate.from_template(
         """Оцени, насколько Контекст релевантен для ответа на Вопрос.
@@ -195,7 +195,7 @@ JSON:"""
         )
         return {
             "context_relevance_score": 0.0,
-            "context_relevance_reasoning": f"Ошибка парсинга: {response}",
+            "context_relevance_reasoning": f"Parse error: {response}",
             "relevant_sentences": [],
         }
 
@@ -204,16 +204,16 @@ def evaluate_completeness(
     question: str, answer: str, reference_answer: str, llm
 ) -> Dict[str, Any]:
     """
-    Оценка полноты ответа по сравнению с эталонным.
+    Completeness: how complete is the answer compared to the reference?
 
     Args:
-        question: Вопрос
-        answer: Сгенерированный ответ
-        reference_answer: Эталонный ответ
-        llm: LLM для оценки
+        question: Question
+        answer: Generated answer
+        reference_answer: Reference (ground truth) answer
+        llm: LLM used for evaluation
 
     Returns:
-        Dict с score и reasoning
+        Dict with score and reasoning
     """
     prompt = ChatPromptTemplate.from_template(
         """Оцени, насколько полон Ответ Модели по сравнению с Эталонным Ответом.
@@ -253,34 +253,34 @@ JSON:"""
         )
         return {
             "completeness_score": 0.0,
-            "completeness_reasoning": f"Ошибка парсинга: {response}",
+            "completeness_reasoning": f"Parse error: {response}",
             "missing_points": [],
         }
 
 
 def extract_citations(text: str) -> List[str]:
     """
-    Извлекает цитаты из текста. Поддерживает форматы:
+    Extract citations from text. Supports formats:
     - [cite: 1, 2]
-    - [Источник: Название, п. X.Y]
+    - [Источник: Title, п. X.Y]
     - [Источник: ...]
 
     Args:
-        text: Текст с цитатами
+        text: Text containing citations
 
     Returns:
-        Список строк-цитат
+        List of citation strings
     """
     citations = []
 
-    # 1. Старый формат [cite: 140, 141]
+    # 1. Legacy format [cite: 140, 141]
     cite_pattern = r"\[cite:\s*([0-9,\s]+)\]"
     cite_matches = re.findall(cite_pattern, text)
     for match in cite_matches:
         nums = [x.strip() for x in match.split(",") if x.strip()]
         citations.extend(nums)
 
-    # 2. Новый экспертный формат [Источник: ...]
+    # 2. Expert format [Источник: ...]
     source_pattern = r"\[Источник:\s*(.*?)\]"
     source_matches = re.findall(source_pattern, text)
     for match in source_matches:
@@ -299,7 +299,7 @@ def evaluate_citation_quality(
     unique_citations = list(set(citations))
     has_citations = len(citations) > 0
 
-    # Если есть хотя бы одна цитата в новом или старом формате - это уже успех для базовой метрики
+    # At least one citation in any format is sufficient for the baseline metric
     return {
         "has_citations": has_citations,
         "citation_count": len(citations),
@@ -320,18 +320,18 @@ def evaluate_generation_comprehensive(
     llm,
 ) -> Dict[str, Any]:
     """
-    Комплексная оценка качества генерации.
+    Run all generation quality metrics for a single question-answer pair.
 
     Args:
-        question: Вопрос
-        answer: Сгенерированный ответ
-        context: Контекст
-        reference_answer: Эталонный ответ (опционально)
-        source_docs: Список source документов
-        llm: LLM для оценки
+        question: Question
+        answer: Generated answer
+        context: Retrieved context
+        reference_answer: Reference answer (optional)
+        source_docs: List of source documents
+        llm: LLM used for evaluation
 
     Returns:
-        Dict со всеми метриками
+        Dict with all metric values
     """
     metrics = {}
 
@@ -344,33 +344,33 @@ def evaluate_generation_comprehensive(
     # Context Relevance
     metrics.update(evaluate_context_relevance(question, context, llm))
 
-    # Completeness (если есть эталон)
+    # Completeness (only if reference answer is provided)
     if reference_answer:
         metrics.update(evaluate_completeness(question, answer, reference_answer, llm))
 
     # Citation Quality
     metrics.update(evaluate_citation_quality(answer, context, source_docs))
 
-    # Дополнительные простые метрики
+    # Basic surface metrics
     metrics["answer_length"] = len(answer)
     metrics["answer_word_count"] = len(answer.split())
 
     return metrics
 
 
-# Пример использования
+# Usage example
 if __name__ == "__main__":
     from src.infra.llm_factory import get_llm
 
     llm = get_llm()
 
-    # Пример данных
+    # Sample data
     question = "Кто проходит обучение по программе А?"
     context = "По программе А обучаются работодатели, руководители, специалисты по охране труда."
     answer = "По программе А обучаются работодатели, руководители и специалисты по охране труда [cite: 140, 141]."
     reference = "По программе А обучаются: работодатели (руководители), заместители руководителя по охране труда."
 
-    # Оценка
+    # Evaluate
     metrics = evaluate_generation_comprehensive(
         question=question,
         answer=answer,
@@ -380,6 +380,6 @@ if __name__ == "__main__":
         llm=llm,
     )
 
-    print("Результаты оценки генерации:")
+    print("Generation evaluation results:")
     for key, value in metrics.items():
         print(f"  {key}: {value}")

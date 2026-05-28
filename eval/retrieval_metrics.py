@@ -1,12 +1,12 @@
 """
-Метрики для оценки качества Retrieval компонента RAG системы.
+Retrieval quality metrics for the RAG pipeline.
 
-Основные метрики:
-- Hit Rate @ K: Найден ли хотя бы один релевантный документ в топ-K
-- MRR (Mean Reciprocal Rank): Средняя обратная позиция первого релевантного документа
+Metrics:
+- Hit Rate @ K: is at least one relevant document present in the top-K results?
+- MRR (Mean Reciprocal Rank): average reciprocal rank of the first relevant document
 - NDCG @ K: Normalized Discounted Cumulative Gain
-- Precision @ K: Точность в топ-K результатах
-- Recall @ K: Полнота в топ-K результатах
+- Precision @ K: fraction of top-K results that are relevant
+- Recall @ K: fraction of relevant documents found in top-K
 """
 
 from __future__ import annotations
@@ -19,15 +19,15 @@ def hit_rate_at_k(
     retrieved_docs: List[str], relevant_docs: List[str], k: int = 10
 ) -> float:
     """
-    Hit Rate @ K: Найден ли хотя бы один релевантный документ в топ-K.
+    Hit Rate @ K: is at least one relevant document present in the top-K results?
 
     Args:
-        retrieved_docs: Список ID извлеченных документов (упорядочен по релевантности)
-        relevant_docs: Список ID релевантных документов (ground truth)
-        k: Количество топ документов для проверки
+        retrieved_docs: List of retrieved document IDs ordered by relevance
+        relevant_docs: List of relevant document IDs (ground truth)
+        k: Number of top documents to check
 
     Returns:
-        1.0 если хотя бы один релевантный документ найден в топ-K, иначе 0.0
+        1.0 if at least one relevant document is in top-K, else 0.0
     """
     top_k = retrieved_docs[:k]
     return 1.0 if any(doc in relevant_docs for doc in top_k) else 0.0
@@ -37,14 +37,14 @@ def mean_reciprocal_rank(
     retrieved_docs_list: List[List[str]], relevant_docs_list: List[List[str]]
 ) -> float:
     """
-    MRR (Mean Reciprocal Rank): Средняя обратная позиция первого релевантного документа.
+    MRR (Mean Reciprocal Rank): average reciprocal rank of the first relevant document.
 
     Args:
-        retrieved_docs_list: Список списков извлеченных документов для каждого запроса
-        relevant_docs_list: Список списков релевантных документов для каждого запроса
+        retrieved_docs_list: List of retrieved document ID lists, one per query
+        relevant_docs_list: List of relevant document ID lists, one per query
 
     Returns:
-        MRR score от 0.0 до 1.0
+        MRR score from 0.0 to 1.0
     """
     reciprocal_ranks = []
 
@@ -63,15 +63,15 @@ def precision_at_k(
     retrieved_docs: List[str], relevant_docs: List[str], k: int = 10
 ) -> float:
     """
-    Precision @ K: Доля релевантных документов среди топ-K извлеченных.
+    Precision @ K: fraction of top-K retrieved documents that are relevant.
 
     Args:
-        retrieved_docs: Список ID извлеченных документов
-        relevant_docs: Список ID релевантных документов
-        k: Количество топ документов
+        retrieved_docs: List of retrieved document IDs
+        relevant_docs: List of relevant document IDs
+        k: Number of top documents
 
     Returns:
-        Precision от 0.0 до 1.0
+        Precision from 0.0 to 1.0
     """
     top_k = retrieved_docs[:k]
     relevant_in_top_k = sum(1 for doc in top_k if doc in relevant_docs)
@@ -82,15 +82,15 @@ def recall_at_k(
     retrieved_docs: List[str], relevant_docs: List[str], k: int = 10
 ) -> float:
     """
-    Recall @ K: Доля найденных релевантных документов от всех релевантных.
+    Recall @ K: fraction of all relevant documents found in top-K.
 
     Args:
-        retrieved_docs: Список ID извлеченных документов
-        relevant_docs: Список ID релевантных документов
-        k: Количество топ документов
+        retrieved_docs: List of retrieved document IDs
+        relevant_docs: List of relevant document IDs
+        k: Number of top documents
 
     Returns:
-        Recall от 0.0 до 1.0
+        Recall from 0.0 to 1.0
     """
     if not relevant_docs:
         return 0.0
@@ -105,8 +105,8 @@ def dcg_at_k(relevances: List[float], k: int = 10) -> float:
     DCG @ K (Discounted Cumulative Gain).
 
     Args:
-        relevances: Список оценок релевантности (0 = нерелевантен, 1+ = релевантен)
-        k: Количество топ позиций
+        relevances: List of relevance scores (0 = not relevant, 1+ = relevant)
+        k: Number of top positions
 
     Returns:
         DCG score
@@ -115,7 +115,7 @@ def dcg_at_k(relevances: List[float], k: int = 10) -> float:
     if relevances.size == 0:
         return 0.0
 
-    # DCG = sum(rel_i / log2(i+1)) для i от 0 до k-1
+    # DCG = sum(rel_i / log2(i+1)) for i from 0 to k-1
     discounts = np.log2(np.arange(2, relevances.size + 2))
     return np.sum(relevances / discounts)
 
@@ -129,18 +129,18 @@ def ndcg_at_k(
     NDCG @ K (Normalized Discounted Cumulative Gain).
 
     Args:
-        retrieved_docs: Список ID извлеченных документов (упорядочен)
-        relevant_docs: Словарь {doc_id: relevance_score}, где score обычно 0, 1 или 2
-                      (0 = нерелевантен, 1 = частично релевантен, 2 = полностью релевантен)
-        k: Количество топ позиций
+        retrieved_docs: List of retrieved document IDs ordered by rank
+        relevant_docs: Dict {doc_id: relevance_score}, where score is typically 0, 1, or 2
+                      (0 = not relevant, 1 = partially relevant, 2 = fully relevant)
+        k: Number of top positions
 
     Returns:
-        NDCG от 0.0 до 1.0
+        NDCG from 0.0 to 1.0
     """
-    # Получаем relevance scores для извлеченных документов
+    # Get relevance scores for retrieved documents
     retrieved_relevances = [relevant_docs.get(doc, 0.0) for doc in retrieved_docs[:k]]
 
-    # Ideal DCG: сортируем все релевантные документы по убыванию релевантности
+    # Ideal DCG: sort all relevant documents by descending relevance
     ideal_relevances = sorted(relevant_docs.values(), reverse=True)[:k]
 
     dcg = dcg_at_k(retrieved_relevances, k)
@@ -155,17 +155,17 @@ def evaluate_retrieval(
     k: int = 10,
 ) -> Dict[str, float]:
     """
-    Вычисляет все retrieval метрики для одного запроса.
+    Compute all retrieval metrics for a single query.
 
     Args:
-        retrieved_docs: Список ID извлеченных документов (упорядочен по релевантности)
-        relevant_docs: Список ID релевантных документов ИЛИ словарь {doc_id: relevance_score}
-        k: Количество топ документов для оценки
+        retrieved_docs: List of retrieved document IDs ordered by relevance
+        relevant_docs: List of relevant document IDs OR dict {doc_id: relevance_score}
+        k: Number of top documents to evaluate
 
     Returns:
-        Словарь с метриками
+        Dict with metric values
     """
-    # Конвертируем в список для метрик, которым нужен просто список
+    # Convert to list for metrics that only need a plain list
     if isinstance(relevant_docs, dict):
         relevant_list = [doc for doc, score in relevant_docs.items() if score > 0]
     else:
@@ -177,7 +177,7 @@ def evaluate_retrieval(
         f"recall@{k}": recall_at_k(retrieved_docs, relevant_list, k),
     }
 
-    # NDCG требует scoring, если у нас есть
+    # NDCG requires scoring dict
     if isinstance(relevant_docs, dict):
         metrics[f"ndcg@{k}"] = ndcg_at_k(retrieved_docs, relevant_docs, k)
 
@@ -190,15 +190,15 @@ def evaluate_retrieval_batch(
     k: int = 10,
 ) -> Dict[str, float]:
     """
-    Вычисляет средние retrieval метрики для батча запросов.
+    Compute averaged retrieval metrics over a batch of queries.
 
     Args:
-        retrieved_docs_list: Список списков извлеченных документов
-        relevant_docs_list: Список списков/словарей релевантных документов
-        k: Количество топ документов
+        retrieved_docs_list: List of retrieved document ID lists
+        relevant_docs_list: List of relevant document ID lists or scoring dicts
+        k: Number of top documents
 
     Returns:
-        Словарь со средними метриками + MRR
+        Dict with averaged metrics plus MRR
     """
     all_metrics = []
 
@@ -206,13 +206,13 @@ def evaluate_retrieval_batch(
         metrics = evaluate_retrieval(retrieved, relevant, k)
         all_metrics.append(metrics)
 
-    # Усредняем метрики
+    # Average per-metric values
     avg_metrics = {}
     if all_metrics:
         for key in all_metrics[0].keys():
             avg_metrics[key] = np.mean([m[key] for m in all_metrics])
 
-    # Добавляем MRR (требует специальной обработки)
+    # MRR requires special handling (needs all queries together)
     relevant_lists = [
         list(rel.keys()) if isinstance(rel, dict) else rel for rel in relevant_docs_list
     ]
@@ -221,18 +221,18 @@ def evaluate_retrieval_batch(
     return avg_metrics
 
 
-# Пример использования
+# Usage example
 if __name__ == "__main__":
-    # Пример 1: Простой список релевантных документов
+    # Example 1: plain list of relevant documents
     retrieved = ["doc_3", "doc_1", "doc_5", "doc_2", "doc_7"]
     relevant = ["doc_1", "doc_2", "doc_4"]
 
     metrics = evaluate_retrieval(retrieved, relevant, k=5)
-    print("Метрики для примера 1:")
+    print("Example 1 metrics:")
     for metric, value in metrics.items():
         print(f"  {metric}: {value:.3f}")
 
-    # Пример 2: С оценками релевантности для NDCG
+    # Example 2: with relevance scores for NDCG
     relevant_scored = {
         "doc_1": 2.0,  # highly relevant
         "doc_2": 1.0,  # somewhat relevant
@@ -240,11 +240,11 @@ if __name__ == "__main__":
     }
 
     metrics_scored = evaluate_retrieval(retrieved, relevant_scored, k=5)
-    print("\nМетрики для примера 2 (с NDCG):")
+    print("\nExample 2 metrics (with NDCG):")
     for metric, value in metrics_scored.items():
         print(f"  {metric}: {value:.3f}")
 
-    # Пример 3: Батч запросов
+    # Example 3: batch of queries
     retrieved_batch = [
         ["doc_3", "doc_1", "doc_5"],
         ["doc_2", "doc_4", "doc_1"],
@@ -252,6 +252,6 @@ if __name__ == "__main__":
     relevant_batch = [["doc_1", "doc_2"], ["doc_1", "doc_3"]]
 
     batch_metrics = evaluate_retrieval_batch(retrieved_batch, relevant_batch, k=3)
-    print("\nСредние метрики для батча:")
+    print("\nBatch averaged metrics:")
     for metric, value in batch_metrics.items():
         print(f"  {metric}: {value:.3f}")
