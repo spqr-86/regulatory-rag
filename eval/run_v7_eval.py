@@ -33,7 +33,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.infra.llm_factory import apply_ipv6_patch_for_googleapis  # noqa: E402
+from src.infra.llm_factory import apply_ipv6_patch_for_googleapis, get_judge_llm  # noqa: E402
 
 apply_ipv6_patch_for_googleapis()
 

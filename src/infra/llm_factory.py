@@ -76,9 +76,10 @@ def _create_openai_llm(**kwargs):
             note="provider-specific kwargs ignored — may cause behavior drift",
         )
     model = kwargs.pop("model_name", "gpt-4o-mini")
+    temperature = kwargs.pop("temperature", settings.TEMPERATURE)
     return ChatOpenAI(
         model=model,
-        temperature=settings.TEMPERATURE,
+        temperature=temperature,
         timeout=settings.REQUEST_TIMEOUT,
         max_retries=3,
         **kwargs,
