@@ -42,7 +42,6 @@ from eval.advanced_generation_metrics import (
     evaluate_faithfulness,
 )
 from src.backends.vector_store import get_vector_store_backend
-from src.infra.llm_factory import get_gemini_llm
 from src.v7.bridge import init_v7_pipeline
 from src.v7.graph import build_graph
 
@@ -180,7 +179,7 @@ def run(
         print("  [--skip-judge] LLM judge disabled — pipeline only, $0 cost.\n")
     else:
         print("Loading judge LLM...")
-        judge_llm = get_gemini_llm(temperature=0.0)
+        judge_llm = get_simple_llm(temperature=0.0)
         print("  Judge ready.\n")
 
     results = []
