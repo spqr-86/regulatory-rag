@@ -205,7 +205,8 @@ storage_llamaindex/
 analysis/error_reports/
 app.log
 *.pkl
-benchmarks/
+benchmarks/*.jsonl
+benchmarks/*.json
 static/visuals/
 .flashrank_cache/
 semantic_cache.json
