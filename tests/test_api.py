@@ -88,9 +88,9 @@ class TestExceptionHiding:
         assert response.status_code == 500
         rid_header = response.headers.get("x-request-id", "")
         detail = response.json().get("detail", "")
-        assert rid_header in detail, (
-            f"request_id in header ({rid_header!r}) not found in detail ({detail!r})"
-        )
+        assert (
+            rid_header in detail
+        ), f"request_id in header ({rid_header!r}) not found in detail ({detail!r})"
 
 
 # ---------------------------------------------------------------------------

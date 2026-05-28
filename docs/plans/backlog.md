@@ -12,6 +12,7 @@
 | 4 | **test_sufficient fix** — pre-existing fail в test_evaluate_triage.py | ~30 мин | тесты 100% зелёные | |
 | 5 | **Integration tests** с реальным ChromaDB | ~1 день | покрытие E2E | |
 | 6 | **MCP-сервер поверх RAG** — search_knowledge tool для Claude | ~1 день | Claude ищет по ~/knowledge/ | |
+| 7 | **eval/compare.py** — адаптировать под V7 метрики (correctness, faithfulness, false_sufficiency вместо completeness/abstain_rate) | ~1 ч | A/B сравнение прогонов из benchmarks/ | |
 
 ---
 
