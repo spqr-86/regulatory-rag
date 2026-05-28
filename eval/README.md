@@ -1,4 +1,4 @@
-# eval/
+# Eval
 
 Offline evaluation suite for the V7 RAG pipeline. Runs the golden question dataset through the pipeline, measures quality metrics, and saves results to `benchmarks/`.
 
