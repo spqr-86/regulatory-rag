@@ -179,7 +179,7 @@ def run(
         print("  [--skip-judge] LLM judge disabled — pipeline only, $0 cost.\n")
     else:
         print("Loading judge LLM...")
-        judge_llm = get_simple_llm(temperature=0.0)
+        judge_llm = get_judge_llm(temperature=0.0)
         print("  Judge ready.\n")
 
     results = []

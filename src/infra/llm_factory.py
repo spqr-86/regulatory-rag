@@ -209,6 +209,24 @@ def get_complex_llm(**kwargs):
     return factory(**kwargs)
 
 
+def get_judge_llm(**kwargs):
+    """LLM for eval judge (JUDGE_LLM_PROVIDER + JUDGE_MODEL_NAME). Independent from pipeline."""
+    provider, model = _resolve_provider_and_model(
+        settings.JUDGE_LLM_PROVIDER,
+        settings.JUDGE_MODEL_NAME,
+    )
+    if provider == "gemini":
+        kwargs.setdefault("model_name", model)
+        return get_gemini_llm(**kwargs)
+    factory = _LLM_PROVIDERS.get(provider)
+    if not factory:
+        available = ", ".join(sorted(_LLM_PROVIDERS.keys()))
+        raise ValueError(
+            f"Unknown JUDGE_LLM_PROVIDER={provider!r}. Available: {available}"
+        )
+    return factory(**kwargs)
+
+
 def get_vision_llm():
     """
     Возвращает LLM с поддержкой Vision (зрения).

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     CHROMA_DB_PATH: str = "./chroma_db"
     CHROMA_COLLECTION_NAME: str = "documents"
     VECTOR_STORE: str = "chroma"
+    GOSTS_DB_PATH: str = "./chroma_db_gosts"
 
     # HTTP
     REQUEST_TIMEOUT: float = 120.0
@@ -43,6 +44,9 @@ class Settings(BaseSettings):
     SIMPLE_MODEL_NAME: str = "gemini-2.5-flash"
     COMPLEX_LLM_PROVIDER: str = "gemini"
     COMPLEX_MODEL_NAME: str = "gemini-3-flash-preview"
+    # Eval judge — independent from pipeline provider
+    JUDGE_LLM_PROVIDER: str = "openai"
+    JUDGE_MODEL_NAME: str = "gpt-4o-mini"
 
     # V7 node limits
     MAX_SEARCH_CALLS: int = 2
