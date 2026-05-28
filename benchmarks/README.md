@@ -1,14 +1,14 @@
 # Benchmarks
 
-Директория содержит актуальные метрики и локальные артефакты eval-прогонов.
+This directory contains the current baseline metrics and local eval artifacts.
 
-**Что в git:** только этот README.  
-**Что локально:** `eval_v7_*.jsonl`, `cps_*.json` — артефакты прогонов, в `.gitignore`.
+**In git:** this README only.  
+**Local only:** `eval_v7_*.jsonl`, `cps_*.json` — eval run artifacts, listed in `.gitignore`.
 
-## Актуальный baseline (2026-05-15)
+## Current Baseline (2026-05-15)
 
-| Метрика | Значение | Цель | Статус |
-|---------|----------|------|--------|
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
 | Correctness | **7.9 / 10** | > 7.5 | ✅ |
 | Faithfulness | **0.988** | > 0.85 | ✅ |
 | Answer Relevance | **0.753** | > 0.85 | 🔄 |
@@ -16,18 +16,22 @@
 | Complex path rate | 59% | — | — |
 | Mean latency | 17.4s | < 10s | 🔄 |
 
-**Конфиг:** V7 LangGraph, OpenAI embeddings (text-embedding-3-small), Gemini 2.5 Flash (simple) + thinking (complex), 11 PDF, HybridChunker v3.0-hybrid, dataset 57 вопросов.
+**Config:** V7 LangGraph, OpenAI embeddings (text-embedding-3-small), Gemini 2.5 Flash (simple) + thinking (complex), 11 PDFs, HybridChunker v3.0-hybrid, dataset 57 questions.
 
-## Как запустить eval
+## Running Eval
 
 ```bash
-# Pipeline-only (без LLM-судьи, ~$0)
+# Pipeline-only (no LLM judge, ~$0)
 python eval/run_v7_eval.py --skip-judge --output benchmarks/eval_v7_$(date +%F).jsonl
 
-# Полный eval с судьёй (OpenAI gpt-4o-mini)
+# Full eval with LLM judge (OpenAI gpt-4o-mini)
 python eval/run_v7_eval.py --output benchmarks/eval_v7_$(date +%F).jsonl
 ```
 
-## Как обновить baseline
+## Updating the Baseline
 
-После значимого улучшения метрик — обновить таблицу выше вручную и закоммитить.
+After a meaningful improvement, update the table above manually and commit.
+
+---
+
+[Русская версия](README_RU.md)
