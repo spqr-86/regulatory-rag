@@ -348,7 +348,7 @@ def make_expand_fn(llm, n: int = 3) -> Callable[[str, int], List[str]]:
     return _expand
 
 
-# Паттерны для русских ссылок на пункты/статьи НПА
+# Patterns for Russian references to clauses/articles in regulations
 _REF_PATTERNS = [
     re.compile(r"пункт\w*\s+(\d+)", re.IGNORECASE),
     re.compile(r'подпункт\w*\s+[«"]?([а-яё])[»"]?', re.IGNORECASE),
@@ -357,7 +357,7 @@ _REF_PATTERNS = [
 
 
 def _extract_refs(text: str) -> list[str]:
-    """Извлечь ссылки на пункты/статьи из текста чанка."""
+    """Extract clause/article references from chunk text."""
     found: list[str] = []
     for pattern in _REF_PATTERNS:
         for m in pattern.finditer(text):
@@ -372,14 +372,14 @@ def expand_cross_references(
     backend,
     query: str = "",
 ) -> list[dict]:
-    """Подтянуть чанки, связанные с найденными passages через cross-reference.
+    """Fetch chunks linked to the found passages via cross-references.
 
-    Два механизма:
-    1. Явные ссылки: ищет "пункт N", "статью N" в тексте passage и тянет чанки
-       из того же source, где встречается этот номер.
-    2. BM25-доиск: для каждого уникального source из passages запускает bm25_search
-       по запросу и добавляет чанки из этого source (улавливает обратные ссылки,
-       когда п.60 ссылается на п.46.в, а не наоборот).
+    Two mechanisms:
+    1. Explicit refs: searches for "пункт N", "статью N" in passage text and pulls
+       chunks from the same source where that number appears.
+    2. BM25 re-search: for each unique source in passages runs bm25_search
+       on the query and adds chunks from that source (catches reverse references,
+       e.g. п.60 referencing п.46.в, not the other way round).
     """
     if not passages:
         return passages
@@ -394,7 +394,7 @@ def expand_cross_references(
                 {"text": text, "score": 0.35, "metadata": metadata, "cross_ref": True}
             )
 
-    # ── Mechanism 1: explicit refs in passage text ────────────────────────────
+    # ── Mechanism 1: explicit refs in passage text ───────────────────────────
     for passage in passages:
         source = passage.get("metadata", {}).get("source", "")
         if not source:
@@ -455,12 +455,12 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
         return "LOW"
 
     def _short_source(passage: dict) -> str:
-        """Извлечь короткое название документа из metadata.source."""
+        """Extract short document name from metadata.source."""
         raw = passage.get("metadata", {}).get("source", "")
         # "Трудовой кодекс РФ - Система Охрана труда. Премиальная версия.pdf"
         # → "Трудовой кодекс РФ"
         name = raw.split(" - ")[0].replace(".pdf", "").strip()
-        return name or "Неизвестный источник"
+        return name or "Unknown source"
 
     def _generate(query: str, active_query: str, passages: List[dict]) -> str:
         if not passages:

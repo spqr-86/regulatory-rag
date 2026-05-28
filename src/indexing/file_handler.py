@@ -18,33 +18,33 @@ from utils.logging import logger
 
 FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
 
-# ⚙️ Обновляем версию, так как формат хранения кардинально меняется
-# v2.2-grouped: bbox-фильтр больше не отбрасывает текст (только зануляет bbox);
-# MAX_CHUNK_SIZE из settings; смена страницы flushит чанк.
+# ⚙️ Bump version: storage format has changed significantly.
+# v2.2-grouped: bbox filter no longer drops text (only nulls bbox);
+# MAX_CHUNK_SIZE from settings; page change flushes the chunk.
 PIPELINE_VERSION = "v3.0-hybrid"
 
-# --- Константы для фильтрации и группировки ---
-# Порог высоты bbox: ниже него bbox считается мусором (визуальные артефакты, footer).
-# Текст при этом сохраняется — bbox просто зануляется (visual_proof не сработает,
-# но retrieval остаётся полным). Раньше item выбрасывался целиком — это роняло
-# короткие однострочные пункты норм (см. ППРФ 2464).
+# --- Constants for filtering and grouping ---
+# bbox height threshold: below this the bbox is considered noise (visual artifacts, footer).
+# Text is kept — bbox is just nulled (visual_proof won't work,
+# but retrieval stays complete). Previously the item was dropped entirely — this
+# caused short single-line regulatory clauses to be lost (see PPRF 2464).
 MIN_BBOX_HEIGHT = 7
 BLACKLIST_PHRASES = ["Премиальная версия", "Скачано с", "Страница"]
 MAX_CHUNK_SIZE = settings.CHUNK_SIZE
 
-# Паттерны шума — удаляются из текста чанка перед индексацией.
-# URL-водяные знаки (напр. https://1otruda.ru/#/document/99/727688582),
-# маркеры страниц (14/34), временны́е штампы (25.01.2026, 20:10).
+# Noise patterns — removed from chunk text before indexing.
+# URL watermarks (e.g. https://1otruda.ru/#/document/99/727688582),
+# page markers (14/34), timestamps (25.01.2026, 20:10).
 _NOISE_PATTERNS = re.compile(
     r"https?://\S+"  # URL
-    r"|(?<!\d)\d{1,2}/\d{2,3}(?!\d)"  # n/nn страница (14/34) — не дроби в тексте
-    r"|\d{2}\.\d{2}\.\d{4},?\s+\d{2}:\d{2}",  # дата+время 25.01.2026, 20:10
+    r"|(?<!\d)\d{1,2}/\d{2,3}(?!\d)"  # n/nn page marker (14/34) — not fractions in text
+    r"|\d{2}\.\d{2}\.\d{4},?\s+\d{2}:\d{2}",  # date+time 25.01.2026, 20:10
     re.UNICODE,
 )
 
 
 def _clean_noise(text: str) -> str:
-    """Удаляет шум: нормализует кириллицу, убирает URL/маркеры страниц/timestamps."""
+    """Remove noise: normalise Cyrillic, strip URLs/page markers/timestamps."""
     text = unicodedata.normalize("NFC", text)
     cleaned = _NOISE_PATTERNS.sub("", text)
     cleaned = re.sub(r" {2,}", " ", cleaned)
@@ -61,8 +61,8 @@ def _dict_to_document(d: dict) -> Document:
 
 class DocumentProcessor:
     """
-    Обработчик файлов с поддержкой извлечения координат (BBox) для визуализации.
-    Использует Docling для структурного парсинга.
+    File processor with BBox coordinate extraction for visualisation.
+    Uses Docling for structural parsing.
     """
 
     def __init__(
@@ -75,16 +75,16 @@ class DocumentProcessor:
         self.cache_dir = Path(settings.CACHE_DIR)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Ленивая инициализация Docling
+        # Lazy Docling initialisation
         self._docling = DocumentConverter()
         from docling_core.transforms.chunker import HybridChunker
 
         self._chunker = HybridChunker(max_tokens=400, merge_peers=True)
 
-    # ---------- публичные методы ----------
+    # ---------- public methods ----------
 
     def validate_files(self, files: Iterable[FileLike]) -> None:
-        """Проверяет суммарный размер загружаемых файлов."""
+        """Check total size of files being processed."""
         total = 0
         for f in files:
             size = self._safe_sizeof(f)
@@ -99,7 +99,7 @@ class DocumentProcessor:
             )
 
     def process(self, files: Iterable[FileLike]) -> List[Document]:
-        """Обработка файлов с кэшированием."""
+        """Process files with caching."""
         self.validate_files(files)
 
         all_chunks: List[Document] = []
@@ -109,7 +109,7 @@ class DocumentProcessor:
             try:
                 stream, display_name = self._get_stream_and_name(file_obj)
 
-                # Хэш файла для кэша
+                # File hash for cache key
                 file_hash = self._hash_bytes_stream(stream)
                 cache_path = self._cache_path_for(file_hash)
 
@@ -122,10 +122,10 @@ class DocumentProcessor:
                     chunks = self._convert_and_extract(stream, display_name, file_hash)
                     self._save_to_cache(chunks, cache_path)
 
-                # Дедупликация
+                # Deduplication
                 for ch in chunks:
-                    # Уникальность определяем по тексту + координатам (если есть)
-                    # Но для простоты пока по тексту, хотя разные bbox могут иметь один текст
+                    # Uniqueness by text + coordinates (if present);
+                    # for simplicity we use text only, though different bboxes may share text
                     content_hash = hashlib.sha256(
                         ch.page_content.encode("utf-8")
                     ).hexdigest()
@@ -143,22 +143,22 @@ class DocumentProcessor:
         logger.info(f"Total unique chunks: {len(all_chunks)}")
         return all_chunks
 
-    # ---------- конвертация и извлечение ----------
+    # ---------- conversion and extraction ----------
 
     def _convert_and_extract(
         self, stream: io.BufferedIOBase, source_name: str, file_hash: str
     ) -> List[Document]:
-        """Конвертация через Docling и извлечение структурных чанков."""
+        """Convert via Docling and extract structural chunks."""
         import tempfile
 
-        # Docling требует файл на диске
+        # Docling requires a file on disk
         suffix = self._suffix_from_name(source_name)
         with tempfile.NamedTemporaryFile(delete=True, suffix=suffix) as tmp:
             stream.seek(0)
             tmp.write(stream.read())
             tmp.flush()
 
-            # Конвертация
+            # Convert
             try:
                 res = self._docling.convert(tmp.name)
             except Exception as e:
@@ -177,7 +177,7 @@ class DocumentProcessor:
                 continue
 
             headings = chunk.meta.headings or []
-            parent_section = headings[-1] if headings else "Начало документа"
+            parent_section = headings[-1] if headings else "Document start"
             heading_path = " > ".join(headings) if headings else ""
 
             meta: dict = {
@@ -204,7 +204,7 @@ class DocumentProcessor:
             chunks.append(Document(page_content=text, metadata=meta))
         return chunks
 
-    # ---------- кэш и утилиты (без изменений логики) ----------
+    # ---------- cache and utilities (logic unchanged) ----------
 
     def _cache_path_for(self, file_hash: str) -> Path:
         key = hashlib.sha256(

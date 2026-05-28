@@ -23,9 +23,9 @@ from src.v7.state_types import (
 
 
 def validate_filters(filters: Optional[dict]) -> Optional[dict]:
-    """Whitelist валидация filters перед передачей в retriever.
+    """Whitelist validation of filters before passing to retriever.
 
-    Защита от NoSQL injection через произвольные where-clause.
+    Protection against NoSQL injection via arbitrary where-clauses.
     """
     if not filters:
         return filters
@@ -36,9 +36,9 @@ def validate_filters(filters: Optional[dict]) -> Optional[dict]:
 
 
 def sanitize_for_llm(text: str) -> str:
-    """Санитизация текста перед отправкой в LLM.
+    """Sanitise text before sending to LLM.
 
-    Удаляет потенциальные prompt injection паттерны.
+    Removes potential prompt injection patterns.
     """
     injection_patterns = [
         r"(?i)ignore\s+(previous|above|all)\s+(instructions?|prompts?)",
@@ -62,16 +62,16 @@ def check_hard_gates(
     passages: List[dict],
     plan: dict,
 ) -> HardGateResult:
-    """ТОЛЬКО hard gates + ключевые метрики. Без triage, без soft signals.
+    """Hard gates ONLY + key metrics. No triage, no soft signals.
 
-    Hard gates (все должны быть True для sufficient):
+    Hard gates (all must be True for sufficient):
       1. top_score >= threshold
       2. passage_count >= min_passages
-      3. keyword_overlap (по active_query) >= min_keyword_overlap
+      3. keyword_overlap (on active_query) >= min_keyword_overlap
 
     Dual overlap:
-      keyword_overlap_active  — по рабочему запросу (для hard gate).
-      keyword_overlap_original — по оригинальному (для drift detection).
+      keyword_overlap_active  — on active query (for hard gate).
+      keyword_overlap_original — on original query (for drift detection).
     """
     if not passages:
         return HardGateResult(
@@ -118,19 +118,19 @@ def check_full_triage(
 
     Triage:
       sufficient   — hard gates ok, no escalation_hint.
-      borderline   — score в зоне (borderline, threshold) ИЛИ
-                     hard gates ok но escalation_hint (diversity).
-      clearly_bad  — score < borderline ИЛИ мало passages.
+      borderline   — score in zone (borderline, threshold) OR
+                     hard gates ok but escalation_hint (diversity).
+      clearly_bad  — score < borderline OR too few passages.
     """
     hard = check_hard_gates(original_query, active_query, passages, plan)
 
     unique_docs, max_doc_ratio = compute_doc_diversity(passages)
     diversity_ok = max_doc_ratio <= plan.get("max_single_doc_ratio", 1.0)
 
-    # v6.1: если router выставил require_multi_doc, diversity = hard gate
+    # v6.1: if router set require_multi_doc, diversity = hard gate
     require_multi = plan.get("require_multi_doc", False)
-    # escalation_hint только когда multi-doc требуется —
-    # для factoid-запросов (require_multi=False) ответ в одном документе норма.
+    # escalation_hint only when multi-doc is required —
+    # for factoid queries (require_multi=False) a single-document answer is normal.
     escalation_hint = not diversity_ok and require_multi
 
     if require_multi and not diversity_ok:
@@ -174,9 +174,9 @@ def make_sufficiency(
     diversity_ok: bool = True,
     escalation_hint: bool = False,
 ) -> SufficiencyResult:
-    """Helper: собрать SufficiencyResult из HardGateResult + passages.
+    """Helper: build SufficiencyResult from HardGateResult + passages.
 
-    Убирает copy-paste 13 полей в evaluate_complex.
+    Eliminates 13-field copy-paste in evaluate_complex.
     """
     unique_docs, max_doc_ratio = compute_doc_diversity(passages)
     return SufficiencyResult(
@@ -205,10 +205,10 @@ def compute_attempt_metrics(
     passages: List[dict],
     plan: dict,
 ) -> tuple[HardGateResult, dict]:
-    """Вычислить hard gates + metrics для RetrievalAttempt.
+    """Compute hard gates + metrics for a RetrievalAttempt.
 
-    Возвращает (hard_gate_result, metrics_dict).
-    Переиспользуется в rag_simple/rag_complex и evaluate.
+    Returns (hard_gate_result, metrics_dict).
+    Reused in rag_simple/rag_complex and evaluate nodes.
     """
     hard = check_hard_gates(original_query, active_query, passages, plan)
     unique_docs, max_doc_ratio = compute_doc_diversity(passages)

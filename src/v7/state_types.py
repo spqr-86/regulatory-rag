@@ -56,14 +56,14 @@ ALLOWED_FILTER_KEYS = frozenset({"doc_type", "doc_id", "section", "category", "y
 
 
 class RetrievalPlan(TypedDict, total=False):
-    """Параметры поиска. Создаётся router, обновляется при эскалации.
+    """Retrieval parameters. Created by router, updated on escalation.
 
     Retrieval: top_k, rerank, timeout_ms.
     Hard gates: threshold, min_passages, min_keyword_overlap.
     Soft signals: max_single_doc_ratio.
     Borderline zone: borderline_threshold.
-    LLM verifier: min_verifier_confidence — минимальная confidence LLM
-                  для принятия verdict. Ниже → ignore verdict, escalate.
+    LLM verifier: min_verifier_confidence — minimum LLM confidence
+                  to accept the verdict. Below this → ignore verdict, escalate.
     """
 
     top_k: int
@@ -76,15 +76,15 @@ class RetrievalPlan(TypedDict, total=False):
     borderline_threshold: float
     min_verifier_confidence: float
     # v6.1: router-driven signals
-    require_multi_doc: bool  # True для запросов-сравнений → diversity = hard gate
+    require_multi_doc: bool  # True for comparison queries → diversity = hard gate
     mmr_lambda: float  # dynamic: 0.9-1.0 factoid, 0.5-0.6 overview
 
 
 class RetrievalAttempt(TypedDict, total=False):
-    """Результат одной попытки retrieval. Append-only.
+    """Result of a single retrieval attempt. Append-only.
 
-    attempt_plan: snapshot plan на момент retrieval (fix #4).
-    metrics: per-attempt diagnostics для offline evaluation.
+    attempt_plan: plan snapshot at retrieval time (fix #4).
+    metrics: per-attempt diagnostics for offline evaluation.
     """
 
     retrieval_id: str
@@ -96,12 +96,12 @@ class RetrievalAttempt(TypedDict, total=False):
 
 
 class HardGateResult(TypedDict):
-    """Результат ТОЛЬКО hard gates. Без triage, без soft signals.
+    """Result of hard gates ONLY. No triage, no soft signals.
 
-    Используется evaluate_complex (финальная проверка).
+    Used by evaluate_complex (final check).
 
-    Dual overlap: keyword_overlap_active (по рабочему запросу),
-    keyword_overlap_original (по оригиналу — drift detection).
+    Dual overlap: keyword_overlap_active (on active query),
+    keyword_overlap_original (on original — drift detection).
     """
 
     sufficient: bool
@@ -115,9 +115,9 @@ class HardGateResult(TypedDict):
 
 
 class SufficiencyResult(TypedDict):
-    """Полный результат проверки: hard gates + soft signals + triage.
+    """Full check result: hard gates + soft signals + triage.
 
-    Используется evaluate_triage (3-way gate).
+    Used by evaluate_triage (3-way gate).
     """
 
     sufficient: bool
@@ -147,11 +147,11 @@ class EvidenceReport(TypedDict, total=False):
 
 
 class VerificationResult(TypedDict, total=False):
-    """Результат LLM-верификации.
+    """LLM verification result.
 
     verdict: sufficient / rewrite / escalate.
-    rewrite_hint: инструкция для rewriter.
-    missing_aspects: что не покрыто.
+    rewrite_hint: instruction for the rewriter.
+    missing_aspects: what is not covered.
     """
 
     verdict: VerifierVerdict
@@ -162,14 +162,14 @@ class VerificationResult(TypedDict, total=False):
 
 
 class RAGState(TypedDict, total=False):
-    """Состояние графа v7.
+    """V7 graph state.
 
     INPUT:     query (immutable), filters.
     INTERNAL:  intent, plan, retrieval_id, active_query,
                retrieval_attempts, sufficient, verify_iteration, verification.
     OUTPUT:    final_passages, final_score, fallback_passages, fallback_score,
                clarify_message, abstain_reason, sufficiency_details.
-    UX:        status_message — progress для frontend streaming.
+    UX:        status_message — progress for frontend streaming.
     """
 
     # INPUT

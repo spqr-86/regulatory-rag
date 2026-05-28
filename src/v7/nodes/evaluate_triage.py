@@ -14,8 +14,8 @@ from src.v7.state_types import (
     RetrievalPlan,
 )
 
-# Паттерны перечислительных вопросов — требуют полного покрытия всех категорий/условий.
-# Для таких запросов rag_simple может вернуть неполный ответ даже при высоком top_score.
+# Enumeration question patterns — require complete coverage of all categories/conditions.
+# For such queries rag_simple may return an incomplete answer even at high top_score.
 _ENUMERATION_PATTERNS = [
     r"\bкто\s+проходит\b",
     r"\bкто\s+обязан\b",
@@ -30,9 +30,9 @@ _ENUMERATION_PATTERNS = [
 ]
 
 
-# Паттерны перекрёстных ссылок в нормативных документах.
-# Если retrieved чанки содержат много таких маркеров — ответ, вероятно, рассеян
-# по соседним пунктам и требует расширенного поиска.
+# Cross-reference patterns in regulatory documents.
+# If retrieved chunks contain many such markers, the answer is likely spread
+# across adjacent clauses and requires broader search.
 _CROSSREF_PATTERNS = [
     r"\bпункт[а-я]*\s+\d+",
     r"\bподпункт[а-я]*\s+\d+",
@@ -48,7 +48,7 @@ _CROSSREF_ESCALATION_THRESHOLD = 3  # >= N hits в топ-чанках → escal
 
 
 def _count_crossref_hits(passages: list[dict]) -> int:
-    """Считает суммарное число crossref-паттернов в топ-5 passages."""
+    """Count total number of crossref pattern matches in the top-5 passages."""
     total = 0
     for p in passages[:5]:
         text = p.get("text", "").lower()
@@ -59,10 +59,10 @@ def _count_crossref_hits(passages: list[dict]) -> int:
 
 
 def _has_enumeration_intent(query: str) -> bool:
-    """True если запрос требует полного перечисления категорий/условий.
+    """True if the query requires complete enumeration of categories/conditions.
 
-    Такие запросы направляются в rag_complex даже при sufficient simple-triage,
-    потому что ответ часто рассеян по нескольким пунктам документа.
+    Such queries are routed to rag_complex even when simple-triage is sufficient,
+    because the answer is often spread across multiple document clauses.
     """
     q = query.lower()
     return any(re.search(p, q) for p in _ENUMERATION_PATTERNS)

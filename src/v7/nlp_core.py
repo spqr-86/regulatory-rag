@@ -95,12 +95,12 @@ STOP_WORDS: frozenset[str] = frozenset(
 
 
 def extract_keywords(text: str) -> set[str]:
-    """Ключевые слова для keyword overlap check.
+    """Keywords for keyword overlap check.
 
-    pymorphy3 лемматизация + razdel токенизация.
-    Сохраняет номера нормативных документов (СП 1.13130, ГОСТ 12.1.004).
+    pymorphy3 lemmatisation + razdel tokenisation.
+    Preserves regulatory document numbers (СП 1.13130, ГОСТ 12.1.004).
     """
-    # Извлечь номера документов ДО лемматизации
+    # Extract document numbers BEFORE lemmatisation
     doc_numbers = set(re.findall(r"\d+(?:\.\d+)+(?:-\d+)?", text))
 
     lemmas: set[str] = set()
@@ -120,7 +120,7 @@ def extract_keywords(text: str) -> set[str]:
 
 
 def compute_keyword_overlap(query: str, passages: List[dict]) -> float:
-    """Доля ключевых слов запроса, найденных в passages (0.0–1.0)."""
+    """Fraction of query keywords found in passages (0.0–1.0)."""
     query_kw = extract_keywords(query)
     if not query_kw:
         return 1.0
@@ -145,7 +145,7 @@ def compute_doc_diversity(passages: List[dict]) -> tuple[int, float]:
 
 
 def _lemmatize_for_bm25(text: str) -> List[str]:
-    """Токенизация + лемматизация для BM25 индекса и запросов."""
+    """Tokenise and lemmatise for BM25 index and queries."""
     tokens = []
     for token in razdel_tokenize(text):
         word = token.text.lower()
@@ -158,7 +158,7 @@ def _lemmatize_for_bm25(text: str) -> List[str]:
 
 
 class BM25Index:
-    """BM25 индекс поверх rank_bm25.BM25Okapi с pymorphy3 лемматизацией.
+    """BM25 index over rank_bm25.BM25Okapi with pymorphy3 lemmatisation.
 
     Usage:
         index = BM25Index(passages)  # build once
@@ -221,9 +221,9 @@ def bm25_search(
     filters: Optional[dict] = None,
     top_k: int = 12,
 ) -> List[dict]:
-    """BM25 full-text search с pymorphy3 лемматизацией.
+    """BM25 full-text search with pymorphy3 lemmatisation.
 
-    Требует предварительной init_bm25_index() с корпусом.
+    Requires prior init_bm25_index() with corpus.
     """
     if _bm25_index is not None:
         return _bm25_index.search(query, top_k, filters)
@@ -238,11 +238,11 @@ def rrf_merge(
     top_k: int = 12,
     k: int | None = None,
 ) -> List[dict]:
-    """Reciprocal Rank Fusion — объединяет results из нескольких retriever-ов.
+    """Reciprocal Rank Fusion — merges results from multiple retrievers.
 
-    RRF score = Σ 1 / (k + rank_i) по всем спискам.
-    k=60 — стандартное значение (Cormack et al.).
-    Дедуп по chunk_id.
+    RRF score = Σ 1 / (k + rank_i) across all lists.
+    k=60 — standard value (Cormack et al.).
+    Dedup by chunk_id.
     """
     if k is None:
         k = v7_config.RRF_K
@@ -278,11 +278,11 @@ def mmr_select(
 ) -> List[dict]:
     """Maximal Marginal Relevance — FALLBACK ONLY.
 
-    В production основной MMR делает Chroma/Qdrant нативно.
-    Этот mmr_select используется ТОЛЬКО в merge_all_passages(),
-    где нет доступа к VectorDB (passages уже извлечены).
+    In production the primary MMR is done natively by Chroma/Qdrant.
+    This mmr_select is used ONLY in merge_all_passages(),
+    where VectorDB access is unavailable (passages already extracted).
 
-    Diversity penalty на основе doc_id.
+    Diversity penalty based on doc_id.
     """
     if lambda_param is None:
         lambda_param = v7_config.MMR_LAMBDA
@@ -329,11 +329,11 @@ def merge_all_passages(
     top_k: int = 12,
     mmr_lambda: float | None = None,
 ) -> List[dict]:
-    """Merge уникальных passages из ВСЕХ retrieval attempts.
+    """Merge unique passages from ALL retrieval attempts.
 
-    1. Собрать все passages из всех attempts.
-    2. Дедуп по chunk_id.
-    3. MMR-select top_k для diversity.
+    1. Collect all passages from all attempts.
+    2. Dedup by chunk_id.
+    3. MMR-select top_k for diversity.
     """
     if mmr_lambda is None:
         mmr_lambda = v7_config.MMR_LAMBDA

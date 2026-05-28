@@ -133,5 +133,5 @@ def rag_simple(state: RAGState) -> RAGState:
                 metrics=metrics,
             )
         ],
-        "status_message": f"Найдено {len(passages)} фрагментов (hybrid search).",
+        "status_message": f"Found {len(passages)} fragments (hybrid search).",
     }

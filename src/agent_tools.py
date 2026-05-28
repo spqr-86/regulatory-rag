@@ -192,15 +192,15 @@ def make_tools(ctx: ToolContext):
 
 
 SOURCE_DOCS_DIR = Path("source_docs").resolve()
-MAX_BBOX_DIM = 10_000.0  # PDF user-units; защита от DoS-рендера
+MAX_BBOX_DIM = 10_000.0  # PDF user-units; protection against DoS rendering
 MAX_BBOX_AREA_PT2 = 921_600.0  # ~4 MP at 150 DPI; ~1.84 A4 pages
 
 
 def _validate_file_name(file_name: str) -> Path | str:
-    """Возвращает безопасный Path внутри SOURCE_DOCS_DIR или строку с ошибкой.
+    """Return a safe Path inside SOURCE_DOCS_DIR, or an error string.
 
-    Параметр приходит от LLM, который может быть подвержен prompt-injection через
-    содержимое PDF. Любые '/', '..' или абсолютные пути — невалидны.
+    The parameter comes from an LLM that may be susceptible to prompt-injection
+    via PDF content. Any '/', '..', or absolute paths are invalid.
     """
     if not file_name or not isinstance(file_name, str):
         return "Error: file_name must be a non-empty string."
@@ -215,7 +215,7 @@ def _validate_file_name(file_name: str) -> Path | str:
 
 
 def _validate_bbox(bbox) -> str | None:
-    """Возвращает None если bbox валиден, иначе текст ошибки."""
+    """Return None if bbox is valid, otherwise an error string."""
     import math
 
     if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:

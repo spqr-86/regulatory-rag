@@ -31,7 +31,7 @@ class PromptManager:
             return yaml.safe_load(f) or {}
 
     def _resolve_version(self, prompt_id: str) -> str:
-        # Приоритет 1: ENV variable (PROMPT_ID_VERSION)
+        # Priority 1: ENV variable (PROMPT_ID_VERSION)
         env_key = f"PROMPT_{prompt_id.upper()}_VERSION"
         if env_key in os.environ:
             version = os.environ[env_key]
@@ -40,7 +40,7 @@ class PromptManager:
             )
             return version
 
-        # Приоритет 2: Registry active_version
+        # Priority 2: Registry active_version
         if prompt_id in self.registry:
             version = self.registry[prompt_id].get("active_version")
             if version:
@@ -60,7 +60,7 @@ class PromptManager:
 
         rel_path = versions[version]
 
-        # Безопасность: запрет на traversal
+        # Security: forbid path traversal
         if ".." in rel_path or rel_path.startswith("/"):
             raise ValueError(
                 f"Invalid template path: {rel_path}. Absolute paths and '..' are forbidden."
@@ -76,7 +76,7 @@ class PromptManager:
             template = self.env.get_template(template_path)
             rendered = template.render(**kwargs)
 
-            # Хеширование и логирование
+            # Hash and log
             prompt_hash = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
             _log.info(
                 "prompt_manager.rendered",
@@ -86,7 +86,7 @@ class PromptManager:
                 inputs=list(kwargs.keys()),
             )
 
-            # Полный текст только в DEBUG
+            # Full text only in DEBUG
             if os.environ.get("DEBUG_PROMPTS") == "true":
                 _log.debug(
                     "prompt_manager.full_prompt",

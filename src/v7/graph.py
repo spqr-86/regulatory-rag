@@ -29,10 +29,10 @@ from src.v7.state_types import RAGState
 def build_graph(
     overrides: Optional[Dict[str, Callable]] = None,
 ) -> StateGraph:
-    """Собирает граф v7.
+    """Assemble the v7 graph.
 
     overrides: dict of {node_name: replacement_function}.
-    Позволяет подменить любую ноду для тестов.
+    Allows replacing any node for testing.
 
     Usage:
         app = build_graph().compile()

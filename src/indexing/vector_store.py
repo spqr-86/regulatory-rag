@@ -27,7 +27,7 @@ def _token_len_openai(text: str) -> int:
 
 
 def _sanitize_metadata(meta: dict[str, Any]) -> dict[str, Any]:
-    """Превращает сложные значения в допустимые для Chroma скаляры."""
+    """Convert complex values to Chroma-compatible scalars."""
     out: dict[str, Any] = {}
     for k, v in (meta or {}).items():
         if v is None or isinstance(v, (str, int, float, bool)):
@@ -40,9 +40,9 @@ def _sanitize_metadata(meta: dict[str, Any]) -> dict[str, Any]:
             except Exception:
                 out[k] = str(v)
         else:
-            # всё остальное в строку
+            # everything else to string
             out[k] = str(v)
-        # опционально: ограничим длину огромных полей
+        # optionally: cap length of very large fields
         if isinstance(out[k], str) and len(out[k]) > 2000:
             out[k] = out[k][:2000] + "…"
     return out
@@ -80,7 +80,7 @@ def _create_chroma_instance(embeddings) -> Chroma:
 
 
 def create_vector_store(chunks: List[Document]) -> Chroma:
-    logger.info("Создание новой векторной базы данных...")
+    logger.info("Creating new vector database...")
     os.makedirs(settings.CHROMA_DB_PATH, exist_ok=True)
 
     embeddings = get_embedding_model()
@@ -99,12 +99,12 @@ def create_vector_store(chunks: List[Document]) -> Chroma:
         is_openai=is_openai,
     ):
         texts = [d.page_content for d in batch]
-        metas = [_sanitize_metadata(d.metadata or {}) for d in batch]  # ✅ тут
+        metas = [_sanitize_metadata(d.metadata or {}) for d in batch]
         vector_store.add_texts(texts=texts, metadatas=metas)
         done += len(batch)
-        logger.info(f"Chroma add: прогресс {done}/{total}")
+        logger.info(f"Chroma add: progress {done}/{total}")
 
-    logger.info(f"Векторная БД сохранена: {settings.CHROMA_DB_PATH}")
+    logger.info(f"Vector DB saved: {settings.CHROMA_DB_PATH}")
     return vector_store
 
 
@@ -112,7 +112,7 @@ def create_vector_store(chunks: List[Document]) -> Chroma:
 def load_vector_store() -> Chroma:
     """Load existing Chroma collection (singleton — cached per process)."""
     if not os.path.isdir(settings.CHROMA_DB_PATH):
-        raise FileNotFoundError(f"Chroma DB не найдена: {settings.CHROMA_DB_PATH}")
+        raise FileNotFoundError(f"Chroma DB not found: {settings.CHROMA_DB_PATH}")
 
     embeddings = get_embedding_model()
     vs = _create_chroma_instance(embeddings)
@@ -120,8 +120,8 @@ def load_vector_store() -> Chroma:
     count = vs._collection.count()
     if count == 0:
         raise ValueError(
-            f"Chroma DB пуста (0 документов): {settings.CHROMA_DB_PATH}. "
-            "Запустите 'python index.py' для индексации."
+            f"Chroma DB is empty (0 documents): {settings.CHROMA_DB_PATH}. "
+            "Run 'python index.py' to index documents."
         )
-    logger.info(f"Chroma DB загружена: {count} документов")
+    logger.info(f"Chroma DB loaded: {count} documents")
     return vs
