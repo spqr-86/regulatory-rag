@@ -187,6 +187,17 @@ class DocumentProcessor:
                 "heading_path": heading_path,
             }
             if chunk.meta.doc_items:
+                # element_type: propagate Docling structural label (table/text/...)
+                # so visual_enrichment can route table chunks (e.g. 29н periodicity,
+                # 817н classifier) through the VLM. "table" wins if any item is a table.
+                labels = [
+                    str(getattr(di, "label", "")).lower() for di in chunk.meta.doc_items
+                ]
+                if any("table" in lbl for lbl in labels):
+                    meta["element_type"] = "table"
+                elif labels and labels[0]:
+                    meta["element_type"] = labels[0].split(".")[-1]
+
                 item = chunk.meta.doc_items[0]
                 if hasattr(item, "prov") and item.prov:
                     prov = item.prov[0]
@@ -201,7 +212,22 @@ class DocumentProcessor:
                         if abs(bbox[3] - bbox[1]) >= MIN_BBOX_HEIGHT:
                             meta["bbox"] = json.dumps(bbox)
 
-            chunks.append(Document(page_content=text, metadata=meta))
+            # Contextual embedding: prepend the section/article title to the
+            # embedded text so retrieval can disambiguate near-duplicate wording
+            # across different norms (e.g. ст.228.1 «Порядок извещения» vs 223н
+            # «Сообщение о последствиях»). Lightweight, LLM-free variant of
+            # Contextual Retrieval — the NPA article title IS the disambiguator.
+            # Skip when the chunk text already opens with the heading (HybridChunker
+            # often inlines it) to avoid duplicating the title.
+            if (
+                parent_section
+                and parent_section != "Document start"
+                and not text.startswith(parent_section)
+            ):
+                embed_text = f"{parent_section}\n{text}"
+            else:
+                embed_text = text
+            chunks.append(Document(page_content=embed_text, metadata=meta))
         return chunks
 
     # ---------- cache and utilities (logic unchanged) ----------
