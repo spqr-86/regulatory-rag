@@ -14,8 +14,10 @@ class Settings(BaseSettings):
     EMBEDDING_PROVIDER: str = "openai"  # варианты: openai, hf_api, local
     EMBEDDING_MODEL_NAME: str = "text-embedding-3-small"
 
-    # FlashRank reranker
+    # Reranker (flashrank | crossencoder)
+    RERANKER_BACKEND: str = "flashrank"
     RERANKING_MODEL: str = "ms-marco-MiniLM-L-12-v2"
+    CROSSENCODER_MODEL: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
     FLASHRANK_CACHE_DIR: str = ".flashrank_cache"
 
     # Indexing

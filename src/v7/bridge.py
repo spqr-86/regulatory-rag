@@ -69,58 +69,86 @@ def make_visual_proof_fn() -> Callable[[str, int, list, str], str]:
 
 def make_rerank_fn(
     model_name: str = "ms-marco-MiniLM-L-12-v2",
-    cache_dir: str = ".flashrank_cache",
+    cache_dir: str = ".reranker_cache",
 ) -> Callable[[str, List[dict], int], List[dict]]:
     """Create a FlashRank reranker function for v7 rag_complex.
 
-    Thin adapter over ``langchain_community.document_compressors.FlashrankRerank``:
-    converts v7 passage dicts ↔ ``Document`` and preserves the original vector
-    similarity score in ``metadata["vector_score"]`` so downstream MMR/gates
-    keep using vector scores (FlashRank scores are not calibrated for Russian
-    domain — see fix 2026-05-16).
-
     Signature: fn(query, passages, top_k) -> passages (reranked, ≤ top_k items).
     Each passage must have a 'text' key.
-    """
-    from flashrank import Ranker
-    from langchain_community.document_compressors import FlashrankRerank
-    from langchain_core.documents import Document
 
-    ranker = Ranker(model_name=model_name, cache_dir=cache_dir)
+    Preserves original vector_score so downstream MMR/gates use vector scores
+    (FlashRank scores are not calibrated for thresholds — see CLAUDE.md session 22).
+    """
+    from flashrank import Ranker, RerankRequest
+
+    _ranker = Ranker(model_name=model_name, cache_dir=cache_dir)
 
     def _rerank(query: str, passages: List[dict], top_k: int) -> List[dict]:
         if not passages:
             return passages
 
-        # Freeze vector_score BEFORE rerank so we don't overwrite it with the
-        # FlashRank score (see CLAUDE.md "Known Issues" — fix 2026-05-16).
-        compressor = FlashrankRerank(client=ranker, top_n=top_k)
-        docs: List[Document] = []
-        for idx, p in enumerate(passages):
-            meta = dict(p.get("metadata", {}))
-            meta["_v7_passage_idx"] = idx
-            docs.append(Document(page_content=p.get("text", ""), metadata=meta))
-
-        compressed = compressor.compress_documents(documents=docs, query=query)
+        # Build indexed map for O(1) lookup after rerank
+        text_to_original = {p.get("text", ""): p for p in passages}
+        passages_for_ranker = [{"text": p.get("text", "")} for p in passages]
+        rerank_request = RerankRequest(query=query, passages=passages_for_ranker)
+        results = _ranker.rerank(rerank_request)
 
         reranked: List[dict] = []
-        for doc in compressed:
-            idx = doc.metadata.get("_v7_passage_idx")
-            orig = passages[idx] if isinstance(idx, int) else {}
-            vector_score = orig.get("vector_score", orig.get("score", 0.0))
-            relevance = float(doc.metadata.get("relevance_score", 0.0))
-            new_meta = {
-                k: v
-                for k, v in doc.metadata.items()
-                if k not in ("_v7_passage_idx", "id", "relevance_score")
-            }
+        for result in results[:top_k]:
+            original = text_to_original.get(result["text"], {})
+            vector_score = original.get("vector_score", original.get("score", 0.0))
             reranked.append(
                 {
-                    **orig,
-                    "text": doc.page_content,
-                    "metadata": new_meta,
+                    **original,
                     "vector_score": vector_score,
-                    "score": round(relevance, 4),
+                    "score": round(float(result["score"]), 4),
+                }
+            )
+        return reranked
+
+    return _rerank
+
+
+def make_crossencoder_rerank_fn(
+    model_name: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    batch_size: int = 32,
+) -> Callable[[str, List[dict], int], List[dict]]:
+    """CrossEncoder reranker with sigmoid normalization to [0, 1].
+
+    Multilingual (works on Russian). Raw logits (~-5..+7) are squashed via
+    sigmoid so triage thresholds calibrated on FlashRank (HARD=0.50, SOFT=0.38)
+    keep their meaning.
+    """
+    import math
+
+    from sentence_transformers import CrossEncoder
+
+    _model = CrossEncoder(model_name)
+
+    def _sigmoid(x: float) -> float:
+        if x >= 0:
+            z = math.exp(-x)
+            return 1.0 / (1.0 + z)
+        z = math.exp(x)
+        return z / (1.0 + z)
+
+    def _rerank(query: str, passages: List[dict], top_k: int) -> List[dict]:
+        if not passages:
+            return passages
+
+        pairs = [(query, p.get("text", "")) for p in passages]
+        raw_scores = _model.predict(pairs, batch_size=batch_size)
+        scored = [(p, _sigmoid(float(s))) for p, s in zip(passages, raw_scores)]
+        scored.sort(key=lambda item: item[1], reverse=True)
+
+        reranked: List[dict] = []
+        for original, score in scored[:top_k]:
+            vector_score = original.get("vector_score", original.get("score", 0.0))
+            reranked.append(
+                {
+                    **original,
+                    "vector_score": vector_score,
+                    "score": round(score, 4),
                 }
             )
         return reranked
@@ -160,25 +188,22 @@ def make_vector_search_fn(vector_store) -> Callable[..., List[dict]]:
 
 def make_section_fetch_fn(
     vector_store,
-    max_section_chunks: int = 30,
+    max_section_chunks: int = 50,
+    anchor_count: int = 3,
 ) -> Callable[[List[dict]], List[dict]]:
     """Create a section-aware expander from ChromaDB store.
 
-    Takes the top anchor passage, extracts parent_section + source from its metadata,
-    and fetches all chunks from that section (up to max_section_chunks).
+    Takes the top N anchor passages, extracts parent_section + source from each,
+    and fetches all chunks from those sections (up to max_section_chunks per anchor).
+    Multiple anchors help when the answer is scattered across sections from
+    different sources (e.g. ст.229 ТК + 223н разд.III for one question).
     Returns passages not already in the input list.
     """
 
-    def _fetch_section(passages: List[dict]) -> List[dict]:
-        if not passages:
-            return []
-        anchor_meta = passages[0].get("metadata", {})
-        section = (anchor_meta.get("parent_section") or "").strip()
-        source = anchor_meta.get("source", "")
+    def _fetch_one_section(section: str, source: str) -> List[dict]:
         if not section or not source:
             return []
         try:
-            # VectorStoreBackend (Protocol) exposes get_by_filter; raw Chroma uses _collection.
             if isinstance(vector_store, VectorStoreBackend):
                 docs = vector_store.get_by_filter(
                     {
@@ -212,13 +237,29 @@ def make_section_fetch_fn(
                     {
                         "text": doc,
                         "metadata": dict(meta),
-                        "score": 0.0,  # no vector score for fetched chunks
+                        "score": 0.0,
                     }
                 )
             return extra
         except Exception as exc:
             logger.warning("section_fetch failed: %s", exc)
             return []
+
+    def _fetch_section(passages: List[dict]) -> List[dict]:
+        if not passages:
+            return []
+        seen_sections: set[tuple[str, str]] = set()
+        out: List[dict] = []
+        for anchor in passages[:anchor_count]:
+            meta = anchor.get("metadata", {})
+            section = (meta.get("parent_section") or "").strip()
+            source = meta.get("source", "")
+            key = (section, source)
+            if not section or not source or key in seen_sections:
+                continue
+            seen_sections.add(key)
+            out.extend(_fetch_one_section(section, source))
+        return out
 
     return _fetch_section
 
@@ -427,7 +468,92 @@ def expand_cross_references(
         except Exception:
             pass
 
-    return passages + extra
+    # ── Mechanism 3: numbered-list expansion ─────────────────────────────────
+    # If a passage starts with "N. а)" (subparagraph of a numbered list), pull
+    # sibling subparagraphs "N. б)", "N. в)" ... from the same source so the
+    # full enumeration is available for generation.
+    _SUBPARA_RE = re.compile(r"^\s*(\d+)\.\s+[а-яё]\)", re.IGNORECASE)
+    for passage in list(passages):  # iterate original only
+        text = passage.get("text", "")
+        m = _SUBPARA_RE.match(text)
+        if not m:
+            continue
+        para_num = m.group(1)
+        source = passage.get("metadata", {}).get("source", "")
+        if not source:
+            continue
+        try:
+            docs = backend.get_by_filter(where={"source": source}, limit=500)
+            for doc in docs:
+                if _SUBPARA_RE.match(doc.page_content) and doc.page_content.startswith(
+                    para_num + "."
+                ):
+                    _add(doc.page_content, doc.metadata)
+        except Exception:
+            continue
+
+    # ── Mechanism 4: same-bbox block expansion ───────────────────────────────
+    # HybridChunker sometimes splits one PDF text block into multiple chunks
+    # that share the same source + page_no + bbox. Pull all siblings so a
+    # truncated sentence ("связана с ...") gets its continuation.
+    # Siblings inherit the parent passage score so they rank alongside it.
+    bbox_extra: list[dict] = []
+
+    def _add_bbox(text: str, metadata: dict, parent_score: float) -> None:
+        if text and text not in existing_texts:
+            existing_texts.add(text)
+            bbox_extra.append(
+                {
+                    "text": text,
+                    "score": parent_score,
+                    "metadata": metadata,
+                    "cross_ref": True,
+                }
+            )
+
+    for passage in list(passages):  # iterate original only
+        meta = passage.get("metadata", {})
+        source = meta.get("source", "")
+        page_no = meta.get("page_no")
+        bbox = meta.get("bbox")
+        if not (source and page_no is not None and bbox):
+            continue
+        parent_score = passage.get("score", 0.35)
+        try:
+            docs = backend.get_by_filter(where={"source": source}, limit=500)
+            for doc in docs:
+                dm = doc.metadata
+                if (
+                    dm.get("page_no") == page_no
+                    and dm.get("bbox") == bbox
+                    and dm.get("source") == source
+                ):
+                    _add_bbox(doc.page_content, doc.metadata, parent_score)
+        except Exception:
+            continue
+
+    # Insert bbox siblings right after their parent passage so they stay adjacent
+    # in the ranked list and don't get pushed past the [:30] cutoff.
+    result: list[dict] = []
+    for passage in passages:
+        result.append(passage)
+        meta = passage.get("metadata", {})
+        source, page_no, bbox = (
+            meta.get("source"),
+            meta.get("page_no"),
+            meta.get("bbox"),
+        )
+        siblings = [
+            p
+            for p in bbox_extra
+            if p["metadata"].get("source") == source
+            and p["metadata"].get("page_no") == page_no
+            and p["metadata"].get("bbox") == bbox
+        ]
+        result.extend(siblings)
+    # Append remaining extra (mechanisms 1-3) at the end
+    result.extend(extra)
+    return result
 
 
 def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]:
@@ -462,6 +588,27 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
         name = raw.split(" - ")[0].replace(".pdf", "").strip()
         return name or "Unknown source"
 
+    def _section_label(passage: dict) -> str:
+        """Extract short section label (parent_section / heading_path) for the chunk.
+
+        Helps the LLM and reranker distinguish similar wording across different
+        normative sections (e.g. Ст.228 vs Ст.228.1).
+        """
+        meta = passage.get("metadata", {}) or {}
+        raw = (meta.get("parent_section") or meta.get("heading_path") or "").strip()
+        if not raw:
+            return ""
+        # Truncate very long section titles
+        return raw[:120] + ("…" if len(raw) > 120 else "")
+
+    def _chunk_header(i: int, passage: dict) -> str:
+        score = _score_label(passage.get("score", 0.0))
+        src = _short_source(passage)
+        section = _section_label(passage)
+        if section:
+            return f"[{i + 1}] ({score}) [Источник: {src}; Раздел: {section}]"
+        return f"[{i + 1}] ({score}) [Источник: {src}]"
+
     def _generate(query: str, active_query: str, passages: List[dict]) -> str:
         if not passages:
             return ""
@@ -475,7 +622,7 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
         # low-ranked but answer-bearing cross-refs (e.g. п.60 for программа В) are included.
         top_passages = expanded[:30]
         passages_text = "\n\n".join(
-            f"[{i + 1}] ({_score_label(p.get('score', 0.0))}) [Источник: {_short_source(p)}]\n{p.get('text', '')}"
+            f"{_chunk_header(i, p)}\n{p.get('text', '')}"
             for i, p in enumerate(top_passages)
         )
         prompt = _pm.render(
@@ -530,18 +677,28 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
     except Exception as exc:
         logger.warning("Failed to initialize section fetch for v7: %s.", exc)
 
-    # Inject FlashRank reranker for complex path and V8 evidence assess (simple path)
+    # Inject reranker (FlashRank or CrossEncoder+sigmoid)
     try:
-        rerank_fn = make_rerank_fn(
-            model_name=settings.RERANKING_MODEL,
-            cache_dir=settings.FLASHRANK_CACHE_DIR,
-        )
+        backend = (settings.RERANKER_BACKEND or "flashrank").lower()
+        if backend == "crossencoder":
+            rerank_fn = make_crossencoder_rerank_fn(
+                model_name=settings.CROSSENCODER_MODEL,
+            )
+            logger.info(
+                "v7 CrossEncoder reranker injected (model=%s)",
+                settings.CROSSENCODER_MODEL,
+            )
+        else:
+            rerank_fn = make_rerank_fn(
+                model_name=settings.RERANKING_MODEL,
+                cache_dir=settings.FLASHRANK_CACHE_DIR,
+            )
+            logger.info("v7 FlashRank reranker injected successfully")
         rag_complex_mod.set_rerank_fn(rerank_fn)
         rag_simple_mod.set_reranker(rerank_fn)
-        logger.info("v7 FlashRank reranker injected successfully")
     except Exception as exc:
         logger.warning(
-            "Failed to initialize FlashRank for v7: %s. Complex path will skip reranking.",
+            "Failed to initialize reranker for v7: %s. Complex path will skip reranking.",
             exc,
         )
 

@@ -69,7 +69,14 @@ def load_dataset(path: Path) -> list[dict[str, str]]:
             q = row.get("question", "").strip()
             gt = row.get("ground_truth", "").strip()
             if q and gt:
-                rows.append({"question": q, "ground_truth": gt})
+                rows.append(
+                    {
+                        "question": q,
+                        "ground_truth": gt,
+                        "oos_type": (row.get("oos_type") or "").strip(),
+                        "must_not_contain": (row.get("must_not_contain") or "").strip(),
+                    }
+                )
     return rows
 
 
@@ -186,6 +193,7 @@ def run(
     for i, item in enumerate(dataset, 1):
         question = item["question"]
         ground_truth = item["ground_truth"]
+        oos_type = item.get("oos_type", "")
         print(f"[{i}/{len(dataset)}] {question[:70]}...")
 
         # Run graph
@@ -252,6 +260,7 @@ def run(
             "path": path,
             "elapsed_sec": run_result["elapsed_sec"],
             "retrieval_attempts": run_result["retrieval_attempts"],
+            "oos_type": oos_type,
             **faithfulness,
             **relevance,
             **correctness,
@@ -289,9 +298,26 @@ def run(
     }
 
     if not skip_judge:
+        # Split: in-scope vs OOS
+        in_scope = [r for r in valid if not r.get("oos_type")]
+        oos_results = [r for r in valid if r.get("oos_type") == "out_of_scope"]
+        n_in_scope = len(in_scope) or 1
+
         avg_faith = sum(r.get("faithfulness_score", 0) for r in valid) / n
         avg_rel = sum(r.get("answer_relevance_score", 0) for r in valid) / n
         avg_correct = sum(r.get("correctness_score", 0) for r in valid) / n
+        # In-scope only correctness (excludes OOS noise)
+        avg_correct_inscope = (
+            sum(r.get("correctness_score", 0) for r in in_scope) / n_in_scope
+        )
+        # OOS rejection rate: empty answer or abstain = correct rejection
+        oos_rejected = sum(
+            1
+            for r in oos_results
+            if not r.get("answer") or "нет" in r.get("answer", "").lower()[:50]
+        )
+        oos_rejection_rate = len(oos_results) and oos_rejected / len(oos_results)
+
         simple_path = [r for r in valid if r.get("path") == "simple"]
         false_sufficiency_cases = [
             r
@@ -306,6 +332,8 @@ def run(
                 "faithfulness": round(avg_faith, 3),
                 "answer_relevance": round(avg_rel, 3),
                 "correctness_mean": round(avg_correct, 2),
+                "correctness_inscope": round(avg_correct_inscope, 2),
+                "oos_rejection_rate": round(oos_rejection_rate, 3),
                 "false_sufficiency_rate": round(false_sufficiency_rate, 3),
             }
         )
@@ -334,8 +362,12 @@ def run(
         print(
             f"  Answer Relevance:      {aggregate['answer_relevance']:.3f}  (target >0.85)"
         )
+        print(f"  Correctness (all):     {aggregate['correctness_mean']:.1f}/10")
         print(
-            f"  Correctness:           {aggregate['correctness_mean']:.1f}/10  (target >7.5)"
+            f"  Correctness (in-scope):{aggregate['correctness_inscope']:.1f}/10  (target >7.5)"
+        )
+        print(
+            f"  OOS rejection rate:    {aggregate['oos_rejection_rate']:.1%}  (target >90%)"
         )
         print(
             f"  False-sufficiency:     {aggregate['false_sufficiency_rate']:.1%}  (target <10%)"
