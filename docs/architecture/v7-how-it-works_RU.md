@@ -34,7 +34,7 @@
 - **LangGraph StateGraph** — детерминированный граф состояний
 
 ### Eval
-- **`eval/run_v7_eval.py`** — прогон golden-датасета через V7-граф, LLM-as-judge метрики. См. [docs/evaluation/README.md](../evaluation/README.md)
+- **`eval/run_v7_eval.py`** — прогон golden-датасета через V7-граф, LLM-as-judge метрики. См. [docs/evaluation/README_RU.md](../evaluation/README_RU.md)
 
 ---
 

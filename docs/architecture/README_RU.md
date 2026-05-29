@@ -2,7 +2,7 @@
 
 Regulatory RAG — система retrieval-augmented generation для российских нормативных документов (ГОСТ, ТК РФ, СНиП, СП). Отвечает на вопросы о соответствии нормативным требованиям: извлекает релевантные фрагменты из проиндексированного корпуса и синтезирует ответ с помощью Gemini.
 
-См. также: [Как работает пайплайн V7](./v7-how-it-works.md) · [Как работает triage](./triage-how-it-works.md)
+См. также: [Как работает пайплайн V7](./v7-how-it-works_RU.md) · [Как работает triage](./triage-how-it-works_RU.md)
 
 ---
 
@@ -47,5 +47,5 @@ Regulatory RAG — система retrieval-augmented generation для росс
 
 ## Дополнительно
 
-- [v7-how-it-works.md](./v7-how-it-works.md) — подробное описание каждой ноды, hard gates и калибровки порогов
-- [triage-how-it-works.md](./triage-how-it-works.md) — глубокое погружение в метрики `evaluate_triage` и 3-way routing
+- [v7-how-it-works_RU.md](./v7-how-it-works_RU.md) — подробное описание каждой ноды, hard gates и калибровки порогов
+- [triage-how-it-works_RU.md](./triage-how-it-works_RU.md) — глубокое погружение в метрики `evaluate_triage` и 3-way routing

@@ -54,4 +54,4 @@ JSONL: каждая строка — `{aggregate, results, dataset_size, valid_r
 ## См. также
 
 - [Бенчмарки и baseline](./../../benchmarks/README.md)
-- [Добавление вопросов в датасет](../guides/adding-questions.md)
+- [Добавление вопросов в датасет](../guides/adding-questions_RU.md)

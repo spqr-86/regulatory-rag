@@ -80,7 +80,7 @@ python eval/run_v7_eval.py                 # полный eval с gpt-4o-mini ju
 python eval/run_v7_eval.py --limit 5       # smoke test
 ```
 
-Результаты записываются в `benchmarks/eval_v7_{date}.jsonl`. См. [evaluation/README.md](../evaluation/README.md).
+Результаты записываются в `benchmarks/eval_v7_{date}.jsonl`. См. [evaluation/README_RU.md](../evaluation/README_RU.md).
 
 ## Тесты
 
