@@ -27,14 +27,15 @@ User query
     ↓
 intent_gate          — regex filter, drops noise before retrieval
     ↓
-router               — query plan + domain glossary expansion
+domain_gate          — cosine-to-centroid OOS filter, abstains before retrieval
     ↓
-rag_simple           — hybrid retrieval (BM25 + vectors, top-12) + FlashRank rerank
+router               — query plan + glossary expansion + multi-query (RRF merge)
+    ↓
+rag_simple           — hybrid retrieval (BM25 + vectors, top-12) + CrossEncoder rerank
     ↓
 evaluate_triage      — deterministic hard gates (no LLM scoring)
-    ├── sufficient   → generate_answer (OpenAI GPT-4o)
-    ├── borderline   → llm_verifier → rewrite → rag_simple (one retry)
-    └── clearly_bad  → rag_complex (top-60 + MMR) → evaluate_complex
+    ├── sufficient    → generate_answer (OpenAI GPT-4o)
+    └── insufficient  → rag_complex (top-60 + MMR) → evaluate_complex
                             ├── pass  → generate_answer
                             └── fail  → abstain (explicit refusal)
 ```
@@ -97,18 +98,16 @@ flowchart TD
     subgraph V7 [V7 LangGraph Pipeline]
         Q[Query] --> Gate{intent_gate}
         Gate -->|noise| End[END]
-        Gate -->|domain| Router[router + glossary]
-        Router --> Simple[rag_simple hybrid top-12 + FlashRank]
+        Gate -->|domain| Domain{domain_gate}
+        Domain -->|out-of-scope| Abstain[abstain]
+        Domain -->|in-domain| Router[router + glossary + multi-query]
+        Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
         Simple --> Triage{evaluate_triage hard gates}
         Triage -->|sufficient| Gen[generate_answer OpenAI]
-        Triage -->|borderline| Verifier[llm_verifier]
-        Triage -->|clearly_bad| Complex[rag_complex top-60 + MMR]
-        Verifier -->|ok| Gen
-        Verifier -->|rewrite| Rewriter[rewriter] --> Simple
-        Verifier -->|escalate| Complex
+        Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
         Complex --> Eval[evaluate_complex hard gates]
         Eval -->|pass| Gen
-        Eval -->|fail| Abstain[abstain]
+        Eval -->|fail| Abstain
         Gen --> Answer[Answer + sources]
     end
 ```
@@ -172,7 +171,7 @@ Interactive docs: `http://localhost:8503/docs`
 | LLM | Gemini, OpenAI, DeepSeek — configurable per path via `SIMPLE/COMPLEX_LLM_PROVIDER` in `.env` |
 | Embeddings | OpenAI text-embedding-3-small |
 | Vector store | ChromaDB |
-| Reranking | FlashRank Cross-Encoder |
+| Reranking | CrossEncoder (sentence-transformers); FlashRank selectable via `RERANKER_BACKEND` |
 | ETL | Docling (PDF/DOCX → chunks) |
 | Evaluation | Ragas + custom LLM-as-judge |
 | UI | Streamlit |
@@ -229,16 +228,19 @@ No code changes needed — edit the YAML and restart.
 
 ## Project status
 
-- ✅ V7 LangGraph pipeline — all nodes, deterministic routing
+- ✅ V7 LangGraph pipeline — all nodes, deterministic routing (verifier/rewriter retired — insufficient triage routes straight to rag_complex)
 - ✅ Hybrid retrieval — BM25 + semantic, two-stage (simple/complex path)
 - ✅ Hard gate thresholds — score-based, no LLM decisions in routing
+- ✅ Domain gate — pre-retrieval OOS filter via cosine similarity to corpus centroid
 - ✅ HybridChunker v3 — structure-aware chunking aligned to document sections/articles
+- ✅ Contextual embedding — parent-section heading prepended to each chunk vector (lightweight Contextual Retrieval)
 - ✅ Cross-reference expansion — auto-fetches referenced clauses (e.g. "пункт 46") from same source
-- ✅ Multi-query expansion — LLM generates 3 query variants, RRF merge
-- ✅ Eval framework — 57-question golden dataset, overall score 0.80
+- ✅ Multi-query expansion — LLM generates query variants, RRF merge
+- ✅ Versioned prompts — Jinja2 templates, registry trimmed to 3 live families; `generate_answer` v8 (anti-sycophancy + value↔condition binding)
+- ✅ Eval framework — golden dataset, overall score 0.80, faithfulness 0.988
 - ✅ GOST RAG — 108 docs, 9,344 chunks, separate ChromaDB collection
 - ✅ Deployed on VPS (port 8502, Streamlit)
-- 🔄 Contextual retrieval (+35-49% recall expected)
+- 🔄 Value↔condition robustness on multi-value queries (e.g. program-type periodicity)
 - 🔄 Corpus expansion (SOAT methodology, fire safety details)
 
 ---
