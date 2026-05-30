@@ -60,7 +60,7 @@ streamlit run app.py --server.port 8502
 ```
 
 Open `http://localhost:8502`. The query goes through the V7 graph:
-`intent_gate → router → rag_simple → evaluate_triage → [llm_verifier/rag_complex] → generate_answer`
+`intent_gate → router → rag_simple → evaluate_triage → [rag_complex] → generate_answer` (insufficient results escalate to `rag_complex`, then answer or abstain)
 
 ## Run the API
 

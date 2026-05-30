@@ -6,7 +6,9 @@
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Overall score: 0.80 · Faithfulness: 0.988 · Cost: $0.01/query**
+**In-scope correctness: 7.4/10 · Faithfulness: 0.86 · OOS abstain: 1.00 · Cost: $0.01/query**
+
+> Metrics from the latest eval (`gpt-4o` judge). The reasoning behind the architecture is in [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
 
 [Russian README →](./README_RU.md)
 
@@ -45,21 +47,27 @@ Key design decisions:
 - **Abstain > hallucinate** — system refuses to answer when retrieval confidence is low
 - **Two-stage retrieval** — fast path handles most queries; slow path activates only when needed
 
+📖 **Docs:** [architecture](./docs/explanation/architecture.md) · [design decisions](./docs/explanation/design-decisions.md) · [full documentation](./docs/README.md)
+
 ---
 
 ## Metrics
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| Overall score (LLM-as-judge, 0–1) | **0.80** | > 0.85 |
-| In-scope correctness | **0.72** | > 0.80 |
+| In-scope correctness (LLM-as-judge, 0–10) | **7.44** | > 7.5 |
+| Correctness, all questions | **7.39** | > 7.5 |
+| Faithfulness (no hallucinations, 0–1) | **0.859** | > 0.85 |
+| Answer relevance (0–1) | **0.872** | > 0.85 |
 | OOS abstain rate | **1.00** | > 0.90 |
-| False-premise detection | **0.87** | > 0.85 |
-| Faithfulness (no hallucinations) | **0.988** | > 0.85 |
+| False-sufficiency rate | **0.098** | < 0.10 |
 | Cost per query | **$0.0102** | — |
-| Avg latency | ~8s (simple path) | — |
+| Avg latency | **9.7s** | — |
 
-Eval: 57-question golden dataset, `eval/run_v7_eval.py`. LLM judge: GPT-4o.
+Eval: 57-question golden dataset (54 valid), `eval/run_v7_eval.py`, judge `gpt-4o`
+(`benchmarks/eval_v7_2026-05-30_chunkid.jsonl`). Numbers are judge-dependent — the current
+judge is stricter than earlier runs, so absolute values are lower but better calibrated.
+Canonical values: [docs/reference/FACTS.md](./docs/reference/FACTS.md).
 
 ---
 
@@ -237,7 +245,7 @@ No code changes needed — edit the YAML and restart.
 - ✅ Cross-reference expansion — auto-fetches referenced clauses (e.g. "пункт 46") from same source
 - ✅ Multi-query expansion — LLM generates query variants, RRF merge
 - ✅ Versioned prompts — Jinja2 templates, registry trimmed to 3 live families; `generate_answer` v8 (anti-sycophancy + value↔condition binding)
-- ✅ Eval framework — golden dataset, overall score 0.80, faithfulness 0.988
+- ✅ Eval framework — golden dataset, in-scope correctness 7.4/10, faithfulness 0.86
 - ✅ GOST RAG — 108 docs, 9,344 chunks, separate ChromaDB collection
 - ✅ Deployed on VPS (port 8502, Streamlit)
 - 🔄 Value↔condition robustness on multi-value queries (e.g. program-type periodicity)
