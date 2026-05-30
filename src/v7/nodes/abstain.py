@@ -11,11 +11,8 @@ def abstain(state: RAGState) -> RAGState:
     """Honest refusal with detailed diagnostics."""
     details = state.get("sufficiency_details")
     query = state.get("query", "")
-    active_q = state.get("active_query", query)
     attempts = state.get("retrieval_attempts") or []
     plan = state.get("plan") or {}
-    verification = state.get("verification")
-    iteration = state.get("verify_iteration", 0)
 
     reasons: List[str] = []
 
@@ -33,17 +30,6 @@ def abstain(state: RAGState) -> RAGState:
                 f"(порог {min_kw:.0%}), "
                 f"original={details['keyword_overlap_original']:.0%}"
             )
-
-    if verification:
-        reasons.append(f"LLM-верификатор: {verification.get('reason', '—')}")
-        missing = verification.get("missing_aspects", [])
-        if missing:
-            reasons.append(f"недостающие аспекты: {', '.join(missing)}")
-
-    if iteration > 0:
-        reasons.append(f"выполнено {iteration} переформулировок")
-        if active_q != query:
-            reasons.append(f'последний запрос: "{active_q[:60]}"')
 
     if not reasons:
         reasons.append("контекст недостаточен для ответа")

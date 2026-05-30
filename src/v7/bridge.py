@@ -5,18 +5,17 @@ Responsibilities:
 2. Build BM25 corpus from ChromaDB docs
 3. Inject search functions into rag_simple / rag_complex nodes
 4. Inject FlashRank reranker into rag_complex
-5. Inject LLM-backed verify, rewrite, and generate functions
+5. Inject LLM-backed generate and expand functions
 """
 
 from __future__ import annotations
 
 import re
 import threading
-from typing import Callable, List, Literal
+from typing import Callable, List
 
 import structlog
 from langchain_core.messages import HumanMessage
-from pydantic import BaseModel, Field
 
 from src.backends.vector_store import (
     VectorStoreBackend,
@@ -28,14 +27,9 @@ from src.infra.parsers import (
 from src.infra.prompt_manager import PromptManager
 from src.v7.nlp_core import init_bm25_index
 from src.v7.nodes import generate_answer as generate_answer_mod
-from src.v7.nodes import llm_verifier as llm_verifier_mod
 from src.v7.nodes import rag_complex as rag_complex_mod
 from src.v7.nodes import rag_simple as rag_simple_mod
-from src.v7.nodes import rewriter as rewriter_mod
 from src.v7.nodes import visual_enrichment as visual_enrichment_mod
-from src.v7.nodes.llm_verifier import VERIFIER_SYSTEM_PROMPT
-from src.v7.nodes.utils import extract_doc_identifiers
-from src.v7.state_types import VerificationResult
 
 logger = structlog.get_logger()
 _pm = PromptManager()
@@ -262,110 +256,6 @@ def make_section_fetch_fn(
         return out
 
     return _fetch_section
-
-
-class _VerifierVerdictSchema(BaseModel):
-    """Pydantic schema for structured verifier output (Gemini → typed object).
-
-    Maps 1:1 to ``VerificationResult`` TypedDict; the name is suffixed with
-    ``Schema`` to avoid clashing with the ``VerifierVerdict`` Literal alias
-    declared in ``state_types``.
-    """
-
-    verdict: Literal["sufficient", "rewrite", "escalate"]
-    reason: str = ""
-    rewrite_hint: str = ""
-    missing_aspects: List[str] = Field(default_factory=list)
-    confidence: float = 0.0
-
-
-def make_verify_fn(llm) -> Callable[..., VerificationResult]:
-    """Create a v7-compatible verify function backed by Gemini LLM.
-
-    Uses ``llm.with_structured_output(_VerifierVerdictSchema)`` so Gemini
-    returns a typed Pydantic object directly — no regex/braces JSON parsing,
-    no «could not parse JSON» warnings on malformed responses.
-    """
-    structured_llm = llm.with_structured_output(_VerifierVerdictSchema)
-
-    def _verify(
-        original_query: str, active_query: str, passages: List[dict]
-    ) -> VerificationResult:
-        passages_text = "\n\n".join(
-            f"[{i + 1}] (score={p.get('score', 'N/A')}): {p.get('text', '')}"
-            for i, p in enumerate(passages)
-        )
-        prompt = (
-            f"{VERIFIER_SYSTEM_PROMPT}\n\n"
-            f"Запрос пользователя: {original_query}\n"
-            f"Активный запрос: {active_query}\n\n"
-            f"Найденные passages ({len(passages)}):\n{passages_text}"
-        )
-        try:
-            verdict_obj = structured_llm.invoke([HumanMessage(content=prompt)])
-            if verdict_obj is None:
-                raise ValueError("Structured output returned None")
-            return VerificationResult(
-                verdict=verdict_obj.verdict,
-                reason=verdict_obj.reason,
-                rewrite_hint=verdict_obj.rewrite_hint,
-                missing_aspects=list(verdict_obj.missing_aspects),
-                confidence=float(verdict_obj.confidence),
-            )
-        except Exception as exc:
-            logger.warning("LLM verify failed: %s", exc)
-            return VerificationResult(
-                verdict="escalate",
-                reason=f"LLM parse error: {type(exc).__name__}",
-                missing_aspects=[],
-                confidence=0.0,
-            )
-
-    return _verify
-
-
-def make_rewrite_fn(llm) -> Callable[..., str]:
-    """Create a v7-compatible rewrite function backed by Gemini LLM."""
-
-    def _rewrite(
-        original_query: str,
-        active_query: str,
-        rewrite_hint: str,
-        missing_aspects: List[str],
-    ) -> str:
-        protected_ids = extract_doc_identifiers(original_query)
-        aspects_str = ", ".join(missing_aspects) if missing_aspects else ""
-        prompt = (
-            "Переформулируй поисковый запрос для поиска в базе нормативных документов.\n"
-            "Сохрани ВСЕ номера документов (ГОСТ, СП, СНиП и т.д.) из исходного запроса.\n\n"
-            f"Исходный запрос: {original_query}\n"
-            f"Текущий запрос: {active_query}\n"
-            f"Подсказка: {rewrite_hint}\n"
-            f"Недостающие аспекты: {aspects_str}\n\n"
-            "Верни ТОЛЬКО переформулированный запрос, без пояснений."
-        )
-        try:
-            response = llm.invoke([HumanMessage(content=prompt)])
-            rewritten = extract_text(response.content).strip()
-            if not rewritten:
-                raise ValueError("Empty rewrite response")
-            # Protect doc identifiers
-            for doc_id in protected_ids:
-                if doc_id not in rewritten:
-                    rewritten = f"{rewritten} [{doc_id}]"
-            return rewritten
-        except Exception as exc:
-            logger.warning("LLM rewrite failed: %s, falling back to stub", exc)
-            # Fallback to stub logic
-            rewritten = (
-                f"{original_query} ({aspects_str})" if aspects_str else original_query
-            )
-            for doc_id in protected_ids:
-                if doc_id not in rewritten:
-                    rewritten = f"{rewritten} [{doc_id}]"
-            return rewritten
-
-    return _rewrite
 
 
 def make_expand_fn(llm, n: int = 3) -> Callable[[str, int], List[str]]:
@@ -649,7 +539,7 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
     2. Injects it into rag_simple and rag_complex nodes
     3. Builds BM25 index from full corpus
     4. Injects FlashRank reranker into rag_complex
-    5. Injects LLM-backed verify, rewrite, and generate functions (if provider available)
+    5. Injects LLM-backed generate and expand functions (if provider available)
     """
     from config.settings import settings
 
@@ -706,20 +596,11 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
                 exc,
             )
 
-        # Inject LLM-backed verify, rewrite, generate, and expand functions
+        # Inject LLM-backed generate and expand functions
         if llm_provider:
             try:
-                verifier_llm = get_complex_llm(
-                    thinking_budget=1024, response_mime_type="application/json"
-                )
-                llm_verifier_mod.set_verify_fn(make_verify_fn(verifier_llm))
-
-                rewriter_llm = get_complex_llm(thinking_budget=1024)
-                rewriter_mod.set_rewrite_fn(make_rewrite_fn(rewriter_llm))
-
                 # Split generators: cheap model for the simple path, full-quality
-                # model for the complex path (where verifier/rewriter already paid
-                # the latency tax — answer quality dominates CPS savings).
+                # model for the complex path (answer quality dominates CPS savings).
                 generator_llm_complex = get_complex_llm(thinking_budget=4096)
                 generator_llm_simple = get_simple_llm(thinking_budget=4096)
                 xref_backend = (
@@ -737,12 +618,10 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
                 expander_llm = get_simple_llm(thinking_budget=0)
                 rag_simple_mod.set_expand_fn(make_expand_fn(expander_llm))
 
-                logger.info(
-                    "v7 LLM verifier, rewriter, generator, and expander injected successfully"
-                )
+                logger.info("v7 LLM generator and expander injected successfully")
             except Exception as exc:
                 logger.warning(
-                    "Failed to initialize LLM for v7 verifier/rewriter/generator: %s. "
+                    "Failed to initialize LLM for v7 generator: %s. "
                     "Using rule-based stubs.",
                     exc,
                 )

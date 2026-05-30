@@ -22,12 +22,6 @@ class TestLiteralTypes:
         val: TriageCategory = "sufficient"
         assert val in ("sufficient", "borderline", "clearly_bad")
 
-    def test_verifier_verdict_values(self):
-        from src.v7.state_types import VerifierVerdict
-
-        val: VerifierVerdict = "rewrite"
-        assert val in ("sufficient", "rewrite", "escalate")
-
     def test_routing_literal_types_exist(self):
         from src.v7.state_types import (
             NextAfterIntent,
@@ -180,29 +174,6 @@ class TestSufficiencyResult:
         assert set(SufficiencyResult.__annotations__) == expected_keys
 
 
-class TestVerificationResult:
-    def test_partial_result(self):
-        from src.v7.state_types import VerificationResult
-
-        result: VerificationResult = {
-            "verdict": "sufficient",
-            "confidence": 0.9,
-        }
-        assert result["verdict"] == "sufficient"
-
-    def test_has_expected_keys(self):
-        from src.v7.state_types import VerificationResult
-
-        expected_keys = {
-            "verdict",
-            "reason",
-            "rewrite_hint",
-            "missing_aspects",
-            "confidence",
-        }
-        assert set(VerificationResult.__annotations__) == expected_keys
-
-
 class TestRAGState:
     def test_minimal_state(self):
         from src.v7.state_types import RAGState
@@ -222,8 +193,6 @@ class TestRAGState:
         assert "active_query" in annotations
         assert "retrieval_attempts" in annotations
         assert "sufficient" in annotations
-        assert "verify_iteration" in annotations
-        assert "verification" in annotations
         assert "final_passages" in annotations
         assert "final_score" in annotations
         assert "fallback_passages" in annotations
@@ -244,11 +213,6 @@ class TestRAGState:
 
 
 class TestConstants:
-    def test_max_verify_iterations(self):
-        from src.v7.state_types import MAX_VERIFY_ITERATIONS
-
-        assert MAX_VERIFY_ITERATIONS == 2
-
     def test_allowed_filter_keys(self):
         from src.v7.state_types import ALLOWED_FILTER_KEYS
 

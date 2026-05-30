@@ -16,10 +16,7 @@ def make_retrieval_id(query: str, filters: Optional[dict] = None) -> str:
 
 
 def extract_doc_identifiers(text: str) -> set[str]:
-    """Extract regulatory document identifiers (СП, ГОСТ, СНиП, ФЗ, НПБ...).
-
-    Used by the rewriter to protect against query drift.
-    """
+    """Extract regulatory document identifiers (СП, ГОСТ, СНиП, ФЗ, НПБ...)."""
     patterns = [
         r"(?:СП|ГОСТ|СНиП|ФЗ|НПБ|ПБ|ВНТП|ВСН|РД|ППБ)\s*Р?\s*[\d\.\-\*]+",
     ]

@@ -7,6 +7,7 @@ import pytest
 from src.v7.nodes.evaluate_triage import (
     _count_crossref_hits,
     _has_enumeration_intent,
+    _legacy_triage,
     evaluate_triage,
     route_after_triage,
 )
@@ -44,7 +45,9 @@ class TestEvaluateTriage:
             "retrieval_attempts": [_make_attempt(passages)],
             "plan": {},
         }
-        result = evaluate_triage(state)
+        # Tests the legacy 3-way gate directly (V8 evidence_assess is the default
+        # path when the flag is on; this asserts the legacy sufficient branch).
+        result = _legacy_triage(state)
         assert result["sufficient"] is True
         assert result["final_passages"] == passages
 
@@ -165,13 +168,15 @@ class TestRouteAfterTriage:
         )
 
     @pytest.mark.unit
-    def test_borderline_routes_verifier(self):
+    def test_borderline_routes_complex(self):
+        # Legacy borderline → llm_verifier route was removed; all insufficient
+        # verdicts now route to rag_complex.
         state = {
             "sufficient": False,
             "sufficiency_details": {"triage": "borderline"},
             "query": "ограждение лестница",
         }
-        assert route_after_triage(state) == "llm_verifier"
+        assert route_after_triage(state) == "rag_complex"
 
     @pytest.mark.unit
     def test_clearly_bad_routes_complex(self):
@@ -277,7 +282,7 @@ class TestCrossrefSignal:
             "retrieval_attempts": [_make_attempt(passages)],
             "plan": {},
         }
-        result = evaluate_triage(state)
+        result = _legacy_triage(state)
         # If crossref_hits >= threshold → not sufficient, fallback saved
         from src.v7.nodes.evaluate_triage import (
             _count_crossref_hits,
@@ -316,6 +321,6 @@ class TestCrossrefSignal:
             "retrieval_attempts": [_make_attempt(passages)],
             "plan": {},
         }
-        result = evaluate_triage(state)
+        result = _legacy_triage(state)
         # No crossrefs → sufficient should remain True
         assert result["sufficient"] is True

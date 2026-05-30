@@ -62,7 +62,7 @@ def _classify_query(q: str) -> tuple[bool, float]:
 
 
 def router(state: RAGState) -> RAGState:
-    """Reads: query, filters. Writes: plan, retrieval_id, active_query, verify_iteration."""
+    """Reads: query, filters. Writes: plan, retrieval_id, active_query."""
     q = (state.get("query") or "").strip()
     filters = state.get("filters")
 
@@ -94,7 +94,6 @@ def router(state: RAGState) -> RAGState:
         "plan": plan,
         "retrieval_id": make_retrieval_id(q, validate_filters(filters)),
         "active_query": expand_query_with_glossary(q),
-        "verify_iteration": 0,
         # State cleanup
         "clarify_message": None,
         "abstain_reason": None,

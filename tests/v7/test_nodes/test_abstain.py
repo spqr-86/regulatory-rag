@@ -29,32 +29,6 @@ class TestAbstain:
         assert "ниже порога" in result["abstain_reason"]
 
     @pytest.mark.unit
-    def test_includes_verification_info(self):
-        state = {
-            "query": "test",
-            "retrieval_attempts": [],
-            "verification": {
-                "reason": "passages слабые",
-                "missing_aspects": ["конкретика"],
-            },
-        }
-        result = abstain(state)
-        assert "passages слабые" in result["abstain_reason"]
-        assert "конкретика" in result["abstain_reason"]
-
-    @pytest.mark.unit
-    def test_includes_rewrite_info(self):
-        state = {
-            "query": "оригинальный запрос",
-            "active_query": "переформулированный запрос",
-            "retrieval_attempts": [],
-            "verify_iteration": 2,
-        }
-        result = abstain(state)
-        assert "2 переформулировок" in result["abstain_reason"]
-        assert "переформулированный" in result["abstain_reason"]
-
-    @pytest.mark.unit
     def test_fallback_reason(self):
         """No details, no verification → generic message."""
         state = {"query": "test", "retrieval_attempts": []}

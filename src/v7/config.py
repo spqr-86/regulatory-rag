@@ -21,7 +21,7 @@ class V7Config(BaseSettings):
     # ── Simple path (rag_simple) ───────────────────────────────────────────
     # ChromaDB L2→similarity formula: 1/(1+d). Relevant docs score ~0.44–0.56.
     # Acceptance threshold: >= 0.50 = clearly relevant (direct to generate).
-    # Soft floor: [0.38, 0.50) = uncertain → borderline → llm_verifier decides.
+    # Soft floor: [0.38, 0.50) = uncertain → borderline → rag_complex.
     # Below 0.38 = garbage → clearly_bad → rag_complex.
     HARD_GATE_THRESHOLD: float = 0.50  # plan.threshold (similarity acceptance gate)
     TRIAGE_SOFT_THRESHOLD: float = 0.38  # plan.borderline_threshold (floor)

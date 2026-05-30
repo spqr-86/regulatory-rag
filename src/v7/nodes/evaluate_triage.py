@@ -226,16 +226,7 @@ def route_after_triage(state: RAGState) -> NextAfterTriage:
             return "rag_complex"
         return "end"
 
-    # V8: when evidence_report is present, check verdict to decide routing.
-    # verdict="abstain": route to rag_complex; evaluate_complex will emit abstain
-    #   if passages remain insufficient (rag_complex → evaluate_complex → abstain node).
-    # verdict="improve": route to rag_complex for a broader search attempt.
-    # Both abstain and improve reach rag_complex — the correct downstream path.
-    evidence_report = state.get("evidence_report")
-    if evidence_report is not None:
-        # abstain and improve both go to rag_complex; abstain reaches abstain node via
-        # evaluate_complex. llm_verifier path is not applicable for V8 evidence routing.
-        return "rag_complex"
-
-    triage = (state.get("sufficiency_details") or {}).get("triage", "clearly_bad")
-    return "llm_verifier" if triage == "borderline" else "rag_complex"
+    # Both V8 (evidence_report) and legacy (sufficiency_details) insufficient
+    # verdicts route to rag_complex for a broader search attempt. rag_complex →
+    # evaluate_complex emits abstain via the abstain node if passages stay poor.
+    return "rag_complex"

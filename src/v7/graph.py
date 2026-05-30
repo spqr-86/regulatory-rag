@@ -17,10 +17,8 @@ from src.v7.nodes.evaluate_complex import evaluate_complex, route_after_eval_com
 from src.v7.nodes.evaluate_triage import evaluate_triage, route_after_triage
 from src.v7.nodes.generate_answer import generate_answer
 from src.v7.nodes.intent_gate import intent_gate, route_by_intent
-from src.v7.nodes.llm_verifier import llm_verifier, route_after_verifier
 from src.v7.nodes.rag_complex import rag_complex
 from src.v7.nodes.rag_simple import rag_simple
-from src.v7.nodes.rewriter import rewriter
 from src.v7.nodes.router import clarify_respond, route_after_router, router
 from src.v7.nodes.visual_enrichment import visual_enrichment
 from src.v7.state_types import RAGState
@@ -44,8 +42,6 @@ def build_graph(
         "clarify_respond": clarify_respond,
         "rag_simple": rag_simple,
         "evaluate_triage": evaluate_triage,
-        "llm_verifier": llm_verifier,
-        "rewriter": rewriter,
         "rag_complex": rag_complex,
         "evaluate_complex": evaluate_complex,
         "visual_enrichment": visual_enrichment,
@@ -78,20 +74,9 @@ def build_graph(
         route_after_triage,
         {
             "end": "visual_enrichment",
-            "llm_verifier": "llm_verifier",
             "rag_complex": "rag_complex",
         },
     )
-    g.add_conditional_edges(
-        "llm_verifier",
-        route_after_verifier,
-        {
-            "end": "visual_enrichment",
-            "rewriter": "rewriter",
-            "rag_complex": "rag_complex",
-        },
-    )
-    g.add_edge("rewriter", "rag_simple")
     g.add_edge("rag_complex", "evaluate_complex")
     g.add_conditional_edges(
         "evaluate_complex",

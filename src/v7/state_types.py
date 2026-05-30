@@ -35,18 +35,15 @@ class ScoredDoc(Doc):
 
 Intent = Literal["noise", "domain"]
 TriageCategory = Literal["sufficient", "borderline", "clearly_bad"]
-VerifierVerdict = Literal["sufficient", "rewrite", "escalate"]
 EvidenceVerdict = Literal["answer", "improve", "abstain"]
 
 NextAfterIntent = Literal["end", "router"]
 NextAfterRouter = Literal["rag_simple", "clarify_respond"]
-NextAfterTriage = Literal["end", "llm_verifier", "rag_complex"]
-NextAfterVerifier = Literal["end", "rewriter", "rag_complex"]
+NextAfterTriage = Literal["end", "rag_complex"]
 NextAfterEvalComplex = Literal["end", "abstain"]
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
-MAX_VERIFY_ITERATIONS = 2
 ALLOWED_FILTER_KEYS = frozenset({"doc_type", "doc_id", "section", "category", "year"})
 
 
@@ -146,27 +143,12 @@ class EvidenceReport(TypedDict, total=False):
     passage_count: int
 
 
-class VerificationResult(TypedDict, total=False):
-    """LLM verification result.
-
-    verdict: sufficient / rewrite / escalate.
-    rewrite_hint: instruction for the rewriter.
-    missing_aspects: what is not covered.
-    """
-
-    verdict: VerifierVerdict
-    reason: str
-    rewrite_hint: str
-    missing_aspects: List[str]
-    confidence: float
-
-
 class RAGState(TypedDict, total=False):
     """V7 graph state.
 
     INPUT:     query (immutable), filters.
     INTERNAL:  intent, plan, retrieval_id, active_query,
-               retrieval_attempts, sufficient, verify_iteration, verification.
+               retrieval_attempts, sufficient.
     OUTPUT:    final_passages, final_score, fallback_passages, fallback_score,
                clarify_message, abstain_reason, sufficiency_details.
     UX:        status_message — progress for frontend streaming.
@@ -182,8 +164,6 @@ class RAGState(TypedDict, total=False):
     active_query: str
     retrieval_attempts: Annotated[List[RetrievalAttempt], operator.add]
     sufficient: bool
-    verify_iteration: int
-    verification: VerificationResult
     # OUTPUT
     final_passages: List[dict]
     final_score: float

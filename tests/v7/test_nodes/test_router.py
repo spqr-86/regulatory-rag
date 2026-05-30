@@ -44,7 +44,6 @@ class TestRouter:
         assert "plan" in result
         assert "retrieval_id" in result
         assert "active_query" in result
-        assert result["verify_iteration"] == 0
 
     @pytest.mark.unit
     def test_plan_has_all_fields(self):
