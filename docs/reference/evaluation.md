@@ -1,29 +1,13 @@
-# Evaluation Guide
+# Evaluation — reference
 
-Quality evaluation framework for the V7 pipeline.
+Quality evaluation framework for the V7 pipeline. Current scores: [FACTS](FACTS.md#metrics).
+To run a evaluation, see [how-to/run-evaluation](../how-to/run-evaluation.md).
 
 ## Components
 
-1. **Dataset** — `tests/dataset.csv`. Golden set, columns `question` and `ground_truth`
-   (~57 questions: in-scope + OOS + false-premise).
-2. **Runner** — `eval/run_v7_eval.py`. Runs the dataset through the compiled V7 graph,
-   computes metrics, writes a JSONL report.
-3. **Judge metrics** — `eval/advanced_generation_metrics.py` (`evaluate_faithfulness`,
-   `evaluate_answer_relevance`) + `evaluate_correctness` inside the runner. All three are
-   LLM-as-judge using `gpt-4o-mini` (`JUDGE_LLM_PROVIDER=openai`, configured via `get_judge_llm()`).
-
-## Running
-
-```bash
-source venv/bin/activate
-python eval/run_v7_eval.py                                  # full dataset
-python eval/run_v7_eval.py --skip-judge                     # pipeline only, no LLM judge (~$0)
-python eval/run_v7_eval.py --limit 5                        # quick smoke test
-python eval/run_v7_eval.py --output benchmarks/eval_v7_custom.jsonl
-```
-
-CLI flags: `--limit N` (cap number of questions), `--skip-judge` (no LLM scoring),
-`--output PATH` (default: `benchmarks/eval_v7_{date}.jsonl`).
+1. **Dataset** — `tests/dataset.csv`. Golden set, columns `question` and `ground_truth` (~57 questions: in-scope + OOS + false-premise).
+2. **Runner** — `eval/run_v7_eval.py`. Runs the dataset through the compiled V7 graph, computes metrics, writes a JSONL report.
+3. **Judge metrics** — `eval/advanced_generation_metrics.py` (`evaluate_faithfulness`, `evaluate_answer_relevance`) + `evaluate_correctness` in the runner. All LLM-as-judge via `get_judge_llm()`; judge model in [FACTS](FACTS.md#models).
 
 ## Metrics
 
@@ -31,27 +15,30 @@ CLI flags: `--limit N` (cap number of questions), `--skip-judge` (no LLM scoring
 | :--- | :--- | :--- |
 | **faithfulness** | Answer is grounded in retrieved context (LLM judge, 0–1) | > 0.85 |
 | **answer_relevance** | Answer addresses the question (LLM judge, 0–1) | > 0.85 |
-| **correctness_mean** | Match against ground truth (LLM judge, 0–10) | > 7.5 (achieved: 7.9) |
+| **correctness_mean** | Match against ground truth (LLM judge, 0–10) | > 7.5 |
+| **correctness_inscope** | Same, in-scope questions only | > 7.5 |
 | **false_sufficiency_rate** | Share of simple-path answers with correctness < 5.0 | < 10% |
-| **complex_path_rate** | Share of queries routed to complex path | — |
+| **oos_rejection_rate** | Share of out-of-scope questions correctly abstained | > 0.90 |
+| **complex_path_rate** | Share of queries routed to the complex path | — |
 | **mean_elapsed_sec** | Average response latency | — |
 
-`false_sufficiency` catches the main anti-pattern: the system took the fast path and gave a bad answer.
+Latest measured values: [FACTS](FACTS.md#metrics). `false_sufficiency` catches the main
+anti-pattern — the system took the fast path and gave a bad answer.
 
-## Report Format
+> **Note on the judge.** Scores depend on the judge model. The current judge is stricter
+> than the earlier one (see [FACTS](FACTS.md#models)), so absolute numbers are lower than
+> historical runs but better calibrated. Compare runs only under the same judge.
 
-JSONL: each line is `{aggregate, results, dataset_size, valid_results, timestamp}`. `aggregate` contains
-the metrics above; `results` is a list of per-question records (`question`, `ground_truth`, `answer`,
-`path`, `*_score`, `*_reasoning`, `elapsed_sec`). Reasoning from each judge call is saved —
-this makes it straightforward to diagnose score drops.
+## Report format
 
-## LLM-as-Judge
+JSONL: each line is `{aggregate, results, dataset_size, valid_results, timestamp}`.
+`aggregate` holds the metrics above; `results` is a list of per-question records
+(`question`, `ground_truth`, `answer`, `path`, `*_score`, `*_reasoning`, `elapsed_sec`).
+The judge's `reasoning` is saved per call — this makes score drops diagnosable
+per-question (see [Design decisions §8](../explanation/design-decisions.md) on why we
+trust per-question traces over noisy aggregates).
 
-Each metric is a separate request to the judge model with its own prompt. The judge must return
-both a score and `reasoning`. When comparing runs, account for run-to-run variability:
-small per-question deltas (especially on OOS questions) are noise; trust aggregates and large changes.
+## See also
 
-## See Also
-
-- [Benchmarks and baseline](./../../benchmarks/README.md)
-- [Adding questions to the dataset](../guides/adding-questions.md)
+- [Benchmarks and baseline](../../benchmarks/README.md)
+- [How-to: run an evaluation](../how-to/run-evaluation.md) · [add eval questions](../how-to/add-eval-questions.md)

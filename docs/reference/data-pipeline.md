@@ -18,6 +18,12 @@ Docling converts PDF/DOCX files to structured document objects, preserving headi
 
 HybridChunker splits documents by structural boundaries — headings, clauses, numbered paragraphs — rather than by character count. Adjacent short chunks under the same heading are merged. This produces semantically coherent chunks aligned with the document's legal structure.
 
+> **Why structure-aware chunking (decision).** Legal/regulatory text is hierarchical —
+> articles, clauses, sub-clauses. Fixed-size character splitting cuts across clause
+> boundaries and strands the number from its rule. HybridChunker aligns chunks to the
+> document's own structure, which keeps each rule intact and replaced ~200 lines of a
+> hand-rolled sentence-overlap splitter.
+
 ### 3. Text Cleaning
 
 Each chunk goes through `_clean_noise()`:
@@ -32,7 +38,9 @@ Each chunk carries:
 | Field | Description |
 |-------|-------------|
 | `source` | filename (e.g. `2464.pdf`) |
+| `chunk_id` | per-source 0-based int, assigned after dedup; `source#chunk_id` is the passage identity used for RRF fusion and cross-ref dedup |
 | `type` | `hybrid_chunk` |
+| `element_type` | Docling label (`table` / `text` / …) — lets table chunks be handled specially |
 | `parent_section` | nearest heading text |
 | `heading_path` | full heading breadcrumb |
 | `page_no` | page number in source document |
@@ -40,10 +48,15 @@ Each chunk carries:
 
 ### 5. Embeddings and Storage
 
-**Model:** `text-embedding-3-small` (OpenAI)  
+**Model:** OpenAI embeddings — see [FACTS](FACTS.md#models)
 **Store:** ChromaDB (`./chroma_db`)
 
-Chunks are embedded and stored in ChromaDB. A BM25 index is built in-memory at startup (not persisted to disk).
+The embedded text is **contextual**: the parent-section heading is prepended to the chunk
+text before embedding (`f"{parent_section}\n{text}"`), a lightweight form of Contextual
+Retrieval — the article title lands in the vector without an extra LLM call. A guard avoids
+duplicating the heading when the text already starts with it.
+
+A BM25 index is built in-memory at startup (not persisted to disk).
 
 ## Running
 
@@ -51,6 +64,8 @@ Chunks are embedded and stored in ChromaDB. A BM25 index is built in-memory at s
 python index.py
 ```
 
-> WARNING: destructive — drops the entire ChromaDB collection before reindexing.
+> WARNING: destructive — drops the entire ChromaDB collection (and Docling/BM25 caches)
+> before reindexing. Always check `ls source_docs/ | wc -l` first — indexing an empty
+> `source_docs/` wipes the index.
 
-Current corpus: 11 PDFs in `source_docs/`. Index not yet rebuilt after switching to v3.0-hybrid chunker.
+Current corpus size: see [FACTS](FACTS.md#corpus).
