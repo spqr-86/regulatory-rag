@@ -41,9 +41,21 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 - chunks: 7718  (reindex 2026-05-30, session 61; chunk_id 100%, per-source int)
 
 ## nodes
-intent_gate → domain_gate → router → rag_simple → evaluate_triage → rag_complex → evaluate_complex → visual_enrichment → generate_answer / abstain
+Graph nodes (`src/v7/graph.py`), entry = `intent_gate`:
 
-(`visual_enrichment` is a no-op on VPS — `visual_proof_fn` not injected.)
+```
+intent_gate ─(noise)→ END
+            └(domain)→ router ─(ambiguous)→ clarify_respond → END
+                              └(ok)→ rag_simple → evaluate_triage ─(sufficient)→ visual_enrichment
+                                                                  └(insufficient)→ rag_complex → evaluate_complex ─(pass)→ visual_enrichment
+                                                                                                                  └(fail)→ abstain → END
+visual_enrichment → generate_answer → END
+```
+
+- The **domain gate** (cosine-to-centroid OOS filter) is a step *inside* `intent_gate`, active when `DOMAIN_GATE_THRESHOLD > 0` — not a separate node.
+- `clarify_respond` returns a clarification request for short/ambiguous queries.
+- `visual_enrichment` is a no-op on VPS (`visual_proof_fn` not injected).
+- No `llm_verifier` / `rewriter` (removed session 61): `evaluate_triage` routes sufficient→generate, otherwise→`rag_complex`.
 
 ## metrics
 Source: `benchmarks/eval_v7_2026-05-30_chunkid.jsonl` (dataset 57, valid 54, judge `gpt-4o`).
