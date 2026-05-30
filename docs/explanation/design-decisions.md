@@ -97,7 +97,7 @@ partly a structural bug, not an algorithmic ceiling — found by reading code, n
 
 ---
 
-## 5. Removed the `llm_verifier` / `rewriter` subgraph
+## 5. Removed the `llm_verifier` / `rewriter` subgraph <!--freshness:ignore-->
 
 **Context.** An earlier design sent "borderline" triage results through an LLM verifier that <!--freshness:ignore-->
 could answer, rewrite the query, or escalate.
