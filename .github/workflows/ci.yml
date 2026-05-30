@@ -27,3 +27,6 @@ jobs:
           GEMINI_API_KEY: stub
           OPENAI_API_KEY: stub
         run: python -m pytest -m unit -v --tb=short
+
+      - name: Docs freshness check
+        run: python scripts/check_docs.py --ci

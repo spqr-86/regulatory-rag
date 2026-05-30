@@ -18,8 +18,9 @@ The registry has **three** live families (current active versions:
 | `query_expand` | query expansion |
 | `applicability_retriever` | applicability sub-retrieval |
 
-`PromptManager.render()` is only ever called with these three ids. (Dead families — <!--freshness:ignore-->
-`generate_answer_v1..v6`, verifier, router, rag_simple/complex templates — were removed.)
+`PromptManager.render()` is only ever called with these three ids. Older generate-answer
+versions and the verifier / router / rag-simple / rag-complex templates were removed — only
+the three families above remain.
 
 ## Registry shape
 
