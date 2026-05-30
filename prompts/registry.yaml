@@ -1,23 +1,7 @@
 applicability_retriever:
   active_version: "v2"
   versions:
-    v1: "agents/query_expansion_v1.j2"
     v2: "agents/query_expansion_v2.j2"
-
-router_v2:
-  active_version: "v2"
-  versions:
-    v2: "agents/router_v2.j2"
-
-rag_simple:
-  active_version: "v1"
-  versions:
-    v1: "agents/rag_simple_v1.j2"
-
-rag_complex:
-  active_version: "v1"
-  versions:
-    v1: "agents/rag_complex_v1.j2"
 
 query_expand:
   active_version: "v1"
@@ -28,11 +12,5 @@ query_expand:
 generate_answer:
   active_version: "v8"
   versions:
-    v1: "agents/generate_answer_v1.j2"
-    v2: "agents/generate_answer_v2.j2"
-    v3: "agents/generate_answer_v3.j2"
-    v4: "agents/generate_answer_v4.j2"
-    v5: "agents/generate_answer_v5.j2"
-    v6: "agents/generate_answer_v6.j2"
     v7: "agents/generate_answer_v7.j2"
     v8: "agents/generate_answer_v8.j2"
