@@ -26,7 +26,7 @@ query_expand:
     v2: "agents/query_expand_v2.j2"
 
 generate_answer:
-  active_version: "v7"
+  active_version: "v8"
   versions:
     v1: "agents/generate_answer_v1.j2"
     v2: "agents/generate_answer_v2.j2"
@@ -35,3 +35,4 @@ generate_answer:
     v5: "agents/generate_answer_v5.j2"
     v6: "agents/generate_answer_v6.j2"
     v7: "agents/generate_answer_v7.j2"
+    v8: "agents/generate_answer_v8.j2"
