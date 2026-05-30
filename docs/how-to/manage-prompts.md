@@ -1,129 +1,82 @@
-# Prompt Management
+# How to manage prompts
 
-## Overview
+Pipeline prompts are versioned Jinja2 templates loaded at runtime via `PromptManager`.
+This keeps prompt text out of Python and lets you switch versions without a deploy.
 
-All V7 pipeline prompts (generation, verification, rewrite, expand) are stored as versioned
-Jinja2 templates and loaded at runtime via `PromptManager`. This separates prompt text from
-Python code and enables version switching without deploys.
+- **Templates:** `prompts/` (`.j2` files)
+- **Registry:** `prompts/registry.yaml` — maps a logical `prompt_id` to versioned file paths
+- **Glossary:** `config/term_glossary.yaml` — deterministic domain-abbreviation expansion (not Jinja2, but part of prompt engineering)
 
-- **Templates:** `prompts/` directory (Jinja2 `.j2` files)
-- **Registry:** `prompts/registry.yaml` — maps logical `prompt_id` to versioned file paths
-- **Related:** `config/term_glossary.yaml` — deterministic domain abbreviation expansion (not Jinja2, but part of prompt engineering)
+## Live prompt families
 
----
+The registry has **three** live families (current active versions:
+[FACTS](../reference/FACTS.md#prompts)):
 
-## Directory Structure
+| `prompt_id` | role |
+|---|---|
+| `generate_answer` | answer synthesis from passages |
+| `query_expand` | query expansion |
+| `applicability_retriever` | applicability sub-retrieval |
 
-```text
-prompts/
-├── registry.yaml              # Global version registry
-├── common/
-│   └── base_rules.j2          # BASE_RULES macro (10 edge cases)
-├── agents/
-│   ├── generate_answer_v1.j2  # Generate answer prompt (active)
-│   ├── query_expand_v1.j2     # Query expansion prompt (active)
-│   └── ...
-└── chains/
-    └── ...
-```
+`PromptManager.render()` is only ever called with these three ids. (Dead families — <!--freshness:ignore-->
+`generate_answer_v1..v6`, verifier, router, rag_simple/complex templates — were removed.)
 
----
-
-## Registry (`registry.yaml`)
-
-Maps a logical `prompt_id` to concrete versioned templates.
+## Registry shape
 
 ```yaml
-applicability_retriever:
-  active_version: "v2"
+generate_answer:
+  active_version: "v8"
   versions:
-    v1: "agents/query_expansion_v1.j2"
-    v2: "agents/query_expansion_v2.j2"
+    v7: "agents/generate_answer_v7.j2"
+    v8: "agents/generate_answer_v8.j2"
 ```
 
----
-
-## Usage in Code
-
-Load prompts via `PromptManager`:
+## Rendering in code
 
 ```python
 from src.infra.prompt_manager import PromptManager
 
 manager = PromptManager()
-
 prompt_text = manager.render(
-    prompt_id="research_agent",
-    question="Что такое СИЗ?",
-    documents=[doc1, doc2]
+    prompt_id="generate_answer",
+    question="...",
+    documents=[doc1, doc2],
 )
-
 llm.invoke(prompt_text)
 ```
 
-`PromptManager` uses `StrictUndefined` — if a template variable is missing, it raises an
-exception immediately rather than sending a broken prompt to the LLM.
+`PromptManager` uses `StrictUndefined` — a missing template variable raises immediately
+instead of sending a broken prompt to the LLM. This is also how you validate a template:
+render it with sample context and confirm no error (there is no separate validation script).
 
----
-
-## Version Switching (Pinning)
-
-Override the active version for a specific prompt via environment variable without touching code or registry:
+## Switching versions without code changes
 
 ```bash
 # Format: PROMPT_{PROMPT_ID}_VERSION={VERSION}
-export PROMPT_RESEARCH_AGENT_VERSION=v2
+export PROMPT_GENERATE_ANSWER_VERSION=v7
 python app.py
 ```
 
-Use cases:
-- Local debugging of a new prompt version
-- A/B testing in CI
-- Quick rollback in production
+Use cases: local debugging of a new version, A/B in CI, quick rollback in production.
 
----
+## Adding a new version
 
-## Security and Logging
+1. Create the file, e.g. `prompts/agents/generate_answer_v9.j2`.
+2. Add it under the family's `versions:` in `registry.yaml`; bump `active_version` (or test via the env override above first).
+3. Render-smoke-test with `PromptManager.render(...)` and run `pytest -m unit`.
 
-1. **Path traversal protection:** The registry blocks absolute paths and `..` — cannot read arbitrary files from disk.
-2. **Privacy-first logging:** By default only the SHA256 hash of the prompt and variable key names are logged. Prompt text (which may contain PII) is not logged. Set `DEBUG_PROMPTS=true` to log full prompt text for debugging.
+## Security and logging
 
----
+- **Path traversal protection:** the registry blocks absolute paths and `..` — it cannot read arbitrary files.
+- **Privacy-first logging:** by default only the prompt's SHA256 hash and variable key names are logged, not the text (which may contain PII). Set `DEBUG_PROMPTS=true` to log full prompt text when debugging.
 
-## Advanced Techniques
+## Term glossary
 
-### Chain-of-Thought (XML Tagging)
+`config/term_glossary.yaml` — unofficial domain abbreviations; expansion logic in
+`src/glossary.py` (`expand_query_with_glossary`), applied by the V7 router:
 
-Templates use `<thought>` / `<answer>` XML tags to separate reasoning from the final answer.
-Agent code parses these tags and the UI can display reasoning in a collapsible block.
+- Words > 4 letters matched by morphological stem; abbreviations ≤ 4 letters matched as a whole word.
+- A `[Глоссарий: term → expansion]` block is appended to the query.
 
-### BASE_RULES Macro
-
-`prompts/common/base_rules.j2` — shared macro `{% macro base_rules() %}`. Contains:
-- Absolute prohibitions (no hallucinations, no extrapolation)
-- Query preprocessing rules (substance vs. identifiers)
-- 10 edge cases (outdated references, document overlaps, negative questions, glossary integration, fallback for unknown abbreviations, etc.)
-- Answer format rules (direct answer, verbatim citations)
-
-### Term Glossary
-
-`config/term_glossary.yaml` — YAML dictionary of unofficial domain abbreviations.
-Expansion logic is in `src/glossary.py` (`expand_query_with_glossary`), used by the V7 router.
-Applied deterministically:
-- Words > 4 letters matched by morphological stem; abbreviations ≤ 4 letters matched as whole word
-- A `[Глоссарий: term → expansion]` block is appended to the query
-- Fallback: LLM instruction for terms not in the glossary (BASE_RULES case 10)
-
----
-
-## Validation
-
-`scripts/validate_prompts.py` checks:
-- YAML structure of the registry
-- Existence of all files referenced in the registry
-- No duplicate version keys
-
-Run after any prompt changes:
-```bash
-python scripts/validate_prompts.py
-```
+To extend it, edit the YAML — no code change. See [adding eval questions](./add-eval-questions.md)
+to test the effect on retrieval.

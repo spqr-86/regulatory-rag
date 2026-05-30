@@ -1,34 +1,47 @@
-# Testing Guide
+# How to run tests and checks
 
-How to verify that documentation and code are accurate and up to date.
+Always work inside the project venv (`source venv/bin/activate`).
 
-## What to Check
+## Unit tests
 
-### 1. Links and References
+```bash
+pytest -m unit              # fast unit suite (the CI gate)
+pytest -m integration       # integration tests (need real deps)
+pytest -m "not slow"        # everything except slow tests
+pytest tests/test_hard_gates.py -v   # a single file
+```
 
-- **Internal links:** Verify that all file references in docs (e.g., `[code](src/main.py)`) point to existing files.
-- **External links:** Check that URLs open and lead to current resources.
-- **Images:** Confirm that all images render correctly.
+Markers (`unit` / `integration` / `slow`) are configured in `pyproject.toml`. New features
+and bugfixes must ship with unit tests in `tests/test_*.py` using `unittest.mock` for
+injected dependencies.
 
-### 2. Code Examples
+## Lint
 
-- **Install commands:** Run dependency installation (`pip install -r requirements.txt`) in a clean environment to confirm it works.
-- **Run examples:** Execute code examples from README and guides. They should work without errors.
-- **Config:** Check that example config files (e.g., `.env.example`) are current and contain all required parameters.
+```bash
+black . && ruff check . --fix
+```
 
-### 3. Versions and Dependencies
+Run before every commit. Note: `ruff` strips unused imports — add an import and its first
+use in the same edit, or it gets removed.
 
-- **Version consistency:** Ensure library versions mentioned in docs match `pyproject.toml` or `requirements.txt`.
-- **Compatibility:** Confirm that Python version and OS requirements are up to date.
+## Docs freshness check
 
-### 4. Project Structure
+```bash
+python scripts/check_docs.py          # local: includes provider/chunk checks if available
+python scripts/check_docs.py --ci     # committed-source checks only (what CI runs)
+```
 
-- **File tree:** If docs include a directory structure, compare it with the actual file layout. Deleted or moved files should be reflected in docs.
-- **Module descriptions:** Confirm that descriptions of files and directories match reality.
+This verifies prompt versions against `prompts/registry.yaml` and greps live docs for
+stale terms (removed nodes, old provider names, dead template versions). It is the
+automated replacement for manually re-reading docs after a code change. If it flags a
+real removed-thing mention that is intentional (e.g. "we removed the verifier"), exempt
+that line with a `<!--freshness:ignore-->` marker rather than weakening the deny-list.
 
-## Procedure
+## End-to-end smoke
 
-1. Read the changed or new documentation files.
-2. Go through the checklist above.
-3. Use automated link checkers if configured, or verify manually.
-4. For any inaccuracies found, either fix them immediately or create a backlog item.
+```bash
+python scripts/trace_v7.py "для кого проводится повторный инструктаж?"
+python scripts/trace_v7.py --no-chroma "привет как дела"   # stub mode
+```
+
+Prints the path taken and the final answer — the quickest confirmation the pipeline runs.
