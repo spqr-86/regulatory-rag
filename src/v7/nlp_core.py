@@ -100,8 +100,11 @@ def extract_keywords(text: str) -> set[str]:
     pymorphy3 lemmatisation + razdel tokenisation.
     Preserves regulatory document numbers (СП 1.13130, ГОСТ 12.1.004).
     """
-    # Extract document numbers BEFORE lemmatisation
+    # Extract document numbers BEFORE lemmatisation.
+    # Dotted numbers (СП 1.13130, ГОСТ 12.1.004-91) and bare order numbers
+    # (приказ 2464, 29н) — the latter would otherwise be dropped as pure digits.
     doc_numbers = set(re.findall(r"\d+(?:\.\d+)+(?:-\d+)?", text))
+    doc_numbers |= set(re.findall(r"\b\d{2,}[а-яё]?\b", text.lower()))
 
     lemmas: set[str] = set()
     for token in razdel_tokenize(text):

@@ -10,11 +10,19 @@ from utils.logging import logger
 
 
 @lru_cache(maxsize=1)
-def get_corpus_centroid() -> np.ndarray:
-    """Compute mean embedding of all corpus documents. Cached per process."""
+def get_corpus_centroid() -> np.ndarray | None:
+    """Compute mean embedding of all corpus documents. Cached per process.
+
+    Returns None for an empty corpus — a mean over zero rows yields a nan
+    centroid, against which the gate would behave arbitrarily. None is a
+    sentinel that disables the gate (is_in_domain passes everything).
+    """
     vs = load_vector_store()
     result = vs._collection.get(include=["embeddings"])
     embeddings = np.array(result["embeddings"], dtype=np.float32)
+    if embeddings.size == 0:
+        logger.warning("Domain gate: corpus has no embeddings — gate disabled.")
+        return None
     centroid = embeddings.mean(axis=0)
     norm = np.linalg.norm(centroid)
     if norm > 0:
@@ -46,6 +54,9 @@ def is_in_domain(
     if threshold <= 0.0:
         return True
     centroid = get_corpus_centroid()
+    if centroid is None:
+        # Empty corpus → no domain to gate against; pass everything.
+        return True
     q = np.array(query_embedding, dtype=np.float32)
     sim = cosine_similarity(q, centroid)
     logger.debug("domain gate", cosine_sim=round(sim, 4), threshold=round(threshold, 4))

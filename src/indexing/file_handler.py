@@ -120,7 +120,18 @@ class DocumentProcessor:
                     logger.info(f"[process] {display_name}")
                     stream.seek(0)
                     chunks = self._convert_and_extract(stream, display_name, file_hash)
-                    self._save_to_cache(chunks, cache_path)
+                    # Do not cache an empty result: it most likely came from a
+                    # Docling conversion error (_convert_and_extract returns []
+                    # on exception). Caching [] for CACHE_EXPIRE_DAYS would make
+                    # a reindex silently skip the document until the cache
+                    # expires. A genuinely empty document is harmless to re-parse.
+                    if chunks:
+                        self._save_to_cache(chunks, cache_path)
+                    else:
+                        logger.warning(
+                            f"[no-cache] empty result for {display_name} "
+                            "(conversion error or empty document) — not cached"
+                        )
 
                 # Deduplication
                 for ch in chunks:

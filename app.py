@@ -4,6 +4,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from utils.logging import configure_logging
+
+configure_logging()
+
 import streamlit as st
 
 # Must happen before any langchain_google_genai import (occurs inside src modules).

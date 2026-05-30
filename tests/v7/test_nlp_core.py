@@ -44,6 +44,17 @@ class TestExtractKeywords:
         assert "12.1.004-91" in keywords
 
     @pytest.mark.unit
+    def test_preserves_bare_doc_numbers(self):
+        """Bare regulatory doc numbers (no dots) survive extraction.
+
+        Order numbers like 2464 ("приказ 2464") and 29н ("приказ 29н") must not
+        be dropped — they are high-signal for keyword overlap.
+        """
+        keywords = extract_keywords("что в приказе 2464 и 29н")
+        assert "2464" in keywords
+        assert "29н" in keywords
+
+    @pytest.mark.unit
     def test_returns_set(self):
         """Returns a set, not a list."""
         result = extract_keywords("тест")

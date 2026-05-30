@@ -151,7 +151,7 @@ def llm_verifier(state: RAGState) -> RAGState:
         return {
             "verification": result,
             "sufficient": True,
-            "final_passages": last["passages"],
+            "final_passages": last.get("passages", []),
             "final_score": last.get("top_score", 0.0),
         }
 

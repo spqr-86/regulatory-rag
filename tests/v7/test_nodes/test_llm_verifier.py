@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from src.v7.nodes.llm_verifier import llm_verifier, route_after_verifier
+from src.v7.nodes.llm_verifier import (
+    llm_verifier,
+    route_after_verifier,
+    set_verify_fn,
+)
+from src.v7.state_types import VerificationResult
 
 
 def _make_state(top_score=0.7, iteration=0, min_confidence=0.5):
@@ -61,6 +66,40 @@ class TestLlmVerifier:
     def test_no_attempts(self):
         result = llm_verifier({"retrieval_attempts": [], "plan": {}})
         assert result["sufficient"] is False
+
+    @pytest.mark.unit
+    def test_sufficient_attempt_without_passages_key_no_keyerror(self):
+        """Regression M5: sufficient branch used last['passages'] directly.
+
+        An attempt dict missing the 'passages' key must not KeyError when the
+        verdict is sufficient — it should degrade to an empty passage list.
+        """
+
+        def _always_sufficient(**_kwargs):
+            return VerificationResult(
+                verdict="sufficient",
+                reason="stub",
+                missing_aspects=[],
+                confidence=0.99,
+            )
+
+        set_verify_fn(_always_sufficient)
+        try:
+            state = {
+                "query": "ограждение",
+                "active_query": "ограждение",
+                # attempt has no 'passages' key
+                "retrieval_attempts": [{"top_score": 0.8}],
+                "verify_iteration": 0,
+                "plan": {"min_verifier_confidence": 0.0},
+            }
+            result = llm_verifier(state)
+            assert result["sufficient"] is True
+            assert result["final_passages"] == []
+        finally:
+            from src.v7.nodes.llm_verifier import _stub_verify
+
+            set_verify_fn(_stub_verify)
 
 
 class TestRouteAfterVerifier:

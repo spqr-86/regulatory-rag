@@ -126,7 +126,7 @@ def _legacy_triage(state: RAGState) -> RAGState:
 
     # Fallback: hard gates ok, but triage != sufficient (soft signal escalation)
     if result["sufficient"]:
-        update["fallback_passages"] = last["passages"]
+        update["fallback_passages"] = last.get("passages", [])
         update["fallback_score"] = result["top_score"]
 
     return cast(RAGState, update)

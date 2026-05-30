@@ -167,3 +167,31 @@ class TestGetCorpusCentroid:
             get_corpus_centroid.cache_clear()
 
         assert centroid.shape == (dim,)
+
+    @pytest.mark.unit
+    def test_empty_corpus_disables_gate(self):
+        """Empty corpus must not yield a nan centroid.
+
+        With zero embeddings, get_corpus_centroid returns None (sentinel) and
+        is_in_domain passes everything (returns True) instead of comparing
+        against a nan centroid.
+        """
+        from src.v7.domain_gate import get_corpus_centroid
+
+        mock_collection = MagicMock()
+        mock_collection.get.return_value = {"embeddings": []}
+        mock_vs = MagicMock()
+        mock_vs._collection = mock_collection
+
+        with patch("src.v7.domain_gate.load_vector_store", return_value=mock_vs):
+            get_corpus_centroid.cache_clear()
+            centroid = get_corpus_centroid()
+            get_corpus_centroid.cache_clear()
+
+        assert centroid is None
+
+    @pytest.mark.unit
+    def test_is_in_domain_passes_when_no_centroid(self):
+        """When centroid is unavailable (empty corpus), gate always passes."""
+        with patch("src.v7.domain_gate.get_corpus_centroid", return_value=None):
+            assert is_in_domain([0.0, 1.0, 0.0], threshold=0.9) is True

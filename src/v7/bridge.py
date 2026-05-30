@@ -653,100 +653,108 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
     """
     from config.settings import settings
 
-    search_fn = make_vector_search_fn(vector_store)
-    rag_simple_mod.set_vector_search(search_fn)
-    rag_complex_mod.set_vector_search(search_fn)
+    # Serialize concurrent initialization: the 7 set_*_fn injectors + BM25 build
+    # are not individually atomic, so a reader could observe a half-initialized
+    # pipeline without this lock.
+    with _init_lock:
+        search_fn = make_vector_search_fn(vector_store)
+        rag_simple_mod.set_vector_search(search_fn)
+        rag_complex_mod.set_vector_search(search_fn)
 
-    # Build BM25 corpus. VectorStoreBackend exposes iter_all_documents();
-    # legacy raw Chroma exposes .get() — kept for backward compat.
-    if isinstance(vector_store, VectorStoreBackend):
-        corpus = list(vector_store.iter_all_documents())
-    else:
-        all_data = vector_store.get(include=["metadatas", "documents"])
-        corpus = [
-            {"text": doc, "metadata": meta}
-            for doc, meta in zip(all_data["documents"], all_data["metadatas"])
-        ]
-    init_bm25_index(corpus)
-
-    # Inject section-aware expander for complex path
-    try:
-        section_fetch_fn = make_section_fetch_fn(vector_store)
-        rag_complex_mod.set_section_fetch_fn(section_fetch_fn)
-        logger.info("v7 section-aware expander injected successfully")
-    except Exception as exc:
-        logger.warning("Failed to initialize section fetch for v7: %s.", exc)
-
-    # Inject reranker (FlashRank or CrossEncoder+sigmoid)
-    try:
-        backend = (settings.RERANKER_BACKEND or "flashrank").lower()
-        if backend == "crossencoder":
-            rerank_fn = make_crossencoder_rerank_fn(
-                model_name=settings.CROSSENCODER_MODEL,
-            )
-            logger.info(
-                "v7 CrossEncoder reranker injected (model=%s)",
-                settings.CROSSENCODER_MODEL,
-            )
+        # Build BM25 corpus. VectorStoreBackend exposes iter_all_documents();
+        # legacy raw Chroma exposes .get() — kept for backward compat.
+        if isinstance(vector_store, VectorStoreBackend):
+            corpus = list(vector_store.iter_all_documents())
         else:
-            rerank_fn = make_rerank_fn(
-                model_name=settings.RERANKING_MODEL,
-                cache_dir=settings.FLASHRANK_CACHE_DIR,
-            )
-            logger.info("v7 FlashRank reranker injected successfully")
-        rag_complex_mod.set_rerank_fn(rerank_fn)
-        rag_simple_mod.set_reranker(rerank_fn)
-    except Exception as exc:
-        logger.warning(
-            "Failed to initialize reranker for v7: %s. Complex path will skip reranking.",
-            exc,
-        )
+            all_data = vector_store.get(include=["metadatas", "documents"])
+            corpus = [
+                {"text": doc, "metadata": meta}
+                for doc, meta in zip(all_data["documents"], all_data["metadatas"])
+            ]
+        init_bm25_index(corpus)
 
-    # Inject LLM-backed verify, rewrite, generate, and expand functions
-    if llm_provider:
+        # Inject section-aware expander for complex path
         try:
-            verifier_llm = get_complex_llm(
-                thinking_budget=1024, response_mime_type="application/json"
-            )
-            llm_verifier_mod.set_verify_fn(make_verify_fn(verifier_llm))
+            section_fetch_fn = make_section_fetch_fn(vector_store)
+            rag_complex_mod.set_section_fetch_fn(section_fetch_fn)
+            logger.info("v7 section-aware expander injected successfully")
+        except Exception as exc:
+            logger.warning("Failed to initialize section fetch for v7: %s.", exc)
 
-            rewriter_llm = get_complex_llm(thinking_budget=1024)
-            rewriter_mod.set_rewrite_fn(make_rewrite_fn(rewriter_llm))
-
-            # Split generators: cheap model for the simple path, full-quality
-            # model for the complex path (where verifier/rewriter already paid
-            # the latency tax — answer quality dominates CPS savings).
-            generator_llm_complex = get_complex_llm(thinking_budget=4096)
-            generator_llm_simple = get_simple_llm(thinking_budget=4096)
-            xref_backend = (
-                vector_store if isinstance(vector_store, VectorStoreBackend) else None
-            )
-            generate_answer_mod.set_generate_fns(
-                simple=make_generate_fn(generator_llm_simple, backend=xref_backend),
-                complex_=make_generate_fn(generator_llm_complex, backend=xref_backend),
-            )
-
-            expander_llm = get_simple_llm(thinking_budget=0)
-            rag_simple_mod.set_expand_fn(make_expand_fn(expander_llm))
-
-            logger.info(
-                "v7 LLM verifier, rewriter, generator, and expander injected successfully"
-            )
+        # Inject reranker (FlashRank or CrossEncoder+sigmoid)
+        try:
+            backend = (settings.RERANKER_BACKEND or "flashrank").lower()
+            if backend == "crossencoder":
+                rerank_fn = make_crossencoder_rerank_fn(
+                    model_name=settings.CROSSENCODER_MODEL,
+                )
+                logger.info(
+                    "v7 CrossEncoder reranker injected (model=%s)",
+                    settings.CROSSENCODER_MODEL,
+                )
+            else:
+                rerank_fn = make_rerank_fn(
+                    model_name=settings.RERANKING_MODEL,
+                    cache_dir=settings.FLASHRANK_CACHE_DIR,
+                )
+                logger.info("v7 FlashRank reranker injected successfully")
+            rag_complex_mod.set_rerank_fn(rerank_fn)
+            rag_simple_mod.set_reranker(rerank_fn)
         except Exception as exc:
             logger.warning(
-                "Failed to initialize LLM for v7 verifier/rewriter/generator: %s. "
-                "Using rule-based stubs.",
+                "Failed to initialize reranker for v7: %s. Complex path will skip reranking.",
                 exc,
             )
 
-    # Inject visual proof function for visual_enrichment node
-    try:
-        visual_proof_fn = make_visual_proof_fn()
-        if visual_proof_fn is not None:
-            visual_enrichment_mod.set_visual_proof_fn(visual_proof_fn)
-            logger.info("v7 visual proof injected successfully")
-    except Exception as exc:
-        logger.warning("Failed to initialize visual proof for v7: %s.", exc)
+        # Inject LLM-backed verify, rewrite, generate, and expand functions
+        if llm_provider:
+            try:
+                verifier_llm = get_complex_llm(
+                    thinking_budget=1024, response_mime_type="application/json"
+                )
+                llm_verifier_mod.set_verify_fn(make_verify_fn(verifier_llm))
+
+                rewriter_llm = get_complex_llm(thinking_budget=1024)
+                rewriter_mod.set_rewrite_fn(make_rewrite_fn(rewriter_llm))
+
+                # Split generators: cheap model for the simple path, full-quality
+                # model for the complex path (where verifier/rewriter already paid
+                # the latency tax — answer quality dominates CPS savings).
+                generator_llm_complex = get_complex_llm(thinking_budget=4096)
+                generator_llm_simple = get_simple_llm(thinking_budget=4096)
+                xref_backend = (
+                    vector_store
+                    if isinstance(vector_store, VectorStoreBackend)
+                    else None
+                )
+                generate_answer_mod.set_generate_fns(
+                    simple=make_generate_fn(generator_llm_simple, backend=xref_backend),
+                    complex_=make_generate_fn(
+                        generator_llm_complex, backend=xref_backend
+                    ),
+                )
+
+                expander_llm = get_simple_llm(thinking_budget=0)
+                rag_simple_mod.set_expand_fn(make_expand_fn(expander_llm))
+
+                logger.info(
+                    "v7 LLM verifier, rewriter, generator, and expander injected successfully"
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to initialize LLM for v7 verifier/rewriter/generator: %s. "
+                    "Using rule-based stubs.",
+                    exc,
+                )
+
+        # Inject visual proof function for visual_enrichment node
+        try:
+            visual_proof_fn = make_visual_proof_fn()
+            if visual_proof_fn is not None:
+                visual_enrichment_mod.set_visual_proof_fn(visual_proof_fn)
+                logger.info("v7 visual proof injected successfully")
+        except Exception as exc:
+            logger.warning("Failed to initialize visual proof for v7: %s.", exc)
 
 
 # Backward-compat alias — remove after one release cycle.

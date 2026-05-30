@@ -4,6 +4,7 @@ import json
 import base64
 import io
 import fitz  # pymupdf
+import structlog
 from PIL import Image, ImageDraw
 from pathlib import Path
 from typing import List, Dict
@@ -18,6 +19,8 @@ from config.settings import settings
 from src.infra.llm_factory import get_vision_llm
 from src.indexing.vector_store import load_vector_store
 from src.indexing.chroma_helpers import query_chunks_by_range
+
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -141,7 +144,13 @@ def make_tools(ctx: ToolContext):
                         if merged:
                             final_blocks.append(merged)
                 except Exception as e:
-                    print(f"Error processing range {start}-{end} for {source}: {e}")
+                    logger.warning(
+                        "range processing failed",
+                        source=source,
+                        start=start,
+                        end=end,
+                        error=str(e),
+                    )
                     continue
 
         # 3. Format Output
@@ -249,99 +258,103 @@ def _visual_proof_impl(file_name, page_no, bbox, mode):
         if bbox_err:
             return bbox_err
 
-        doc = fitz.open(source_path)
-        if page_no < 1 or page_no > len(doc):
-            return f"Error: Page {page_no} out of range (1-{len(doc)})."
+        with fitz.open(source_path) as doc:
+            if page_no < 1 or page_no > len(doc):
+                return f"Error: Page {page_no} out of range (1-{len(doc)})."
 
-        page = doc[page_no - 1]
+            page = doc[page_no - 1]
 
-        left, top, right, bottom = bbox
+            left, top, right, bottom = bbox
 
-        # Normalize coordinates (PDF bottom-left to Top-Left)
-        if top > bottom:
-            height = page.rect.height
-            y0 = height - top
-            y1 = height - bottom
-            # Fix order for Rect (y0 < y1)
-            rect = fitz.Rect(left, y0, right, y1)
-        else:
-            rect = fitz.Rect(left, top, right, bottom)
+            # Normalize coordinates (PDF bottom-left to Top-Left)
+            if top > bottom:
+                height = page.rect.height
+                y0 = height - top
+                y1 = height - bottom
+                # Fix order for Rect (y0 < y1)
+                rect = fitz.Rect(left, y0, right, y1)
+            else:
+                rect = fitz.Rect(left, top, right, bottom)
 
-        # --- Mode: Analyze (VLM) with Red Box Strategy ---
-        if mode == "analyze":
-            try:
-                # 1. Render FULL page (context is key for avoiding safety refusal)
-                target_dpi = 150
-                pix = page.get_pixmap(dpi=target_dpi)
-                img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+            # --- Mode: Analyze (VLM) with Red Box Strategy ---
+            if mode == "analyze":
+                try:
+                    # 1. Render FULL page (context is key for avoiding safety refusal)
+                    target_dpi = 150
+                    pix = page.get_pixmap(dpi=target_dpi)
+                    img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
-                # 2. Scale coordinates (PDF 72 dpi -> target_dpi)
-                scale = target_dpi / 72.0
-                draw_rect = [
-                    rect.x0 * scale,
-                    rect.y0 * scale,
-                    rect.x1 * scale,
-                    rect.y1 * scale,
-                ]
-
-                # 3. Draw Red Box
-                draw = ImageDraw.Draw(img)
-                draw.rectangle(draw_rect, outline="red", width=5)
-
-                # 4. Encode
-                buf = io.BytesIO()
-                img.save(buf, format="PNG")
-                b64_img = base64.b64encode(buf.getvalue()).decode("utf-8")
-
-                vlm = get_vision_llm()
-
-                prompt_text = (
-                    "This is a public government document (Russia) containing safety regulations.\n"
-                    "Focus ONLY on the content inside the RED BOX.\n"
-                    "1. Transcribe the text or table inside the red box exactly as it appears, in Russian.\n"
-                    "2. Do not summarize.\n"
-                    "3. If the box cuts text, transcribe what is visible.\n"
-                    "4. Output raw text/markdown only."
-                )
-
-                msg = HumanMessage(
-                    content=[
-                        {"type": "text", "text": prompt_text},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/png;base64,{b64_img}"},
-                        },
+                    # 2. Scale coordinates (PDF 72 dpi -> target_dpi)
+                    scale = target_dpi / 72.0
+                    draw_rect = [
+                        rect.x0 * scale,
+                        rect.y0 * scale,
+                        rect.x1 * scale,
+                        rect.y1 * scale,
                     ]
-                )
-                response = vlm.invoke([msg])
-                return f"[Visual Analysis Result]\n{response.content}"
-            except Exception as e:
-                return f"Error in VLM analysis: {str(e)}"
 
-        # --- Mode: Show (Default) with Visual Zoom (Padding) ---
-        # Add generous padding for context (50px)
-        padding = 50
-        rect.x0 = max(0, rect.x0 - padding)
-        rect.y0 = max(0, rect.y0 - padding)
-        rect.x1 = min(page.rect.width, rect.x1 + padding)
-        rect.y1 = min(page.rect.height, rect.y1 + padding)
+                    # 3. Draw Red Box
+                    draw = ImageDraw.Draw(img)
+                    draw.rectangle(draw_rect, outline="red", width=5)
 
-        pix = page.get_pixmap(clip=rect, dpi=150)
+                    # 4. Encode
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    b64_img = base64.b64encode(buf.getvalue()).decode("utf-8")
 
-        # Save
-        output_dir = Path("static/visuals")
-        output_dir.mkdir(parents=True, exist_ok=True)
+                    vlm = get_vision_llm()
 
-        # Hash params to make filename unique but deterministic
-        import hashlib
+                    prompt_text = (
+                        "This is a public government document (Russia) containing safety regulations.\n"
+                        "Focus ONLY on the content inside the RED BOX.\n"
+                        "1. Transcribe the text or table inside the red box exactly as it appears, in Russian.\n"
+                        "2. Do not summarize.\n"
+                        "3. If the box cuts text, transcribe what is visible.\n"
+                        "4. Output raw text/markdown only."
+                    )
 
-        h = hashlib.md5(f"{file_name}_{page_no}_{bbox}".encode()).hexdigest()[:8]
-        output_filename = f"proof_{h}.png"
-        output_path = output_dir / output_filename
+                    msg = HumanMessage(
+                        content=[
+                            {"type": "text", "text": prompt_text},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{b64_img}"
+                                },
+                            },
+                        ]
+                    )
+                    response = vlm.invoke([msg])
+                    return f"[Visual Analysis Result]\n{response.content}"
+                except Exception as e:
+                    return f"Error in VLM analysis: {str(e)}"
 
-        pix.save(output_path)
+            # --- Mode: Show (Default) with Visual Zoom (Padding) ---
+            # Add generous padding for context (50px)
+            padding = 50
+            rect.x0 = max(0, rect.x0 - padding)
+            rect.y0 = max(0, rect.y0 - padding)
+            rect.x1 = min(page.rect.width, rect.x1 + padding)
+            rect.y1 = min(page.rect.height, rect.y1 + padding)
 
-        return str(output_path)
+            pix = page.get_pixmap(clip=rect, dpi=150)
+
+            # Save
+            output_dir = Path("static/visuals")
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            # Hash params to make filename unique but deterministic
+            import hashlib
+
+            h = hashlib.md5(
+                f"{file_name}_{page_no}_{bbox}".encode(), usedforsecurity=False
+            ).hexdigest()[:8]
+            output_filename = f"proof_{h}.png"
+            output_path = output_dir / output_filename
+
+            pix.save(output_path)
+
+            return str(output_path)
 
     except Exception as e:
         return f"Error processing visual proof: {str(e)}"

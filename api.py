@@ -27,6 +27,10 @@ from slowapi.util import get_remote_address
 
 load_dotenv()
 
+from utils.logging import configure_logging  # noqa: E402
+
+configure_logging()
+
 # Must happen before any langchain_google_genai import (which occurs inside src modules).
 from src.infra.llm_factory import apply_ipv6_patch_for_googleapis  # noqa: E402
 
