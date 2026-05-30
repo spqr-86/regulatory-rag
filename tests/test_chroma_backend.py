@@ -116,6 +116,53 @@ def test_get_by_filter_single_condition_passes_through():
 
 
 @pytest.mark.unit
+def test_get_by_filter_paginates_all_pages():
+    """get_by_filter must return ALL matching docs, not just the first page."""
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
+        mock_vs = MagicMock(spec=Chroma)
+
+        def fake_get(where=None, limit=None, offset=0, **kwargs):
+            # 5 total docs, page size 2 → pages: [0,1], [2,3], [4], []
+            all_docs = [f"d{i}" for i in range(5)]
+            page = all_docs[offset : offset + limit]
+            return {
+                "documents": page,
+                "metadatas": [{"source": "big.pdf"}] * len(page),
+            }
+
+        mock_vs.get.side_effect = fake_get
+        mock_load.return_value = mock_vs
+
+        from src.backends.chroma_backend import ChromaBackend
+
+        docs = ChromaBackend().get_by_filter({"source": "big.pdf"}, limit=2)
+        assert [d.page_content for d in docs] == ["d0", "d1", "d2", "d3", "d4"]
+
+
+@pytest.mark.unit
+def test_iter_all_documents_paginates():
+    """iter_all_documents must batch via offset and return all docs."""
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
+        mock_vs = MagicMock(spec=Chroma)
+
+        def fake_get(limit=None, offset=0, **kwargs):
+            all_docs = [f"d{i}" for i in range(3)]
+            page = all_docs[offset : offset + limit]
+            return {
+                "documents": page,
+                "metadatas": [{"source": "a"}] * len(page),
+            }
+
+        mock_vs.get.side_effect = fake_get
+        mock_load.return_value = mock_vs
+
+        from src.backends.chroma_backend import ChromaBackend
+
+        docs = list(ChromaBackend().iter_all_documents())
+        assert [d["text"] for d in docs] == ["d0", "d1", "d2"]
+
+
+@pytest.mark.unit
 def test_satisfies_protocol():
     from src.backends.chroma_backend import ChromaBackend
     from src.backends.vector_store import VectorStoreBackend

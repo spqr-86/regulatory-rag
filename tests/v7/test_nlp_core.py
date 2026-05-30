@@ -148,6 +148,17 @@ class TestBM25Index:
         assert results == []
 
     @pytest.mark.unit
+    def test_lifts_chunk_id_from_metadata(self):
+        """When chunk_id lives in metadata, it is lifted to top-level on results."""
+        corpus = [
+            {"text": "ограждение лестницы", "metadata": {"chunk_id": 11}},
+            {"text": "пожарная безопасность", "metadata": {"chunk_id": 12}},
+        ]
+        index = BM25Index(corpus)
+        results = index.search("ограждение", top_k=2)
+        assert results[0]["chunk_id"] == 11
+
+    @pytest.mark.unit
     def test_score_field_set(self, corpus):
         """score equals bm25_score when score was absent in the source passage."""
         index = BM25Index(corpus)
@@ -309,3 +320,72 @@ class TestMergeAllPassages:
     @pytest.mark.unit
     def test_empty_attempts(self):
         assert merge_all_passages([], top_k=5) == []
+
+    @pytest.mark.unit
+    def test_dedup_by_content_hash_when_chunk_id_absent(self):
+        """Without chunk_id, identical chunks must still dedup via content hash."""
+        p = {
+            "text": "одинаковый текст фрагмента",
+            "score": 0.9,
+            "doc_id": "d1",
+            "metadata": {"source": "a.pdf", "page_no": 1},
+        }
+        attempts = [{"passages": [dict(p)]}, {"passages": [dict(p)]}]
+        result = merge_all_passages(attempts, top_k=5, mmr_lambda=0.7)
+        assert len(result) == 1
+
+    @pytest.mark.unit
+    def test_distinct_chunks_without_chunk_id_not_collapsed(self):
+        """Different chunks without chunk_id must NOT collapse to one."""
+        attempts = [
+            {
+                "passages": [
+                    {
+                        "text": "первый фрагмент",
+                        "score": 0.9,
+                        "metadata": {"source": "a.pdf", "page_no": 1},
+                    }
+                ]
+            },
+            {
+                "passages": [
+                    {
+                        "text": "второй фрагмент",
+                        "score": 0.8,
+                        "metadata": {"source": "a.pdf", "page_no": 2},
+                    }
+                ]
+            },
+        ]
+        result = merge_all_passages(attempts, top_k=5, mmr_lambda=0.7)
+        assert len(result) == 2
+
+
+# ─── rrf_merge fallback identity ──────────────────────────────────────────
+
+
+class TestRRFMergeIdentityFallback:
+    @pytest.mark.unit
+    def test_fuses_same_chunk_id_across_lists(self):
+        """Same chunk_id appearing in two lists fuses to a single entry."""
+        list1 = [{"chunk_id": 5, "text": "doc", "metadata": {"source": "a.pdf"}}]
+        list2 = [{"chunk_id": 5, "text": "doc", "metadata": {"source": "a.pdf"}}]
+        merged = rrf_merge(list1, list2, top_k=5, k=60)
+        assert len(merged) == 1
+
+    @pytest.mark.unit
+    def test_fuses_by_content_hash_without_chunk_id(self):
+        """Same chunk (no chunk_id) from vector+bm25 fuses by content hash."""
+        meta = {"source": "a.pdf", "page_no": 3}
+        list1 = [{"text": "повторный инструктаж раз в полгода", "metadata": meta}]
+        list2 = [{"text": "повторный инструктаж раз в полгода", "metadata": meta}]
+        merged = rrf_merge(list1, list2, top_k=5, k=60)
+        assert len(merged) == 1
+
+    @pytest.mark.unit
+    def test_distinct_chunks_at_same_rank_not_collided(self):
+        """Two different chunks at rank 0 must not collide (no rank keying)."""
+        list1 = [{"text": "альфа фрагмент", "metadata": {"source": "a.pdf"}}]
+        list2 = [{"text": "бета фрагмент", "metadata": {"source": "b.pdf"}}]
+        merged = rrf_merge(list1, list2, top_k=5, k=60)
+        assert len(merged) == 2

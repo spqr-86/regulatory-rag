@@ -40,11 +40,12 @@ class VectorStoreBackend(Protocol):
         """Total document count."""
         ...
 
-    def get_by_filter(self, where: dict, limit: int = 200) -> list[Document]:
-        """Metadata filter query.
+    def get_by_filter(self, where: dict, limit: int = 500) -> list[Document]:
+        """Metadata filter query. Returns ALL matching docs (paginated).
 
         `where` uses Chroma syntax: {"field": value} or
         {"field": {"$gte": N, "$lte": M}}. Backends translate as needed.
+        `limit` is the page size, not a hard cap on the result count.
         """
         ...
 

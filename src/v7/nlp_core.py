@@ -204,6 +204,12 @@ class BM25Index:
             p["bm25_score"] = round(float(score), 4)
             if "score" not in p:
                 p["score"] = p["bm25_score"]
+            # Lift chunk_id from metadata to top level so RRF fusion / dedup
+            # key on document identity (see passage_identity).
+            if "chunk_id" not in p:
+                meta_cid = (p.get("metadata") or {}).get("chunk_id")
+                if meta_cid is not None:
+                    p["chunk_id"] = meta_cid
             results.append(p)
         return results
 
@@ -233,6 +239,30 @@ def bm25_search(
     return []
 
 
+# ─── Document identity ────────────────────────────────────────────────────
+
+
+def passage_identity(p: dict) -> str:
+    """Stable document-identity key for fusion / dedup.
+
+    Prefers the index-time ``chunk_id`` (per-source sequential int). When it is
+    absent (e.g. an old index not yet reindexed) falls back to a STABLE content
+    hash ``source|page_no|text[:80]`` — never the rank/list position, so two
+    copies of the same chunk from vector + BM25 lists collapse to one and two
+    distinct chunks at the same rank do NOT collide.
+    """
+    cid = p.get("chunk_id")
+    if cid is not None and cid != "":
+        meta = p.get("metadata") or {}
+        source = meta.get("source", "")
+        return f"{source}#{cid}"
+    meta = p.get("metadata") or {}
+    source = meta.get("source", "")
+    page_no = meta.get("page_no", "")
+    text = (p.get("text", "") or "")[:80]
+    return f"{source}|{page_no}|{text}"
+
+
 # ─── RRF merge ────────────────────────────────────────────────────────────
 
 
@@ -255,7 +285,7 @@ def rrf_merge(
 
     for results in result_lists:
         for rank, p in enumerate(results):
-            cid = p.get("chunk_id", f"unknown_{rank}")
+            cid = passage_identity(p)
             rrf_score = 1.0 / (k + rank + 1)
             chunk_scores[cid] = chunk_scores.get(cid, 0.0) + rrf_score
             if cid not in chunk_map:
@@ -346,8 +376,8 @@ def merge_all_passages(
 
     for attempt in attempts:
         for p in attempt.get("passages", []):
-            cid = p.get("chunk_id", "")
-            if cid and cid in seen_chunks:
+            cid = passage_identity(p)
+            if cid in seen_chunks:
                 continue
             seen_chunks.add(cid)
             all_passages.append(p)

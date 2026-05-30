@@ -34,7 +34,6 @@ from src.backends.vector_store import get_vector_store_backend  # noqa: E402
 from src.v7.bridge import init_v7_pipeline  # noqa: E402
 from src.v7.graph import build_graph  # noqa: E402
 
-
 # In-scope questions with correctness < 7 from eval_v7_2026-05-29.jsonl
 TARGET_QUESTIONS = [
     "Как проводится расследование несчастного случая на производстве?",

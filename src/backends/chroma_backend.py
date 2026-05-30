@@ -35,15 +35,37 @@ class ChromaBackend:
     ) -> list[str]:
         return self._vs.add_texts(texts=texts, metadatas=metadatas or [])
 
-    def iter_all_documents(self) -> Iterator[dict]:
-        data = self._vs.get(include=["metadatas", "documents"])
-        for text, meta in zip(data["documents"], data["metadatas"]):
-            yield {"text": text, "metadata": meta or {}}
+    def iter_all_documents(self, page_size: int = 1000) -> Iterator[dict]:
+        # Batch via offset/limit so a large collection is neither truncated by
+        # an implicit backend cap nor fully materialised in memory at once.
+        offset = 0
+        while True:
+            data = self._vs.get(
+                include=["metadatas", "documents"],
+                limit=page_size,
+                offset=offset,
+            )
+            documents = data.get("documents") or []
+            if not documents:
+                break
+            metadatas = data.get("metadatas") or []
+            for i, text in enumerate(documents):
+                meta = metadatas[i] if i < len(metadatas) else None
+                yield {"text": text, "metadata": meta or {}}
+            if len(documents) < page_size:
+                break
+            offset += page_size
 
     def count(self) -> int:
         return self._vs._collection.count()
 
-    def get_by_filter(self, where: dict, limit: int = 200) -> list[Document]:
+    def get_by_filter(self, where: dict, limit: int = 500) -> list[Document]:
+        """Return ALL docs matching ``where``.
+
+        ``limit`` is the page size, not a hard cap: results are paginated via
+        offset until a page comes back short. Sources with > limit chunks
+        (e.g. ТК РФ, > 500) are returned in full instead of being truncated.
+        """
         from src.indexing.chroma_helpers import chroma_results_to_documents
 
         # Chroma needs explicit $and wrapper for multi-condition filters
@@ -60,5 +82,14 @@ class ChromaBackend:
             )
         else:
             chroma_where = where
-        result = self._vs.get(where=chroma_where, limit=limit)
-        return chroma_results_to_documents(result)
+
+        docs: list[Document] = []
+        offset = 0
+        while True:
+            result = self._vs.get(where=chroma_where, limit=limit, offset=offset)
+            page = chroma_results_to_documents(result)
+            docs.extend(page)
+            if len(page) < limit:
+                break
+            offset += limit
+        return docs

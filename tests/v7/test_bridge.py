@@ -46,6 +46,17 @@ class TestMakeVectorSearchFn:
         assert result[0]["score"] == pytest.approx(1.0 / 1.3, abs=0.01)
 
     @pytest.mark.unit
+    def test_lifts_chunk_id_to_top_level(self):
+        mock_store = MagicMock()
+        mock_doc = MagicMock()
+        mock_doc.page_content = "text"
+        mock_doc.metadata = {"source": "gost.pdf", "chunk_id": 7}
+        mock_store.similarity_search_with_score.return_value = [(mock_doc, 0.2)]
+        fn = make_vector_search_fn(mock_store)
+        result = fn(query="q", top_k=3)
+        assert result[0]["chunk_id"] == 7
+
+    @pytest.mark.unit
     def test_respects_top_k(self):
         mock_store = MagicMock()
         mock_store.similarity_search_with_score.return_value = []

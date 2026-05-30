@@ -86,12 +86,18 @@ class ApplicabilityRetriever(BaseRetriever):
         docs_keyword = self.bm25_retriever.invoke(query)
         all_docs.extend(docs_keyword)
 
-        # 3. Deduplication (no Reciprocal Rank Fusion — just uniqueness)
+        # 3. Deduplication (no Reciprocal Rank Fusion — just uniqueness).
+        # Prefer the index-time chunk_id (source-scoped) as the identity key.
+        # Falls back to the full page_content only when chunk_id is absent —
+        # a content[:200] prefix collapses distinct chunks that share a
+        # contextual heading prefix (contextual embedding), losing content.
         unique_docs = {}
         for doc in all_docs:
-            # Use content hash as key
-            # (chunk_id in metadata would be ideal, but we rely on content)
-            key = doc.page_content[:200]  # Hash by text start (heading + partial body)
+            cid = doc.metadata.get("chunk_id")
+            if cid is not None:
+                key = (doc.metadata.get("source", ""), cid)
+            else:
+                key = doc.page_content
             if key not in unique_docs:
                 unique_docs[key] = doc
 

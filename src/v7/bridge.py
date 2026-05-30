@@ -10,7 +10,6 @@ Responsibilities:
 
 from __future__ import annotations
 
-import re
 import threading
 from typing import Callable, List
 
@@ -25,6 +24,7 @@ from src.infra.parsers import (
     extract_text,
 )  # noqa: F401  # used by other make_*_fn
 from src.infra.prompt_manager import PromptManager
+from src.v7.cross_ref import expand_cross_references
 from src.v7.nlp_core import init_bm25_index
 from src.v7.nodes import generate_answer as generate_answer_mod
 from src.v7.nodes import rag_complex as rag_complex_mod
@@ -38,6 +38,18 @@ _pm = PromptManager()
 # Concurrent calls serialize to prevent readers observing a half-initialized
 # pipeline state (7 set_*_fn injectors + BM25 build are not atomic individually).
 _init_lock = threading.RLock()
+
+
+def _doc_to_passage(text: str, meta: dict, score: float = 0.0) -> dict:
+    """Build a v7 passage dict, lifting chunk_id from metadata to top level.
+
+    Centralises passage construction from a Chroma/backend result so RRF fusion
+    and dedup key on document identity (see nlp_core.passage_identity).
+    """
+    passage = {"text": text, "metadata": meta, "score": score}
+    if "chunk_id" in meta:
+        passage["chunk_id"] = meta["chunk_id"]
+    return passage
 
 
 def make_visual_proof_fn() -> Callable[[str, int, list, str], str]:
@@ -168,13 +180,16 @@ def make_vector_search_fn(vector_store) -> Callable[..., List[dict]]:
         for doc, distance in docs_and_scores:
             # ChromaDB returns L2 distance (0..inf). Convert to similarity (0..1).
             similarity = 1.0 / (1.0 + distance)
-            results.append(
-                {
-                    "text": doc.page_content,
-                    "metadata": dict(doc.metadata),
-                    "score": round(similarity, 4),
-                }
-            )
+            meta = dict(doc.metadata)
+            passage = {
+                "text": doc.page_content,
+                "metadata": meta,
+                "score": round(similarity, 4),
+            }
+            # Lift chunk_id to top level for RRF fusion / dedup identity.
+            if "chunk_id" in meta:
+                passage["chunk_id"] = meta["chunk_id"]
+            results.append(passage)
         return results
 
     return _search
@@ -207,11 +222,7 @@ def make_section_fetch_fn(
                     limit=max_section_chunks,
                 )
                 return [
-                    {
-                        "text": d.page_content,
-                        "metadata": dict(d.metadata or {}),
-                        "score": 0.0,
-                    }
+                    _doc_to_passage(d.page_content, dict(d.metadata or {}))
                     for d in docs
                 ]
             col = vector_store._collection
@@ -227,13 +238,7 @@ def make_section_fetch_fn(
             )
             extra = []
             for doc, meta in zip(results["documents"], results["metadatas"]):
-                extra.append(
-                    {
-                        "text": doc,
-                        "metadata": dict(meta),
-                        "score": 0.0,
-                    }
-                )
+                extra.append(_doc_to_passage(doc, dict(meta or {})))
             return extra
         except Exception as exc:
             logger.warning("section_fetch failed: %s", exc)
@@ -277,173 +282,6 @@ def make_expand_fn(llm, n: int = 3) -> Callable[[str, int], List[str]]:
             return []
 
     return _expand
-
-
-# Patterns for Russian references to clauses/articles in regulations
-_REF_PATTERNS = [
-    re.compile(r"пункт\w*\s+(\d+)", re.IGNORECASE),
-    re.compile(r'подпункт\w*\s+[«"]?([а-яё])[»"]?', re.IGNORECASE),
-    re.compile(r"стать\w+\s+(\d+)", re.IGNORECASE),
-]
-
-
-def _extract_refs(text: str) -> list[str]:
-    """Extract clause/article references from chunk text."""
-    found: list[str] = []
-    for pattern in _REF_PATTERNS:
-        for m in pattern.finditer(text):
-            ref = m.group(1)
-            if ref not in found:
-                found.append(ref)
-    return found
-
-
-def expand_cross_references(
-    passages: list[dict],
-    backend,
-    query: str = "",
-) -> list[dict]:
-    """Fetch chunks linked to the found passages via cross-references.
-
-    Two mechanisms:
-    1. Explicit refs: searches for "пункт N", "статью N" in passage text and pulls
-       chunks from the same source where that number appears.
-    2. BM25 re-search: for each unique source in passages runs bm25_search
-       on the query and adds chunks from that source (catches reverse references,
-       e.g. п.60 referencing п.46.в, not the other way round).
-    """
-    if not passages:
-        return passages
-
-    existing_texts = {p["text"] for p in passages}
-    extra: list[dict] = []
-
-    def _add(text: str, metadata: dict) -> None:
-        if text and text not in existing_texts:
-            existing_texts.add(text)
-            extra.append(
-                {"text": text, "score": 0.35, "metadata": metadata, "cross_ref": True}
-            )
-
-    # ── Mechanism 1: explicit refs in passage text ───────────────────────────
-    for passage in passages:
-        source = passage.get("metadata", {}).get("source", "")
-        if not source:
-            continue
-        refs = _extract_refs(passage.get("text", ""))
-        for ref in refs:
-            try:
-                docs = backend.get_by_filter(
-                    where={"source": source},
-                    limit=500,
-                )
-                for doc in docs:
-                    if ref in doc.page_content:
-                        _add(doc.page_content, doc.metadata)
-            except Exception:
-                continue
-
-    # ── Mechanism 2: BM25 re-search within same sources ───────────────────────
-    if query:
-        try:
-            from src.v7.nlp_core import bm25_search
-
-            unique_sources = {
-                p.get("metadata", {}).get("source", "") for p in passages
-            } - {""}
-            bm25_results = bm25_search(query, top_k=30)
-            for r in bm25_results:
-                if r.get("metadata", {}).get("source") in unique_sources:
-                    _add(r.get("text", ""), r.get("metadata", {}))
-        except Exception:
-            pass
-
-    # ── Mechanism 3: numbered-list expansion ─────────────────────────────────
-    # If a passage starts with "N. а)" (subparagraph of a numbered list), pull
-    # sibling subparagraphs "N. б)", "N. в)" ... from the same source so the
-    # full enumeration is available for generation.
-    _SUBPARA_RE = re.compile(r"^\s*(\d+)\.\s+[а-яё]\)", re.IGNORECASE)
-    for passage in list(passages):  # iterate original only
-        text = passage.get("text", "")
-        m = _SUBPARA_RE.match(text)
-        if not m:
-            continue
-        para_num = m.group(1)
-        source = passage.get("metadata", {}).get("source", "")
-        if not source:
-            continue
-        try:
-            docs = backend.get_by_filter(where={"source": source}, limit=500)
-            for doc in docs:
-                if _SUBPARA_RE.match(doc.page_content) and doc.page_content.startswith(
-                    para_num + "."
-                ):
-                    _add(doc.page_content, doc.metadata)
-        except Exception:
-            continue
-
-    # ── Mechanism 4: same-bbox block expansion ───────────────────────────────
-    # HybridChunker sometimes splits one PDF text block into multiple chunks
-    # that share the same source + page_no + bbox. Pull all siblings so a
-    # truncated sentence ("связана с ...") gets its continuation.
-    # Siblings inherit the parent passage score so they rank alongside it.
-    bbox_extra: list[dict] = []
-
-    def _add_bbox(text: str, metadata: dict, parent_score: float) -> None:
-        if text and text not in existing_texts:
-            existing_texts.add(text)
-            bbox_extra.append(
-                {
-                    "text": text,
-                    "score": parent_score,
-                    "metadata": metadata,
-                    "cross_ref": True,
-                }
-            )
-
-    for passage in list(passages):  # iterate original only
-        meta = passage.get("metadata", {})
-        source = meta.get("source", "")
-        page_no = meta.get("page_no")
-        bbox = meta.get("bbox")
-        if not (source and page_no is not None and bbox):
-            continue
-        parent_score = passage.get("score", 0.35)
-        try:
-            docs = backend.get_by_filter(where={"source": source}, limit=500)
-            for doc in docs:
-                dm = doc.metadata
-                if (
-                    dm.get("page_no") == page_no
-                    and dm.get("bbox") == bbox
-                    and dm.get("source") == source
-                ):
-                    _add_bbox(doc.page_content, doc.metadata, parent_score)
-        except Exception:
-            continue
-
-    # Insert bbox siblings right after their parent passage so they stay adjacent
-    # in the ranked list and don't get pushed past the [:30] cutoff.
-    result: list[dict] = []
-    for passage in passages:
-        result.append(passage)
-        meta = passage.get("metadata", {})
-        source, page_no, bbox = (
-            meta.get("source"),
-            meta.get("page_no"),
-            meta.get("bbox"),
-        )
-        siblings = [
-            p
-            for p in bbox_extra
-            if p["metadata"].get("source") == source
-            and p["metadata"].get("page_no") == page_no
-            and p["metadata"].get("bbox") == bbox
-        ]
-        result.extend(siblings)
-    # Append remaining extra (mechanisms 1-3) at the end
-    result.extend(extra)
-    return result
 
 
 def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]:
