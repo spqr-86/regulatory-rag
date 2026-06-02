@@ -46,6 +46,9 @@ _NOISE_PATTERNS = re.compile(
 def _clean_noise(text: str) -> str:
     """Remove noise: normalise Cyrillic, strip URLs/page markers/timestamps."""
     text = unicodedata.normalize("NFC", text)
+    # Normalise dashes: en-dash → em-dash (avoid mismatch on search).
+    # Glue hyphenated line-breaks ("рабо-\nтодатель" → "работодатель").
+    text = text.replace("–", "—").replace("-\n", "")
     cleaned = _NOISE_PATTERNS.sub("", text)
     cleaned = re.sub(r" {2,}", " ", cleaned)
     return cleaned.strip()
