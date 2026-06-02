@@ -13,6 +13,7 @@
 | 5 | **Integration tests** с реальным ChromaDB | ~1 день | покрытие E2E | |
 | 6 | **MCP-сервер поверх RAG** — search_knowledge tool для Claude | ~1 день | Claude ищет по ~/knowledge/ | |
 | 7 | **eval/compare.py** — адаптировать под V7 метрики (correctness, faithfulness, false_sufficiency вместо completeness/abstain_rate) | ~1 ч | A/B сравнение прогонов из benchmarks/ | |
+| 8 | **Incremental index management** — delete/upsert по источнику без полной переиндексации: `collection.delete(where={"source": X})` + add. Позволяет обновить один документ без сноса всей ChromaDB | ~2 ч | обновление документа за секунды вместо 10-15 мин | |
 
 ---
 

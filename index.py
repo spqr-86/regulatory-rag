@@ -23,10 +23,10 @@ def _collect_paths(root_dir: str, allowed_exts: list[str]) -> list[str]:
 
 
 def main():
-    logger.info("Запуск процесса индексации...")
+    logger.info("Starting indexing...")
 
     if os.path.exists(settings.CHROMA_DB_PATH):
-        logger.info(f"Удаление старой базы данных из: {settings.CHROMA_DB_PATH}...")
+        logger.info(f"Dropping existing DB: {settings.CHROMA_DB_PATH}...")
         shutil.rmtree(settings.CHROMA_DB_PATH, ignore_errors=True)
 
     # Invalidate caches tied to index contents.
@@ -53,11 +53,12 @@ def main():
     chunks = processor.process(file_paths)
 
     if chunks:
-        logger.info(f"Всего будет проиндексировано {len(chunks)} чанков.")
+        logger.info(f"Indexing {len(chunks)} chunks...")
+        # Embed chunks and persist to ChromaDB (destructive: drops old collection).
         get_vector_store_backend(load_existing=False).create(chunks)
-        logger.info("Индексация успешно завершена.")
+        logger.info("Indexing complete.")
     else:
-        logger.warning("Чанки не получены. Проверьте документы/конвертацию.")
+        logger.warning("No chunks produced. Check documents/conversion.")
 
 
 if __name__ == "__main__":
