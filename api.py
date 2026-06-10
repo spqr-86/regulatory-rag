@@ -143,6 +143,8 @@ def query(request: Request, req: QueryRequest) -> QueryResponse:
 
     if result.get("clarify_message"):
         answer = result["clarify_message"]
+    elif result.get("intent") == "noise":
+        answer = "Задайте вопрос по нормативной документации."
     elif result.get("abstain_reason"):
         answer = f"Не могу ответить: {result['abstain_reason']}"
     else:
@@ -185,8 +187,16 @@ def _infer_path(result: dict) -> str:
     """Derive human-readable pipeline path from state."""
     if result.get("clarify_message"):
         return "intent_gate → END (chitchat/oos)"
+    if result.get("intent") == "noise":
+        return "intent_gate → END (noise/oos)"
     if result.get("abstain_reason"):
         return "... → abstain → END"
-    if result.get("complex_passages"):
-        return "rag_simple → evaluate_triage → rag_complex → generate_answer → END"
-    return "rag_simple → evaluate_triage → generate_answer → END"
+    retrieval_attempts = result.get("retrieval_attempts")
+    if retrieval_attempts:
+        last_stage = retrieval_attempts[-1].get("stage", "")
+        if last_stage == "complex":
+            return "rag_simple → evaluate_triage → rag_complex → generate_answer → END"
+        return "rag_simple → evaluate_triage → generate_answer → END"
+    if result.get("final_passages"):
+        return "rag_simple → evaluate_triage → generate_answer → END"
+    return "intent_gate → END"
