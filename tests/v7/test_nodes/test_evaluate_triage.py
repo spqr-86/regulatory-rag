@@ -35,9 +35,24 @@ class TestEvaluateTriage:
     @pytest.mark.unit
     def test_sufficient(self):
         passages = [
-            {"text": "ограждение лестница высота", "score": 0.8, "doc_id": "d1"},
-            {"text": "ограждение балкон нормы", "score": 0.7, "doc_id": "d2"},
-            {"text": "лестница ограждение проект", "score": 0.65, "doc_id": "d3"},
+            {
+                "text": "ограждение лестница высота",
+                "score": 0.8,
+                "vector_score": 0.8,
+                "doc_id": "d1",
+            },
+            {
+                "text": "ограждение балкон нормы",
+                "score": 0.7,
+                "vector_score": 0.7,
+                "doc_id": "d2",
+            },
+            {
+                "text": "лестница ограждение проект",
+                "score": 0.65,
+                "vector_score": 0.65,
+                "doc_id": "d3",
+            },
         ]
         state = {
             "query": "ограждение лестница",
@@ -267,14 +282,21 @@ class TestCrossrefSignal:
                     "в соответствии с приложением 1"
                 ),
                 "score": 0.85,
+                "vector_score": 0.85,
                 "doc_id": "d1",
             },
             {
                 "text": "пункт 5 настоящего документа содержит перечень исключений",
                 "score": 0.80,
+                "vector_score": 0.80,
                 "doc_id": "d2",
             },
-            {"text": "ограждение лестница высота", "score": 0.75, "doc_id": "d3"},
+            {
+                "text": "ограждение лестница высота",
+                "score": 0.75,
+                "vector_score": 0.75,
+                "doc_id": "d3",
+            },
         ]
         state = {
             "query": "ограждение лестница",
@@ -302,16 +324,19 @@ class TestCrossrefSignal:
             {
                 "text": "ограждение лестница высота не менее метра",
                 "score": 0.85,
+                "vector_score": 0.85,
                 "doc_id": "d1",
             },
             {
                 "text": "ограждение балкон требования проекта",
                 "score": 0.75,
+                "vector_score": 0.75,
                 "doc_id": "d2",
             },
             {
                 "text": "лестница ограждение строительные нормы",
                 "score": 0.70,
+                "vector_score": 0.70,
                 "doc_id": "d3",
             },
         ]

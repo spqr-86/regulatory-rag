@@ -85,7 +85,7 @@ def check_hard_gates(
             keyword_overlap_original=0.0,
         )
 
-    top_score = max((p.get("score", 0.0) for p in passages), default=0.0)
+    top_score = max((p.get("vector_score", 0.0) for p in passages), default=0.0)
     overlap_active = compute_keyword_overlap(active_query, passages)
     overlap_original = compute_keyword_overlap(original_query, passages)
 

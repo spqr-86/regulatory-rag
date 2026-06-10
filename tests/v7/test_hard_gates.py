@@ -93,9 +93,9 @@ class TestCheckHardGates:
     @pytest.mark.unit
     def test_all_gates_pass(self):
         passages = [
-            {"text": "ограждение лестница высота", "score": 0.8},
-            {"text": "ограждение балкон требования", "score": 0.7},
-            {"text": "лестница ограждение нормы", "score": 0.65},
+            {"text": "ограждение лестница высота", "score": 0.8, "vector_score": 0.8},
+            {"text": "ограждение балкон требования", "score": 0.7, "vector_score": 0.7},
+            {"text": "лестница ограждение нормы", "score": 0.65, "vector_score": 0.65},
         ]
         result = check_hard_gates(
             "ограждение лестница", "ограждение лестница", passages, self.PLAN
@@ -150,11 +150,11 @@ class TestCheckHardGates:
 
     @pytest.mark.unit
     def test_score_exactly_on_threshold(self):
-        """Score ровно на пороге — should pass."""
+        """vector_score ровно на пороге — should pass."""
         passages = [
-            {"text": "ограждение лестница высота", "score": 0.65},
-            {"text": "ограждение балкон нормы", "score": 0.5},
-            {"text": "лестница ограждение проект", "score": 0.4},
+            {"text": "ограждение лестница высота", "score": 0.65, "vector_score": 0.65},
+            {"text": "ограждение балкон нормы", "score": 0.5, "vector_score": 0.5},
+            {"text": "лестница ограждение проект", "score": 0.4, "vector_score": 0.4},
         ]
         result = check_hard_gates(
             "ограждение лестница", "ограждение лестница", passages, self.PLAN
@@ -178,9 +178,24 @@ class TestCheckFullTriage:
     @pytest.mark.unit
     def test_sufficient(self):
         passages = [
-            {"text": "ограждение лестница", "score": 0.8, "doc_id": "d1"},
-            {"text": "ограждение балкон", "score": 0.7, "doc_id": "d2"},
-            {"text": "лестница нормы", "score": 0.6, "doc_id": "d3"},
+            {
+                "text": "ограждение лестница",
+                "score": 0.8,
+                "vector_score": 0.8,
+                "doc_id": "d1",
+            },
+            {
+                "text": "ограждение балкон",
+                "score": 0.7,
+                "vector_score": 0.7,
+                "doc_id": "d2",
+            },
+            {
+                "text": "лестница нормы",
+                "score": 0.6,
+                "vector_score": 0.6,
+                "doc_id": "d3",
+            },
         ]
         result = check_full_triage(
             "ограждение лестница", "ограждение лестница", passages, self.PLAN
@@ -199,10 +214,20 @@ class TestCheckFullTriage:
 
     @pytest.mark.unit
     def test_borderline_score_in_zone(self):
-        """Score between borderline and threshold → borderline."""
+        """vector_score between borderline and threshold → borderline."""
         passages = [
-            {"text": "ограждение лестница", "score": 0.50, "doc_id": "d1"},
-            {"text": "ограждение балкон", "score": 0.45, "doc_id": "d2"},
+            {
+                "text": "ограждение лестница",
+                "score": 0.50,
+                "vector_score": 0.50,
+                "doc_id": "d1",
+            },
+            {
+                "text": "ограждение балкон",
+                "score": 0.45,
+                "vector_score": 0.45,
+                "doc_id": "d2",
+            },
         ]
         result = check_full_triage(
             "ограждение лестница", "ограждение лестница", passages, self.PLAN
@@ -217,9 +242,24 @@ class TestCheckFullTriage:
         escalation_hint НЕ выставляется когда multi-doc не требуется.
         """
         passages = [
-            {"text": "ограждение лестница", "score": 0.8, "doc_id": "d1"},
-            {"text": "ограждение балкон", "score": 0.7, "doc_id": "d1"},
-            {"text": "лестница нормы", "score": 0.65, "doc_id": "d1"},
+            {
+                "text": "ограждение лестница",
+                "score": 0.8,
+                "vector_score": 0.8,
+                "doc_id": "d1",
+            },
+            {
+                "text": "ограждение балкон",
+                "score": 0.7,
+                "vector_score": 0.7,
+                "doc_id": "d1",
+            },
+            {
+                "text": "лестница нормы",
+                "score": 0.65,
+                "vector_score": 0.65,
+                "doc_id": "d1",
+            },
         ]
         result = check_full_triage(
             "ограждение лестница", "ограждение лестница", passages, self.PLAN
@@ -235,9 +275,24 @@ class TestCheckFullTriage:
         """require_multi_doc=True + все из одного дока → borderline (escalation_hint)."""
         plan = {**self.PLAN, "require_multi_doc": True}
         passages = [
-            {"text": "ограждение лестница", "score": 0.8, "doc_id": "d1"},
-            {"text": "ограждение балкон", "score": 0.7, "doc_id": "d1"},
-            {"text": "лестница нормы", "score": 0.65, "doc_id": "d1"},
+            {
+                "text": "ограждение лестница",
+                "score": 0.8,
+                "vector_score": 0.8,
+                "doc_id": "d1",
+            },
+            {
+                "text": "ограждение балкон",
+                "score": 0.7,
+                "vector_score": 0.7,
+                "doc_id": "d1",
+            },
+            {
+                "text": "лестница нормы",
+                "score": 0.65,
+                "vector_score": 0.65,
+                "doc_id": "d1",
+            },
         ]
         result = check_full_triage(
             "ограждение лестница", "ограждение лестница", passages, plan
@@ -251,8 +306,18 @@ class TestCheckFullTriage:
         """require_multi_doc=True + все из одного doc → sufficient=False."""
         plan = {**self.PLAN, "require_multi_doc": True}
         passages = [
-            {"text": "ограждение лестница", "score": 0.8, "doc_id": "d1"},
-            {"text": "ограждение балкон", "score": 0.7, "doc_id": "d1"},
+            {
+                "text": "ограждение лестница",
+                "score": 0.8,
+                "vector_score": 0.8,
+                "doc_id": "d1",
+            },
+            {
+                "text": "ограждение балкон",
+                "score": 0.7,
+                "vector_score": 0.7,
+                "doc_id": "d1",
+            },
         ]
         result = check_full_triage("ограждение", "ограждение", passages, plan)
         assert result["sufficient"] is False
@@ -313,8 +378,18 @@ class TestComputeAttemptMetrics:
     @pytest.mark.unit
     def test_returns_hard_and_metrics(self):
         passages = [
-            {"text": "ограждение лестница", "score": 0.8, "doc_id": "d1"},
-            {"text": "ограждение балкон", "score": 0.7, "doc_id": "d2"},
+            {
+                "text": "ограждение лестница",
+                "score": 0.8,
+                "vector_score": 0.8,
+                "doc_id": "d1",
+            },
+            {
+                "text": "ограждение балкон",
+                "score": 0.7,
+                "vector_score": 0.7,
+                "doc_id": "d2",
+            },
         ]
         plan = {"threshold": 0.65, "min_passages": 1, "min_keyword_overlap": 0.2}
         hard, metrics = compute_attempt_metrics(
@@ -326,3 +401,44 @@ class TestComputeAttemptMetrics:
         assert "keyword_overlap_original" in metrics
         assert metrics["unique_docs"] == 2
         assert metrics["passage_count"] == 2
+
+
+# ─── Phase-1 bug-fix tests ────────────────────────────────────────────────
+
+
+class TestPhase1HardGateFixes:
+    @pytest.mark.unit
+    def test_hard_gate_requires_vector_score(self):
+        """BM25-only passages (no vector_score) must not pass the hard gate.
+
+        Before the fix, raw bm25_score=12 was stored in score and would
+        satisfy threshold=0.5, allowing BM25-only results to bypass the gate.
+        """
+        plan = {"threshold": 0.5, "min_passages": 1, "min_keyword_overlap": 0.0}
+        passages = [
+            {
+                "text": "повторный инструктаж проводится раз в полгода",
+                "bm25_score": 12.0,
+                "score": 12.0 / (12.0 + 5.0),  # normalised, but no vector_score
+                "metadata": {"source": "2464.pdf"},
+            }
+        ]
+        result = check_hard_gates("инструктаж", "инструктаж", passages, plan)
+        assert result["above_threshold"] is False
+        assert result["top_score"] == 0.0
+
+    @pytest.mark.unit
+    def test_hard_gate_passes_with_vector_score(self):
+        """Passages with vector_score >= threshold must pass the hard gate."""
+        plan = {"threshold": 0.5, "min_passages": 1, "min_keyword_overlap": 0.0}
+        passages = [
+            {
+                "text": "повторный инструктаж проводится раз в полгода",
+                "score": 0.55,
+                "vector_score": 0.55,
+                "metadata": {"source": "2464.pdf"},
+            }
+        ]
+        result = check_hard_gates("инструктаж", "инструктаж", passages, plan)
+        assert result["above_threshold"] is True
+        assert result["top_score"] == 0.55

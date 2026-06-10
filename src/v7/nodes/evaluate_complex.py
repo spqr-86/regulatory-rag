@@ -24,7 +24,7 @@ def evaluate_complex(state: RAGState) -> RAGState:
     active_q = state.get("active_query", original_q)
 
     # 1. Merge passages from all attempts
-    merged = merge_all_passages(attempts, top_k=24)
+    merged = merge_all_passages(attempts, top_k=24, mmr_lambda=plan.get("mmr_lambda"))
     if merged:
         hard_m = check_hard_gates(original_q, active_q, merged, plan)
         if hard_m["sufficient"]:
@@ -49,10 +49,18 @@ def evaluate_complex(state: RAGState) -> RAGState:
     # 3. Fallback (fast-path): only accept if fallback passages actually pass hard gates.
     # Without this check, OOS queries whose rag_simple fallback had non-zero score
     # would slip through as sufficient even when kw_overlap=0.
+    # Use the simple-attempt plan for gate evaluation: fallback was produced on
+    # simple-path thresholds (min_passages=5, keyword_overlap≥0.15), so checking
+    # it against complex-plan thresholds (min_passages=8, keyword_overlap≥0.20)
+    # would incorrectly reject a valid simple result.
     fallback = state.get("fallback_passages")
     fallback_score = state.get("fallback_score", 0.0)
     if fallback and fallback_score > 0:
-        fb_hard = check_hard_gates(original_q, active_q, fallback, plan)
+        simple_plan = next(
+            (a["attempt_plan"] for a in attempts if a.get("stage") == "simple"),
+            plan,  # fall back to complex plan if no simple attempt found
+        )
+        fb_hard = check_hard_gates(original_q, active_q, fallback, simple_plan)
         if fb_hard["sufficient"]:
             return {
                 "sufficient": True,

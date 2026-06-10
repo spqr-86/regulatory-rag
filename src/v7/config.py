@@ -46,8 +46,6 @@ class V7Config(BaseSettings):
     # ── Retrieval engine ──────────────────────────────────────────────────
     RRF_K: int = 60
     MMR_LAMBDA: float = 0.7
-    BM25_TOP_K: int = 20
-    SEMANTIC_TOP_K: int = 20
 
     # ── Keyword overlap (dual) ────────────────────────────────────────────
     MIN_KEYWORD_OVERLAP_ORIGINAL: float = 0.10  # drift detection, even looser

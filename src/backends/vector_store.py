@@ -18,9 +18,12 @@ class VectorStoreBackend(Protocol):
     """Minimum API every backend must implement."""
 
     def similarity_search_with_score(
-        self, query: str, k: int = 10
+        self, query: str, k: int = 10, filter: dict | None = None
     ) -> list[tuple[Document, float]]:
-        """Top-k semantic search. Score is similarity (higher=better)."""
+        """Top-k semantic search. Score is similarity (higher=better).
+
+        ``filter`` is an optional Chroma-style metadata filter dict.
+        """
         ...
 
     def add_texts(
