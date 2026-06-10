@@ -45,6 +45,11 @@ class TestNeedsVisual:
         p = _passage("Короткий.", _coords())  # < 150 chars
         assert _needs_visual(p) is True
 
+    def test_true_for_page_no_zero(self):
+        # page_no=0 is a valid first page and must not be treated as falsy
+        p = _passage("короткий текст", _coords(page_no=0))
+        assert _needs_visual(p) is True
+
     def test_true_for_incomplete_chunk(self):
         # No terminal punctuation → detect_incomplete_chunk → True
         text = "Требования к организации рабочих мест изложены в следующем разделе"

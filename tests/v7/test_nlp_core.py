@@ -159,12 +159,16 @@ class TestBM25Index:
         assert results[0]["chunk_id"] == 11
 
     @pytest.mark.unit
-    def test_score_field_set(self, corpus):
-        """score equals bm25_score when score was absent in the source passage."""
+    def test_score_field_normalized(self, corpus):
+        """score is normalized to [0, 1] via squash; bm25_score retains raw value."""
         index = BM25Index(corpus)
         results = index.search("пожарная безопасность", top_k=2)
         for r in results:
-            assert r["score"] == r["bm25_score"]
+            assert 0.0 <= r["score"] <= 1.0
+            assert r["bm25_score"] >= 0.0
+            # bm25_score and score are NOT equal (score is squashed)
+            if r["bm25_score"] > 0:
+                assert r["score"] != r["bm25_score"]
 
 
 # ─── rrf_merge ─────────────────────────────────────────────────────────────
@@ -389,3 +393,90 @@ class TestRRFMergeIdentityFallback:
         list2 = [{"text": "бета фрагмент", "metadata": {"source": "b.pdf"}}]
         merged = rrf_merge(list1, list2, top_k=5, k=60)
         assert len(merged) == 2
+
+
+# ─── Phase-1 bug-fix tests ────────────────────────────────────────────────
+
+
+class TestPhase1BM25Normalization:
+    @pytest.mark.unit
+    def test_bm25_score_normalized(self):
+        """BM25 passage with high raw score → score in [0,1], bm25_score stays raw.
+
+        Before the fix, raw bm25_score (e.g. 12) was copied to score, which
+        could satisfy hard gate threshold=0.5 even for BM25-only passages.
+        """
+        corpus = [
+            {
+                "text": "повторный инструктаж проводится раз в шесть месяцев",
+                "metadata": {"source": "2464.pdf"},
+            },
+            {
+                "text": "пожарная безопасность здания и сооружений",
+                "metadata": {"source": "1479.pdf"},
+            },
+        ]
+        index = BM25Index(corpus)
+        results = index.search("повторный инструктаж", top_k=2)
+        assert results, "expected at least one result"
+        top = results[0]
+        # bm25_score retains the raw (unbounded) value
+        raw = top["bm25_score"]
+        assert raw >= 0.0
+        # score must be squashed into [0, 1]
+        assert 0.0 <= top["score"] <= 1.0
+        # for any non-zero bm25 score the squashed value differs from the raw one
+        if raw > 0:
+            assert top["score"] != raw
+
+    @pytest.mark.unit
+    def test_bm25_doc_id_set(self):
+        """BM25 search results carry doc_id from metadata.source."""
+        corpus = [
+            {"text": "инструктаж по охране труда", "metadata": {"source": "2464.pdf"}},
+        ]
+        index = BM25Index(corpus)
+        results = index.search("инструктаж", top_k=1)
+        assert results[0]["doc_id"] == "2464.pdf"
+
+
+class TestPhase1MMRPrefersVectorScore:
+    @pytest.mark.unit
+    def test_mmr_prefers_vector_score(self):
+        """Chunk with vector_score=0.9 must rank above chunk with only bm25_score=12.
+
+        mmr_select reads vector_score first; BM25-only chunks fall back to
+        normalised score (~0.7 for bm25=12), so the vector chunk should win.
+        """
+        passages = [
+            {
+                "text": "чанк из векторного поиска",
+                "vector_score": 0.9,
+                "score": 0.9,
+                "doc_id": "a.pdf",
+                "chunk_id": "v1",
+            },
+            {
+                "text": "чанк только из BM25",
+                "bm25_score": 12.0,
+                "score": round(12.0 / (12.0 + 5.0), 4),  # ~0.706
+                "doc_id": "b.pdf",
+                "chunk_id": "b1",
+            },
+        ]
+        result = mmr_select(passages, top_k=1, lambda_param=1.0)
+        assert len(result) == 1
+        assert result[0]["chunk_id"] == "v1"
+
+
+class TestPhase1DocDiversityTwoSources:
+    @pytest.mark.unit
+    def test_doc_diversity_two_sources(self):
+        """Passages from two different sources → unique_docs=2, max_doc_ratio=0.5."""
+        passages = [
+            {"doc_id": "source_a.pdf"},
+            {"doc_id": "source_b.pdf"},
+        ]
+        unique_docs, max_doc_ratio = compute_doc_diversity(passages)
+        assert unique_docs == 2
+        assert max_doc_ratio == 0.5

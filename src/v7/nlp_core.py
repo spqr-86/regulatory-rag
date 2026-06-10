@@ -189,8 +189,9 @@ class BM25Index:
             p = self._passages[i]
             if filters:
                 skip = False
+                meta = p.get("metadata") or {}
                 for k, v in filters.items():
-                    if p.get(k) != v:
+                    if meta.get(k) != v:
                         skip = True
                         break
                 if skip:
@@ -201,9 +202,15 @@ class BM25Index:
         results = []
         for idx, score in candidates[:top_k]:
             p = dict(self._passages[idx])
-            p["bm25_score"] = round(float(score), 4)
-            if "score" not in p:
-                p["score"] = p["bm25_score"]
+            s = float(score)
+            p["bm25_score"] = round(s, 4)
+            # Squash raw BM25 score into [0, 1] for the display/label field.
+            # Uses a monotone sigmoid-like transform: s / (s + 5.0).
+            # bm25_score retains the raw value for diagnostics.
+            p["score"] = round(s / (s + 5.0), 4)
+            # doc_id for diversity / MMR
+            if "doc_id" not in p:
+                p["doc_id"] = (p.get("metadata") or {}).get("source", "unknown")
             # Lift chunk_id from metadata to top level so RRF fusion / dedup
             # key on document identity (see passage_identity).
             if "chunk_id" not in p:
@@ -332,7 +339,9 @@ def mmr_select(
         best_mmr = -1.0
 
         for i, p in enumerate(remaining):
-            relevance = p.get("vector_score", p.get("score", 0.0))
+            relevance = (
+                p.get("vector_score") or p.get("rerank_score") or p.get("score", 0.0)
+            )
             doc_id = p.get("doc_id", "unknown")
             doc_count = selected_doc_ids.get(doc_id, 0)
             diversity_penalty = doc_count / max(len(selected), 1)

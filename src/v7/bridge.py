@@ -25,6 +25,7 @@ from src.infra.parsers import (
 )  # noqa: F401  # used by other make_*_fn
 from src.infra.prompt_manager import PromptManager
 from src.v7.cross_ref import expand_cross_references
+from src.v7.hard_gates import sanitize_for_llm
 from src.v7.nlp_core import init_bm25_index
 from src.v7.nodes import generate_answer as generate_answer_mod
 from src.v7.nodes import rag_complex as rag_complex_mod
@@ -46,7 +47,12 @@ def _doc_to_passage(text: str, meta: dict, score: float = 0.0) -> dict:
     Centralises passage construction from a Chroma/backend result so RRF fusion
     and dedup key on document identity (see nlp_core.passage_identity).
     """
-    passage = {"text": text, "metadata": meta, "score": score}
+    passage = {
+        "text": text,
+        "metadata": meta,
+        "score": score,
+        "doc_id": meta.get("source", "unknown"),
+    }
     if "chunk_id" in meta:
         passage["chunk_id"] = meta["chunk_id"]
     return passage
@@ -103,11 +109,13 @@ def make_rerank_fn(
         for result in results[:top_k]:
             original = text_to_original.get(result["text"], {})
             vector_score = original.get("vector_score", original.get("score", 0.0))
+            rerank_score = round(float(result["score"]), 4)
             reranked.append(
                 {
                     **original,
                     "vector_score": vector_score,
-                    "score": round(float(result["score"]), 4),
+                    "rerank_score": rerank_score,
+                    "score": rerank_score,
                 }
             )
         return reranked
@@ -150,11 +158,13 @@ def make_crossencoder_rerank_fn(
         reranked: List[dict] = []
         for original, score in scored[:top_k]:
             vector_score = original.get("vector_score", original.get("score", 0.0))
+            rerank_score = round(score, 4)
             reranked.append(
                 {
                     **original,
                     "vector_score": vector_score,
-                    "score": round(score, 4),
+                    "rerank_score": rerank_score,
+                    "score": rerank_score,
                 }
             )
         return reranked
@@ -175,16 +185,20 @@ def make_vector_search_fn(vector_store) -> Callable[..., List[dict]]:
         top_k: int = 12,
         **kwargs,
     ) -> List[dict]:
-        docs_and_scores = vector_store.similarity_search_with_score(query, k=top_k)
+        docs_and_scores = vector_store.similarity_search_with_score(
+            query, k=top_k, filter=filters or None
+        )
         results = []
         for doc, distance in docs_and_scores:
             # ChromaDB returns L2 distance (0..inf). Convert to similarity (0..1).
-            similarity = 1.0 / (1.0 + distance)
+            similarity = round(1.0 / (1.0 + distance), 4)
             meta = dict(doc.metadata)
             passage = {
                 "text": doc.page_content,
                 "metadata": meta,
-                "score": round(similarity, 4),
+                "score": similarity,
+                "vector_score": similarity,
+                "doc_id": meta.get("source", "unknown"),
             }
             # Lift chunk_id to top level for RRF fusion / dedup identity.
             if "chunk_id" in meta:
@@ -350,7 +364,7 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
         # low-ranked but answer-bearing cross-refs (e.g. п.60 for программа В) are included.
         top_passages = expanded[:30]
         passages_text = "\n\n".join(
-            f"{_chunk_header(i, p)}\n{p.get('text', '')}"
+            f"{_chunk_header(i, p)}\n{sanitize_for_llm(p.get('text', ''))}"
             for i, p in enumerate(top_passages)
         )
         prompt = _pm.render(

@@ -26,9 +26,9 @@ class ChromaBackend:
         return self
 
     def similarity_search_with_score(
-        self, query: str, k: int = 10
+        self, query: str, k: int = 10, filter: dict | None = None
     ) -> list[tuple[Document, float]]:
-        return self._vs.similarity_search_with_score(query, k=k)
+        return self._vs.similarity_search_with_score(query, k=k, filter=filter)
 
     def add_texts(
         self, texts: list[str], metadatas: list[dict] | None = None

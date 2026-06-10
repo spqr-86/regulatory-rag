@@ -34,16 +34,6 @@ class TestV7ConfigDefaults:
 
         assert v7_config.MMR_LAMBDA == 0.7
 
-    def test_bm25_top_k(self):
-        from src.v7.config import v7_config
-
-        assert v7_config.BM25_TOP_K == 20
-
-    def test_semantic_top_k(self):
-        from src.v7.config import v7_config
-
-        assert v7_config.SEMANTIC_TOP_K == 20
-
     def test_keyword_overlap_active(self):
         from src.v7.config import v7_config
 

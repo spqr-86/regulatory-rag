@@ -144,6 +144,43 @@ class TestInputLengthCap:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# E1: noise intent → human-readable answer, not empty string
+# ---------------------------------------------------------------------------
+
+
+class TestNoiseIntentResponse:
+    def test_noise_intent_returns_human_message(self):
+        mock_pipeline = MagicMock()
+        mock_pipeline.invoke.return_value = {
+            "intent": "noise",
+            "answer": "",
+            "final_passages": [],
+        }
+        client, _ = _make_client(pipeline_app=mock_pipeline)
+        response = client.post("/query", json={"question": "фываолд"})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["answer"] != "", "noise answer must not be empty"
+        assert (
+            "нормативной" in body["answer"].lower()
+            or "вопрос" in body["answer"].lower()
+        )
+
+    def test_noise_intent_path_is_intent_gate(self):
+        mock_pipeline = MagicMock()
+        mock_pipeline.invoke.return_value = {
+            "intent": "noise",
+            "answer": "",
+            "final_passages": [],
+        }
+        client, _ = _make_client(pipeline_app=mock_pipeline)
+        response = client.post("/query", json={"question": "фываолд"})
+        body = response.json()
+        assert "intent_gate" in body["path"]
+        assert "noise" in body["path"]
+
+
 class TestRateLimitHandler:
     def test_rate_limit_exceeded_returns_429_without_details(self):
         """Custom handler must return 429 with generic message, no internals."""

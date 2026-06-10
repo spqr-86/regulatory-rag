@@ -112,6 +112,21 @@ def _legacy_triage(state: RAGState) -> RAGState:
                 "fallback_score": result["top_score"],
             }
 
+        # Enumeration escalation: even though triage is sufficient, we force
+        # rag_complex for queries that require complete enumeration coverage.
+        # Save the current passages as fallback so evaluate_complex can fall
+        # back to this simple-path result if the complex attempt fails its
+        # (stricter) gates — preventing an unnecessary abstain.
+        if _has_enumeration_intent(original_q):
+            return {
+                "sufficient": True,
+                "final_passages": passages,
+                "final_score": result["top_score"],
+                "sufficiency_details": result,
+                "fallback_passages": passages,
+                "fallback_score": result["top_score"],
+            }
+
         return {
             "sufficient": True,
             "final_passages": passages,
@@ -187,12 +202,19 @@ def _evidence_assess(state: RAGState) -> RAGState:
     )
 
     if verdict == "answer":
-        return {
+        original_q = state.get("query", "")
+        base: Dict[str, Any] = {
             "sufficient": True,
             "final_passages": passages,
             "final_score": top_score,
             "evidence_report": report,
         }
+        # Save fallback so evaluate_complex can recover this result if the
+        # subsequent complex attempt (triggered by enumeration routing) fails.
+        if _has_enumeration_intent(original_q):
+            base["fallback_passages"] = passages
+            base["fallback_score"] = top_score
+        return cast(RAGState, base)
 
     if verdict == "improve":
         # Save passages as fallback so rag_complex has a starting point if needed.

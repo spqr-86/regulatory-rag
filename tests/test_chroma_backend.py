@@ -24,7 +24,9 @@ def test_similarity_search_delegates():
         results = backend.similarity_search_with_score("q", k=5)
 
         assert results == [(Document(page_content="t"), 0.9)]
-        mock_vs.similarity_search_with_score.assert_called_once_with("q", k=5)
+        mock_vs.similarity_search_with_score.assert_called_once_with(
+            "q", k=5, filter=None
+        )
 
 
 @pytest.mark.unit

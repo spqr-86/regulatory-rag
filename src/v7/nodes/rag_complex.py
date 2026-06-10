@@ -65,7 +65,10 @@ def rag_complex(state: RAGState) -> RAGState:
     active_q = state.get("active_query", state.get("query", ""))
     original_q = state.get("query", "")
     safe_filters = validate_filters(state.get("filters"))
-    rid = make_retrieval_id(active_q, safe_filters)
+    # Prefer the retrieval_id set by the router (computed from original_q).
+    # rag_complex uses active_query (glossary-expanded) which can differ from
+    # original_q, causing dedup keys to diverge between router and this node.
+    rid = state.get("retrieval_id") or make_retrieval_id(active_q, safe_filters)
 
     # Dedup
     existing = state.get("retrieval_attempts") or []

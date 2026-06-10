@@ -39,7 +39,9 @@ def _needs_visual(passage: dict) -> bool:
     """Return True if this passage should be enriched with visual context."""
     meta = passage.get("metadata", {})
     # Must have coordinates to render
-    if not (meta.get("source") and meta.get("page_no") and meta.get("bbox")):
+    if not (
+        meta.get("source") and meta.get("page_no") is not None and meta.get("bbox")
+    ):
         return False
     element_type = str(meta.get("element_type", "")).lower()
     text = passage.get("text", "")
