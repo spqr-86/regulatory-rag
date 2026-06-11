@@ -6,7 +6,7 @@
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**In-scope correctness: 7.5/10 · Faithfulness: 0.876 · OOS abstain: 1.00 · Latency: 7.2s · Cost: $0.01/query**
+**In-scope correctness: 7.7/10 · Faithfulness: 0.936 · OOS abstain: 1.00 · Latency: 9.5s · Cost: $0.01/query**
 
 > Metrics from the latest eval (`gpt-4o` judge). The reasoning behind the architecture is in [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
 
@@ -55,19 +55,30 @@ Key design decisions:
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| In-scope correctness (LLM-as-judge, 0–10) | **7.5** | > 7.5 ✅ |
-| Correctness, all questions | **7.5** | > 7.5 ✅ |
-| Faithfulness (no hallucinations, 0–1) | **0.876** | > 0.85 ✅ |
+| In-scope correctness (LLM-as-judge, 0–10) | **7.7** | > 7.5 ✅ |
+| Correctness, all questions | **7.7** | > 7.5 ✅ |
+| Faithfulness (no hallucinations, 0–1) | **0.936** | > 0.85 ✅ |
 | Answer relevance (0–1) | **0.924** | > 0.85 ✅ |
 | OOS abstain rate | **1.00** | > 0.90 ✅ |
-| False-sufficiency (classic, passed gate + low score) | **7.3%** (3 cases) | < 10% ✅ |
+| False-sufficiency (proxy: correctness ≤5 on answered questions) | **5.0%** (2 corpus gaps) | < 10% ✅ |
 | Cost per query | **$0.0102** | — |
-| Avg latency | **7.2s** | ✅ |
+| Avg latency | **9.5s** (p50=7.8s, p90=17.7s) | ✅ |
 
 Eval: 57-question golden dataset (50 valid), `eval/run_v7_eval.py`, judge `gpt-4o`
-(`benchmarks/eval_v7_2026-06-11.jsonl`). Numbers are judge-dependent — the current
+(`benchmarks/eval_v7_cap100_2026-06-11.jsonl`). Numbers are judge-dependent — the current
 judge is stricter than earlier runs, so absolute values are lower but better calibrated.
 Canonical values: [docs/reference/FACTS.md](./docs/reference/FACTS.md).
+
+**CrossEncoder candidate cap sweep** (`RERANK_CANDIDATE_CAP`, same judge/seed/dataset):
+
+| cap | correctness | faithfulness | mean latency | p90 |
+|-----|-------------|-------------|-------------|-----|
+| 477 (uncapped) | 7.76 | 0.898 | 16.3s | 14.9s |
+| 50 | 7.52 | 0.876 | 7.2s | 10.4s |
+| **100 (selected)** | **7.72** | **0.936** | **9.5s** | 17.7s |
+
+cap=100 dominates cap=477 on latency (−42% mean) and matches on correctness. cap=50 has
+the best tail but costs −0.24 correctness and misroutes borderline queries to complex path.
 
 ---
 

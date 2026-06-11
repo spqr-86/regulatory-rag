@@ -41,7 +41,7 @@ class V7Config(BaseSettings):
     COMPLEX_MAX_SINGLE_DOC_RATIO: float = 0.7
     COMPLEX_BORDERLINE_THRESHOLD: float = 0.30
     COMPLEX_TOP_K: int = 60  # plan.top_k for slow path
-    RERANK_CANDIDATE_CAP: int = 50  # hard limit on CrossEncoder input; prevents O(n) blowup on large section fetches
+    RERANK_CANDIDATE_CAP: int = 100  # hard limit on CrossEncoder input; prevents O(n) blowup on large section fetches
     COMPLEX_TIMEOUT_MS: int = 1200
 
     # ── Retrieval engine ──────────────────────────────────────────────────
