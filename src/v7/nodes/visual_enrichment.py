@@ -12,7 +12,13 @@ Limit: MAX_VISUAL_PROOFS per query (default 3).
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor  # noqa: F401 — used in visual proof timeout
+from concurrent.futures import TimeoutError as FuturesTimeout  # noqa: F401
 from typing import Callable, Optional
+
+_VISUAL_PROOF_TIMEOUT_S = (
+    3  # seconds; _visual_proof hangs on headless PDF render without this
+)
 
 from src.infra.parsers import detect_incomplete_chunk
 from src.v7.state_types import RAGState
@@ -62,8 +68,12 @@ def visual_enrichment(state: RAGState) -> RAGState:
     Writes: final_passages (updated in-place copy, only changed passages)
     No-op if: no visual_proof_fn injected, no passages, or no passages need enrichment.
     """
+    import structlog as _sl
+
+    _log = _sl.get_logger()
     fn = _visual_proof_fn
     passages = state.get("final_passages") or []
+    _log.info("visual_enrichment.enter", passages=len(passages), has_fn=fn is not None)
 
     if not fn or not passages:
         return {}
@@ -102,7 +112,20 @@ def visual_enrichment(state: RAGState) -> RAGState:
                 continue
 
         try:
-            result = fn(meta["source"], int(meta["page_no"]), bbox, mode)
+            _exe = ThreadPoolExecutor(max_workers=1)
+            future = _exe.submit(fn, meta["source"], int(meta["page_no"]), bbox, mode)
+            try:
+                result = future.result(timeout=_VISUAL_PROOF_TIMEOUT_S)
+            except FuturesTimeout:
+                logger.warning(
+                    "visual_enrichment timed out for passage %d (>%ds)",
+                    i,
+                    _VISUAL_PROOF_TIMEOUT_S,
+                )
+                _exe.shutdown(wait=False)
+                continue
+            finally:
+                _exe.shutdown(wait=False)
             if not result:
                 continue
             if mode == "analyze":
