@@ -62,7 +62,7 @@ Key design decisions:
 | OOS abstain rate | **1.00** | > 0.90 ✅ |
 | False-sufficiency (proxy: correctness ≤5 on answered questions) | **5.0%** (2 corpus gaps) | < 10% ✅ |
 | Cost per query | **$0.0102** | — |
-| Avg latency | **9.5s** (p50=7.8s, p90=17.7s) | ✅ |
+| Avg latency | **9.5s** (p50=7.8s, p90=17.7s*) | ✅ |
 
 Eval: 57-question golden dataset (50 valid), `eval/run_v7_eval.py`, judge `gpt-4o`
 (`benchmarks/eval_v7_cap100_2026-06-11.jsonl`). Numbers are judge-dependent — the current
@@ -79,6 +79,9 @@ Canonical values: [docs/reference/FACTS.md](./docs/reference/FACTS.md).
 
 cap=100 dominates cap=477 on latency (−42% mean) and matches on correctness. cap=50 has
 the best tail but costs −0.24 correctness and misroutes borderline queries to complex path.
+
+*p90 driven by 2 complex queries with deep cross-ref expansion; known limitation, not a regression
+relative to the uncapped baseline.
 
 ---
 
