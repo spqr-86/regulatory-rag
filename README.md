@@ -6,7 +6,7 @@
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**In-scope correctness: 7.4/10 · Faithfulness: 0.86 · OOS abstain: 1.00 · Cost: $0.01/query**
+**In-scope correctness: 7.5/10 · Faithfulness: 0.876 · OOS abstain: 1.00 · Latency: 7.2s · Cost: $0.01/query**
 
 > Metrics from the latest eval (`gpt-4o` judge). The reasoning behind the architecture is in [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
 
@@ -55,17 +55,17 @@ Key design decisions:
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| In-scope correctness (LLM-as-judge, 0–10) | **7.6** | > 7.5 ✅ |
-| Correctness, all questions | **7.8** | > 7.5 ✅ |
-| Faithfulness (no hallucinations, 0–1) | **0.898** | > 0.85 ✅ |
-| Answer relevance (0–1) | **0.872** | > 0.85 ✅ |
+| In-scope correctness (LLM-as-judge, 0–10) | **7.5** | > 7.5 ✅ |
+| Correctness, all questions | **7.5** | > 7.5 ✅ |
+| Faithfulness (no hallucinations, 0–1) | **0.876** | > 0.85 ✅ |
+| Answer relevance (0–1) | **0.924** | > 0.85 ✅ |
 | OOS abstain rate | **1.00** | > 0.90 ✅ |
-| False-sufficiency (classic, passed gate + low score) | **0 / 57** | < 10% ✅ |
+| False-sufficiency (classic, passed gate + low score) | **7.3%** (3 cases) | < 10% ✅ |
 | Cost per query | **$0.0102** | — |
-| Avg latency | **16.3s** | ⚠️ profiling in progress |
+| Avg latency | **7.2s** | ✅ |
 
 Eval: 57-question golden dataset (50 valid), `eval/run_v7_eval.py`, judge `gpt-4o`
-(`benchmarks/eval_v7_2026-06-10.jsonl`). Numbers are judge-dependent — the current
+(`benchmarks/eval_v7_2026-06-11.jsonl`). Numbers are judge-dependent — the current
 judge is stricter than earlier runs, so absolute values are lower but better calibrated.
 Canonical values: [docs/reference/FACTS.md](./docs/reference/FACTS.md).
 

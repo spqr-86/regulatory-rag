@@ -14,6 +14,8 @@
 | 6 | **MCP-сервер поверх RAG** — search_knowledge tool для Claude | ~1 день | Claude ищет по ~/knowledge/ | |
 | 7 | **eval/compare.py** — адаптировать под V7 метрики (correctness, faithfulness, false_sufficiency вместо completeness/abstain_rate) | ~1 ч | A/B сравнение прогонов из benchmarks/ | |
 | 8 | **Incremental index management** — delete/upsert по источнику без полной переиндексации: `collection.delete(where={"source": X})` + add. Позволяет обновить один документ без сноса всей ChromaDB | ~2 ч | обновление документа за секунды вместо 10-15 мин | |
+| 10 | **Domain gate включить в проде** — `V7_DOMAIN_GATE_THRESHOLD` сейчас 0.0 (выключен). Разобраться: измерить latency/cost overhead на embedding при включении (0.25), проверить false-positive rate на реальных запросах, решить нужен ли второй слой защиты поверх evaluate_triage keyword_overlap abstain | ~2 ч | экономия LLM-вызовов на OOS запросах |
+| 9 | **Visual proof fix** — два подпункта: (а) `get_vision_llm()` хардкодит Gemini, который не доступен с VPS AEZA без прокси — переключить на OpenAI Vision (`gpt-4o` умеет vision) или добавить WARP proxy; (б) mode="show" кладёт `image_path` в passage но Streamlit UI его не рендерит — добавить отображение в app.py | ~3 ч | таблицы из PDF расшифровываются VLM; пользователь видит фрагмент PDF в ответе | |
 
 ---
 
