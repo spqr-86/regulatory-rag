@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # V7 node limits
     MAX_SEARCH_CALLS: int = 2
     MAX_VISUAL_PROOF_CALLS: int = 1
-    MAX_VISUAL_PROOFS: int = 3
+    MAX_VISUAL_PROOFS: int = 1  # was 3; each attempt costs up to 3s timeout on VPS
 
 
 settings = Settings()
