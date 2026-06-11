@@ -251,9 +251,10 @@ def make_section_fetch_fn(
                     },
                     limit=max_section_chunks,
                 )
+                # get_by_filter paginates until exhausted — hard cap here.
                 return [
                     _doc_to_passage(d.page_content, dict(d.metadata or {}))
-                    for d in docs
+                    for d in docs[:max_section_chunks]
                 ]
             col = vector_store._collection
             results = col.get(

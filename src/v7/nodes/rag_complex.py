@@ -94,6 +94,17 @@ def rag_complex(state: RAGState) -> RAGState:
                     passages.append(p)
                     seen_texts.add(p.get("text", ""))
 
+    # Cap candidates before CrossEncoder to prevent O(n) latency blowup.
+    # Section-fetch can pull entire large sections (e.g. ТК РФ = 477 chunks).
+    # Pre-sort by vector_score so the best candidates survive the cut.
+    cap = v7_config.RERANK_CANDIDATE_CAP
+    if len(passages) > cap:
+        passages = sorted(
+            passages,
+            key=lambda p: p.get("vector_score", p.get("score", 0.0)),
+            reverse=True,
+        )[:cap]
+
     # FlashRank reranking (if injected): reorders by cross-encoder score,
     # but top_score stays anchored to vector similarity (not inflated FlashRank probs).
     if _rerank_fn is not None and passages:
