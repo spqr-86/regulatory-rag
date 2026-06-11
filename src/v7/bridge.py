@@ -11,6 +11,7 @@ Responsibilities:
 from __future__ import annotations
 
 import threading
+import time  # used for generate.timing.crossref / generate.timing.llm logs
 from typing import Callable, List
 
 import structlog
@@ -354,27 +355,40 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
     def _generate(query: str, active_query: str, passages: List[dict]) -> str:
         if not passages:
             return ""
+        t0 = time.perf_counter()
         expanded = (
             expand_cross_references(passages, backend, query=query)
             if backend
             else passages
         )
+        t_crossref = time.perf_counter() - t0
         # final_passages is already capped at 24 upstream (merge_all_passages);
         # cross-reference expansion appends extra passages — allow up to 30 so
-        # low-ranked but answer-bearing cross-refs (e.g. п.60 for программа В) are included.
+        # low-ranked but answer-bearing cross-refs (e.g. п.60 для программа В) are included.
         top_passages = expanded[:30]
         passages_text = "\n\n".join(
             f"{_chunk_header(i, p)}\n{sanitize_for_llm(p.get('text', ''))}"
             for i, p in enumerate(top_passages)
         )
+        prompt_tokens_approx = len(passages_text) // 4
         prompt = _pm.render(
             "generate_answer",
             query=query,
             context=passages_text,
             passages_count=len(top_passages),
         )
+        logger.info(
+            "generate.timing.crossref",
+            crossref_s=round(t_crossref, 3),
+            passages_in=len(passages),
+            passages_out=len(top_passages),
+            prompt_tokens_approx=prompt_tokens_approx,
+        )
+        t1 = time.perf_counter()
         try:
-            return _call_llm(prompt)
+            result = _call_llm(prompt)
+            logger.info("generate.timing.llm", llm_s=round(time.perf_counter() - t1, 3))
+            return result
         except Exception as exc:
             logger.warning(
                 "LLM generate failed after retries: %s, falling back to stub", exc

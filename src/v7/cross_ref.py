@@ -11,6 +11,7 @@ cached for the duration of one call so each source is scanned at most once.
 from __future__ import annotations
 
 import re
+import time
 
 import structlog
 
@@ -142,6 +143,8 @@ def expand_cross_references(
             existing_texts.add(doc.page_content)
             extra.append(_passage_from_doc(doc, score))
 
+    t_start = time.perf_counter()
+
     # ── Mechanism 1: explicit refs in passage text ───────────────────────────
     mech1_total = 0
     for passage in passages:
@@ -177,6 +180,7 @@ def expand_cross_references(
                 added_for_passage += 1
                 mech1_total += 1
 
+    t_mech1 = time.perf_counter() - t_start
     logger.debug("cross_ref.mech1_added", count=mech1_total)
 
     # ── Mechanism 2: BM25 re-search within same sources ───────────────────────
@@ -208,6 +212,7 @@ def expand_cross_references(
         except Exception as exc:
             logger.warning("cross_ref.bm25_research_failed", error=str(exc))
 
+    t_mech2 = time.perf_counter() - t_start - t_mech1
     logger.debug("cross_ref.mech2_added", count=mech2_total)
 
     # ── Mechanism 3: numbered-list expansion ─────────────────────────────────
@@ -236,6 +241,7 @@ def expand_cross_references(
                     _add(doc)
                     mech3_total += 1
 
+    t_mech3 = time.perf_counter() - t_start - t_mech1 - t_mech2
     logger.debug("cross_ref.mech3_added", count=mech3_total)
 
     # ── Mechanism 4: same-bbox block expansion ───────────────────────────────
@@ -272,6 +278,18 @@ def expand_cross_references(
             ):
                 _add_bbox(doc, parent_score)
 
+    t_mech4 = time.perf_counter() - t_start - t_mech1 - t_mech2 - t_mech3
+    t_total = time.perf_counter() - t_start
+    logger.info(
+        "cross_ref.timing",
+        total_s=round(t_total, 3),
+        mech1_s=round(t_mech1, 3),
+        mech2_s=round(t_mech2, 3),
+        mech3_s=round(t_mech3, 3),
+        mech4_s=round(t_mech4, 3),
+        sources_fetched=len(_source_docs_cache),
+        added=mech1_total + mech2_total + mech3_total + mech4_total,
+    )
     logger.debug("cross_ref.mech4_added", count=mech4_total)
 
     # Insert bbox siblings right after their parent passage so they stay adjacent
