@@ -151,8 +151,11 @@ def make_crossencoder_rerank_fn(
         if not passages:
             return passages
 
+        t0 = time.perf_counter()
         pairs = [(query, p.get("text", "")) for p in passages]
         raw_scores = _model.predict(pairs, batch_size=batch_size)
+        t_predict = time.perf_counter() - t0
+
         scored = [(p, _sigmoid(float(s))) for p, s in zip(passages, raw_scores)]
         scored.sort(key=lambda item: item[1], reverse=True)
 
@@ -168,6 +171,12 @@ def make_crossencoder_rerank_fn(
                     "score": rerank_score,
                 }
             )
+        logger.info(
+            "rerank.timing",
+            candidates=len(passages),
+            top_k=top_k,
+            predict_s=round(t_predict, 3),
+        )
         return reranked
 
     return _rerank
@@ -186,8 +195,14 @@ def make_vector_search_fn(vector_store) -> Callable[..., List[dict]]:
         top_k: int = 12,
         **kwargs,
     ) -> List[dict]:
+        t0 = time.perf_counter()
         docs_and_scores = vector_store.similarity_search_with_score(
             query, k=top_k, filter=filters or None
+        )
+        logger.info(
+            "vector_search.timing",
+            top_k=top_k,
+            search_s=round(time.perf_counter() - t0, 3),
         )
         results = []
         for doc, distance in docs_and_scores:
@@ -309,12 +324,15 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
     If backend is provided, cross-reference expansion is applied before generation.
     """
 
-    def _call_llm(prompt: str) -> str:
+    def _call_llm(prompt: str) -> tuple[str, int | None]:
         response = llm.invoke([HumanMessage(content=prompt)])
         answer = extract_text(response.content).strip()
         if not answer:
             raise ValueError("Empty generation response")
-        return answer
+        # Extract completion tokens from provider metadata (LangChain standard).
+        meta = getattr(response, "usage_metadata", None) or {}
+        completion_tokens = meta.get("output_tokens") or meta.get("completion_tokens")
+        return answer, completion_tokens
 
     def _score_label(score: float) -> str:
         if score >= 0.6:
@@ -386,8 +404,13 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
         )
         t1 = time.perf_counter()
         try:
-            result = _call_llm(prompt)
-            logger.info("generate.timing.llm", llm_s=round(time.perf_counter() - t1, 3))
+            result, completion_tokens = _call_llm(prompt)
+            logger.info(
+                "generate.timing.llm",
+                llm_s=round(time.perf_counter() - t1, 3),
+                completion_tokens=completion_tokens,
+                answer_chars=len(result),
+            )
             return result
         except Exception as exc:
             logger.warning(
