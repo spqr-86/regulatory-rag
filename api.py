@@ -3,8 +3,10 @@
 Exposes the v7 RAG graph as a service so external apps (WTA, etc.) can query it.
 
 Endpoints:
-    POST /query  — ask a question, get answer + passages
-    GET  /health — liveness check
+    POST /query    — ask a question, get answer + passages (full v7 pipeline)
+    POST /retrieve — retrieval-only hybrid search (no LLM), for batch clients (WTA)
+    GET  /corpus   — unique source documents in the index
+    GET  /health   — liveness check
 
 Run:
     uvicorn api:app --host 0.0.0.0 --port 8503
@@ -50,6 +52,8 @@ async def lifespan(app: FastAPI):
     /query return 503 instead of crashing the process.
     """
     app.state.pipeline = None
+    app.state.vector_store = None
+    app.state.corpus_sources = None
 
     logger.info("api.startup: loading vector store and v7 pipeline")
     try:
@@ -59,6 +63,7 @@ async def lifespan(app: FastAPI):
 
         vector_store = get_vector_store_backend(load_existing=True)
         init_v7_pipeline(vector_store)
+        app.state.vector_store = vector_store
         app.state.pipeline = build_graph().compile()
         logger.info("api.startup: v7 pipeline ready")
     except Exception as exc:
@@ -68,6 +73,7 @@ async def lifespan(app: FastAPI):
 
     yield
     app.state.pipeline = None
+    app.state.vector_store = None
     logger.info("api.shutdown: pipeline cleared")
 
 
@@ -114,6 +120,74 @@ class QueryResponse(BaseModel):
     passages: list[Passage]
     path: str
     elapsed_sec: float
+
+
+class RetrieveRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=2000)
+    k: int = Field(default=5, ge=1, le=50)
+    source_filter: str | None = Field(default=None, max_length=500)
+
+
+class RetrieveResponse(BaseModel):
+    passages: list[Passage]
+    elapsed_sec: float
+
+
+class CorpusResponse(BaseModel):
+    sources: list[str]
+
+
+def _hybrid_retrieve(
+    question: str,
+    k: int,
+    source_filter: str | None = None,
+) -> list[dict]:
+    """Retrieval-only hybrid search: vector + BM25 → RRF merge (+ optional rerank).
+
+    No LLM calls (no multi-query expand, no generation) — built for batch
+    clients (WTA GOST-check) that need low latency.
+
+    source_filter is applied as a post-filter on metadata.source for both
+    branches (ChromaBackend.similarity_search_with_score does not expose
+    filters; BM25Index filters match top-level keys, not metadata), with
+    over-fetch to keep enough candidates after filtering.
+    """
+    from src.v7.nlp_core import bm25_search, rrf_merge
+    from src.v7.nodes import rag_simple as rag_simple_mod
+
+    fetch_k = max(k * 6, 30) if source_filter else max(k * 2, 12)
+    vector_results = rag_simple_mod._vector_search(query=question, top_k=fetch_k)
+    bm25_results = bm25_search(query=question, top_k=fetch_k)
+
+    if source_filter:
+
+        def _matches(p: dict) -> bool:
+            return p.get("metadata", {}).get("source") == source_filter
+
+        vector_results = [p for p in vector_results if _matches(p)]
+        bm25_results = [p for p in bm25_results if _matches(p)]
+
+    # rrf_merge dedups by chunk_id with an "unknown_{rank}" fallback — passages
+    # without chunk_id collide across lists. Derive a stable id from text.
+    for p in vector_results + bm25_results:
+        p.setdefault("chunk_id", p.get("text", "")[:80])
+
+    passages = rrf_merge(vector_results, bm25_results, top_k=max(k, 12))
+    if not passages:
+        return []
+
+    rerank_fn = getattr(rag_simple_mod, "_reranker_fn", None)
+    if rerank_fn is not None:
+        try:
+            reranked = rerank_fn(question, passages[: max(k, 12)], k)
+            if reranked:
+                passages = reranked
+        except Exception as exc:
+            logger.warning(
+                "api.retrieve: rerank failed, using RRF order", error=str(exc)
+            )
+
+    return passages[:k]
 
 
 @app.post("/query", response_model=QueryResponse)
@@ -173,6 +247,91 @@ def query(request: Request, req: QueryRequest) -> QueryResponse:
     return QueryResponse(
         answer=answer, passages=passages, path=path, elapsed_sec=elapsed
     )
+
+
+@app.post("/retrieve", response_model=RetrieveResponse)
+@limiter.limit("600/minute")
+def retrieve(request: Request, req: RetrieveRequest) -> RetrieveResponse:
+    """Retrieval-only hybrid search — no LLM, for batch clients (WTA)."""
+    if getattr(request.app.state, "vector_store", None) is None:
+        raise HTTPException(status_code=503, detail="vector store not initialized")
+
+    rid = getattr(request.state, "request_id", "no-rid")
+    t0 = time.perf_counter()
+    try:
+        raw_passages = _hybrid_retrieve(
+            question=req.question.strip(),
+            k=req.k,
+            source_filter=req.source_filter,
+        )
+    except Exception as exc:
+        logger.error(
+            "api.retrieve: retrieval error",
+            request_id=rid,
+            question=req.question[:80],
+            error=str(exc),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"internal error (request_id={rid})"
+        ) from exc
+    elapsed = round(time.perf_counter() - t0, 2)
+
+    passages = [
+        Passage(
+            text=p.get("text", ""),
+            source=p.get("metadata", {}).get("source", ""),
+            score=float(p.get("score", 0.0)),
+        )
+        for p in raw_passages
+    ]
+    logger.info(
+        "api.retrieve: done",
+        request_id=rid,
+        question=req.question[:80],
+        k=req.k,
+        source_filter=req.source_filter,
+        passages=len(passages),
+        elapsed_sec=elapsed,
+    )
+    return RetrieveResponse(passages=passages, elapsed_sec=elapsed)
+
+
+@app.get("/corpus", response_model=CorpusResponse)
+@limiter.limit("600/minute")
+def corpus(request: Request) -> CorpusResponse:
+    """Unique metadata.source values in the index (cached after first call)."""
+    vector_store = getattr(request.app.state, "vector_store", None)
+    if vector_store is None:
+        raise HTTPException(status_code=503, detail="vector store not initialized")
+
+    cached: list[str] | None = getattr(request.app.state, "corpus_sources", None)
+    if cached is not None:
+        return CorpusResponse(sources=cached)
+
+    rid = getattr(request.state, "request_id", "no-rid")
+    try:
+        sources = sorted(
+            {
+                (doc.get("metadata") or {}).get("source", "")
+                for doc in vector_store.iter_all_documents()
+            }
+            - {""}
+        )
+    except Exception as exc:
+        logger.error(
+            "api.corpus: failed to list sources",
+            request_id=rid,
+            error=str(exc),
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail=f"internal error (request_id={rid})"
+        ) from exc
+
+    request.app.state.corpus_sources = sources
+    logger.info("api.corpus: cached", request_id=rid, sources=len(sources))
+    return CorpusResponse(sources=sources)
 
 
 @app.get("/health")
