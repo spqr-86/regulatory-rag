@@ -1,4 +1,4 @@
-"""Tests for api.py — CARD-1.1 (request_id, exception hiding) and CARD-1.2 (rate limit, length cap)."""
+"""Tests for api.py — CARD-1.1 (request_id, exception hiding), CARD-1.2 (rate limit, length cap), /retrieve + /corpus."""
 
 from __future__ import annotations
 
@@ -175,3 +175,150 @@ class TestRateLimitHandler:
         body = json.loads(response.body)
         assert "rate limit" in body["detail"].lower()
         assert "10/minute" not in body["detail"]
+
+
+# ---------------------------------------------------------------------------
+# /retrieve + /corpus — retrieval-only endpoints (SPEC П4 §3.1)
+# ---------------------------------------------------------------------------
+
+
+def _passage(text: str, source: str, score: float = 0.5) -> dict:
+    return {"text": text, "metadata": {"source": source}, "score": score}
+
+
+def _make_retrieve_client(vector_store=None):
+    import api as api_module
+
+    api_module.app.state.pipeline = MagicMock()
+    api_module.app.state.vector_store = vector_store
+    api_module.app.state.corpus_sources = None
+    client = TestClient(api_module.app, raise_server_exceptions=False)
+    return client, api_module
+
+
+class TestRetrieveEndpoint:
+    def test_503_when_vector_store_not_initialized(self):
+        client, _ = _make_retrieve_client(vector_store=None)
+        response = client.post("/retrieve", json={"question": "ГОСТ 32601"})
+        assert response.status_code == 503
+
+    def test_happy_path_merges_vector_and_bm25(self, monkeypatch):
+        from src.v7 import nlp_core
+        from src.v7.nodes import rag_simple as rag_simple_mod
+
+        monkeypatch.setattr(
+            rag_simple_mod,
+            "_vector_search",
+            lambda query, top_k=12, **kw: [
+                _passage("насосы центробежные", "ГОСТ 32601.docx", 0.9),
+                _passage("вентиляция", "СП 60.docx", 0.4),
+            ],
+        )
+        monkeypatch.setattr(
+            nlp_core,
+            "_bm25_index",
+            MagicMock(
+                search=lambda query, top_k, filters=None: [
+                    _passage("материалы проточной части", "ГОСТ 32601.docx", 0.7),
+                ]
+            ),
+        )
+        monkeypatch.setattr(rag_simple_mod, "_reranker_fn", None)
+
+        client, _ = _make_retrieve_client(vector_store=MagicMock())
+        response = client.post(
+            "/retrieve", json={"question": "материалы насоса", "k": 5}
+        )
+        assert response.status_code == 200
+        body = response.json()
+        texts = [p["text"] for p in body["passages"]]
+        assert "насосы центробежные" in texts
+        assert "материалы проточной части" in texts
+        assert isinstance(body["elapsed_sec"], float)
+        assert all({"text", "source", "score"} <= p.keys() for p in body["passages"])
+
+    def test_source_filter_drops_foreign_passages(self, monkeypatch):
+        from src.v7 import nlp_core
+        from src.v7.nodes import rag_simple as rag_simple_mod
+
+        monkeypatch.setattr(
+            rag_simple_mod,
+            "_vector_search",
+            lambda query, top_k=12, **kw: [
+                _passage("чужой документ", "СП 60.docx", 0.95),
+                _passage("целевая норма", "ГОСТ 32601.docx", 0.6),
+            ],
+        )
+        monkeypatch.setattr(
+            nlp_core,
+            "_bm25_index",
+            MagicMock(
+                search=lambda query, top_k, filters=None: [
+                    _passage("ещё чужое", "СНиП 2.04.docx", 0.8),
+                ]
+            ),
+        )
+        monkeypatch.setattr(rag_simple_mod, "_reranker_fn", None)
+
+        client, _ = _make_retrieve_client(vector_store=MagicMock())
+        response = client.post(
+            "/retrieve",
+            json={
+                "question": "норма",
+                "k": 5,
+                "source_filter": "ГОСТ 32601.docx",
+            },
+        )
+        assert response.status_code == 200
+        passages = response.json()["passages"]
+        assert len(passages) == 1
+        assert passages[0]["source"] == "ГОСТ 32601.docx"
+
+    def test_empty_result_returns_empty_list(self, monkeypatch):
+        from src.v7 import nlp_core
+        from src.v7.nodes import rag_simple as rag_simple_mod
+
+        monkeypatch.setattr(
+            rag_simple_mod, "_vector_search", lambda query, top_k=12, **kw: []
+        )
+        monkeypatch.setattr(nlp_core, "_bm25_index", None)
+        monkeypatch.setattr(rag_simple_mod, "_reranker_fn", None)
+
+        client, _ = _make_retrieve_client(vector_store=MagicMock())
+        response = client.post("/retrieve", json={"question": "нет такого"})
+        assert response.status_code == 200
+        assert response.json()["passages"] == []
+
+    def test_invalid_k_rejected(self):
+        client, _ = _make_retrieve_client(vector_store=MagicMock())
+        response = client.post("/retrieve", json={"question": "q", "k": 0})
+        assert response.status_code == 422
+
+
+class TestCorpusEndpoint:
+    def test_503_when_vector_store_not_initialized(self):
+        client, _ = _make_retrieve_client(vector_store=None)
+        response = client.get("/corpus")
+        assert response.status_code == 503
+
+    def test_returns_unique_sorted_sources_and_caches(self):
+        store = MagicMock()
+        store.iter_all_documents.return_value = iter(
+            [
+                {"text": "a", "metadata": {"source": "ГОСТ 2.docx"}},
+                {"text": "b", "metadata": {"source": "ГОСТ 1.docx"}},
+                {"text": "c", "metadata": {"source": "ГОСТ 2.docx"}},
+                {"text": "d", "metadata": {}},
+            ]
+        )
+        client, api_module = _make_retrieve_client(vector_store=store)
+
+        response = client.get("/corpus")
+        assert response.status_code == 200
+        assert response.json()["sources"] == ["ГОСТ 1.docx", "ГОСТ 2.docx"]
+
+        # Second call served from cache — no second iteration over the store
+        response2 = client.get("/corpus")
+        assert response2.status_code == 200
+        assert response2.json()["sources"] == ["ГОСТ 1.docx", "ГОСТ 2.docx"]
+        assert store.iter_all_documents.call_count == 1
