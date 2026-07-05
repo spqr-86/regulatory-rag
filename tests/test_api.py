@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
@@ -275,15 +276,18 @@ class TestRetrieveEndpoint:
         assert all({"text", "source", "score"} <= p.keys() for p in body["passages"])
 
     def test_source_filter_drops_foreign_passages(self, monkeypatch):
+        from langchain_core.documents import Document
+
         from src.v7 import nlp_core
         from src.v7.nodes import rag_simple as rag_simple_mod
 
+        # Global semantic top-k never contains a chunk of the target document
+        # (it competes with 100+ other GOST chunks for the top-fetch_k slots).
         monkeypatch.setattr(
             rag_simple_mod,
             "_vector_search",
             lambda query, top_k=12, **kw: [
                 _passage("чужой документ", "СП 60.docx", 0.95),
-                _passage("целевая норма", "ГОСТ 32601.docx", 0.6),
             ],
         )
         monkeypatch.setattr(
@@ -297,19 +301,78 @@ class TestRetrieveEndpoint:
         )
         monkeypatch.setattr(rag_simple_mod, "_reranker_fn", None)
 
-        client, _ = _make_retrieve_client(vector_store=MagicMock())
+        store = MagicMock()
+        store.get_by_filter.return_value = [
+            Document(
+                page_content="требования к материалам проточной части насоса",
+                metadata={"source": "ГОСТ 32601.docx"},
+            ),
+            Document(
+                page_content="общие положения",
+                metadata={"source": "ГОСТ 32601.docx"},
+            ),
+        ]
+        client, _ = _make_retrieve_client(vector_store=store)
         response = client.post(
             "/retrieve",
             json={
-                "question": "норма",
+                "question": "материалы проточной части насоса",
                 "k": 5,
                 "source_filter": "ГОСТ 32601.docx",
             },
         )
         assert response.status_code == 200
         passages = response.json()["passages"]
+        # Old logic (global top-k + post-filter) would return zero passages
+        # here since the target document never appears in the global top-k.
+        assert len(passages) == 2
+        assert all(p["source"] == "ГОСТ 32601.docx" for p in passages)
+        store.get_by_filter.assert_called_once_with(
+            {"source": "ГОСТ 32601.docx"}, limit=200
+        )
+
+    def test_source_filter_falls_back_on_unicode_normalization_mismatch(
+        self, monkeypatch
+    ):
+        """Indexed metadata.source is NFD; a client-supplied filter that is
+        byte-identical after NFC normalization must still match.
+        """
+        from src.v7.nodes import rag_simple as rag_simple_mod
+
+        monkeypatch.setattr(
+            rag_simple_mod, "_vector_search", lambda query, top_k=12, **kw: []
+        )
+        monkeypatch.setattr(rag_simple_mod, "_reranker_fn", None)
+
+        nfd_source = unicodedata.normalize(
+            "NFD", "ГОСТ 32601-2022 (ISO 13709_2009). Межгосударственный стандар.docx"
+        )
+        nfc_source = unicodedata.normalize("NFC", nfd_source)
+        assert nfd_source != nfc_source  # sanity check: genuinely different bytes
+
+        store = MagicMock()
+        store.get_by_filter.return_value = []  # byte-exact chroma match fails
+        store.iter_all_documents.return_value = iter(
+            [
+                {
+                    "text": "требования к материалам проточной части насоса",
+                    "metadata": {"source": nfd_source},
+                },
+            ]
+        )
+        client, _ = _make_retrieve_client(vector_store=store)
+        response = client.post(
+            "/retrieve",
+            json={
+                "question": "материалы проточной части насоса",
+                "k": 3,
+                "source_filter": nfc_source,
+            },
+        )
+        assert response.status_code == 200
+        passages = response.json()["passages"]
         assert len(passages) == 1
-        assert passages[0]["source"] == "ГОСТ 32601.docx"
+        assert passages[0]["source"] == nfd_source
 
     def test_empty_result_returns_empty_list(self, monkeypatch):
         from src.v7 import nlp_core

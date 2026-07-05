@@ -137,35 +137,90 @@ class CorpusResponse(BaseModel):
     sources: list[str]
 
 
+def _retrieve_by_source(
+    question: str,
+    k: int,
+    source_filter: str,
+    vector_store,
+) -> list[dict]:
+    """Retrieve chunks belonging to a single known document, ranked by BM25.
+
+    Global top-k semantic search over the whole collection (2000+ chunks
+    across 100+ documents) frequently does not surface any chunk of the
+    target document in its top-fetch_k — the document then gets filtered
+    down to zero passages even though it is fully indexed. Instead, pull
+    all chunks of that document directly via a native metadata filter and
+    rank only within that (small) subset.
+    """
+    import unicodedata
+
+    from langchain_core.documents import Document
+
+    from src.v7.nlp_core import BM25Index
+
+    docs = vector_store.get_by_filter({"source": source_filter}, limit=200)
+    if not docs:
+        # Chroma's `where` does byte-exact matching. Indexed metadata.source
+        # values are frequently Unicode-NFD (decomposed diacritics from docx
+        # extraction) while a client-supplied source_filter — even copy-pasted
+        # verbatim from /corpus through a terminal/editor — often ends up
+        # NFC-normalized. Retry the native filter with the NFD form first —
+        # this is the deterministic case and stays cheap (still a metadata
+        # filter, not a full scan).
+        docs = vector_store.get_by_filter(
+            {"source": unicodedata.normalize("NFD", source_filter)}, limit=200
+        )
+    if not docs:
+        # Last resort: full collection scan, normalization-insensitive. Only
+        # reached for exotic mismatches the NFD retry doesn't cover.
+        normalized_target = unicodedata.normalize("NFC", source_filter)
+        docs = [
+            Document(page_content=doc["text"], metadata=doc["metadata"])
+            for doc in vector_store.iter_all_documents()
+            if unicodedata.normalize(
+                "NFC", (doc.get("metadata") or {}).get("source", "")
+            )
+            == normalized_target
+        ]
+    if not docs:
+        return []
+
+    passages = [
+        {"text": doc.page_content, "metadata": doc.metadata or {}} for doc in docs
+    ]
+
+    index = BM25Index(passages)
+    ranked = index.search(question, top_k=k)
+    return ranked
+
+
 def _hybrid_retrieve(
     question: str,
     k: int,
     source_filter: str | None = None,
+    vector_store=None,
 ) -> list[dict]:
     """Retrieval-only hybrid search: vector + BM25 → RRF merge (+ optional rerank).
 
     No LLM calls (no multi-query expand, no generation) — built for batch
     clients (WTA GOST-check) that need low latency.
 
-    source_filter is applied as a post-filter on metadata.source for both
-    branches (ChromaBackend.similarity_search_with_score does not expose
-    filters; BM25Index filters match top-level keys, not metadata), with
-    over-fetch to keep enough candidates after filtering.
+    When source_filter is set, retrieval is scoped to that document via a
+    native metadata filter (see _retrieve_by_source) instead of a global
+    top-k + post-filter, which misses documents that don't rank in the
+    global top-fetch_k semantically.
     """
+    if source_filter:
+        if vector_store is None:
+            raise ValueError("vector_store is required when source_filter is set")
+        return _retrieve_by_source(question, k, source_filter, vector_store)
+
     from src.v7.nlp_core import bm25_search, rrf_merge
     from src.v7.nodes import rag_simple as rag_simple_mod
 
-    fetch_k = max(k * 6, 30) if source_filter else max(k * 2, 12)
+    fetch_k = max(k * 2, 12)
     vector_results = rag_simple_mod._vector_search(query=question, top_k=fetch_k)
     bm25_results = bm25_search(query=question, top_k=fetch_k)
-
-    if source_filter:
-
-        def _matches(p: dict) -> bool:
-            return p.get("metadata", {}).get("source") == source_filter
-
-        vector_results = [p for p in vector_results if _matches(p)]
-        bm25_results = [p for p in bm25_results if _matches(p)]
 
     # rrf_merge dedups by chunk_id with an "unknown_{rank}" fallback — passages
     # without chunk_id collide across lists. Derive a stable id from text.
@@ -263,6 +318,7 @@ def retrieve(request: Request, req: RetrieveRequest) -> RetrieveResponse:
             question=req.question.strip(),
             k=req.k,
             source_filter=req.source_filter,
+            vector_store=request.app.state.vector_store,
         )
     except Exception as exc:
         logger.error(
