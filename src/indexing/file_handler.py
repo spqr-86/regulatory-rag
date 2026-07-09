@@ -186,9 +186,55 @@ class DocumentProcessor:
                 res = self._docling.convert(tmp.name)
             except Exception as e:
                 logger.error(f"Docling conversion failed for {source_name}: {e}")
+                if source_name.lower().endswith(".docx"):
+                    return self._fallback_docx(stream, source_name)
                 return []
 
             return self._process_docling_document(res.document, source_name)
+
+    def _fallback_docx(
+        self, stream: io.BufferedIOBase, source_name: str
+    ) -> List[Document]:
+        """Extract text directly from DOCX via lxml when Docling fails (broken .rels paths)."""
+        import zipfile
+        from lxml import etree
+
+        logger.info(f"[fallback] lxml extraction for {source_name}")
+        try:
+            stream.seek(0)
+            z = zipfile.ZipFile(stream)
+            tree = etree.fromstring(z.read("word/document.xml"))
+            ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+            texts = [
+                el.text for el in tree.iter(f"{ns}t") if el.text and el.text.strip()
+            ]
+            full_text = " ".join(texts)
+        except Exception as e:
+            logger.error(f"Fallback lxml extraction failed for {source_name}: {e}")
+            return []
+
+        if not full_text.strip():
+            return []
+
+        chunk_size = 800
+        words = full_text.split()
+        chunks = []
+        for i in range(0, len(words), chunk_size):
+            text = _clean_noise(" ".join(words[i : i + chunk_size]))
+            if not text:
+                continue
+            chunks.append(
+                Document(
+                    page_content=text,
+                    metadata={
+                        "source": source_name,
+                        "type": "fallback_lxml",
+                        "parent_section": "",
+                    },
+                )
+            )
+        logger.info(f"[fallback] {source_name}: {len(chunks)} chunks")
+        return chunks
 
     def _process_docling_document(self, doc: Any, source: str) -> List[Document]:
         chunks = []
