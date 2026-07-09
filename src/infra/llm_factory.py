@@ -66,6 +66,25 @@ _log = _structlog.get_logger()
 _GEMINI_ONLY_KWARGS = {"thinking_budget", "response_mime_type"}
 
 
+def _create_deepseek_llm(**kwargs):
+    dropped = {k: kwargs.pop(k) for k in list(kwargs) if k in _GEMINI_ONLY_KWARGS}
+    if dropped:
+        _log.warning("llm_factory.kwarg_drop", provider="deepseek", dropped=dropped)
+    model = kwargs.pop("model_name", "deepseek-chat")
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise ValueError("DEEPSEEK_API_KEY not set")
+    return ChatOpenAI(
+        model=model,
+        api_key=api_key,
+        base_url="https://api.deepseek.com",
+        temperature=settings.TEMPERATURE,
+        timeout=settings.REQUEST_TIMEOUT,
+        max_retries=3,
+        **kwargs,
+    )
+
+
 def _create_openai_llm(**kwargs):
     dropped = {k: kwargs.pop(k) for k in list(kwargs) if k in _GEMINI_ONLY_KWARGS}
     if dropped:
@@ -94,6 +113,7 @@ def _create_gemini_llm(**kwargs):
 _LLM_PROVIDERS = {
     "openai": _create_openai_llm,
     "gemini": _create_gemini_llm,
+    "deepseek": _create_deepseek_llm,
 }
 
 
