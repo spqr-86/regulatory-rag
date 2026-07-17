@@ -18,6 +18,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
+# ДО любых импортов из src: настроить structlog на stderr, иначе первый же лог
+# уйдёт в stdout и испортит первое JSONRPC-сообщение stdio-транспорта.
+from utils.logging import configure_logging
+
+configure_logging()
+
 from mcp.server.fastmcp import Context, FastMCP
 
 OVERFETCH = 4  # кандидатов на реранк на каждый итоговый результат

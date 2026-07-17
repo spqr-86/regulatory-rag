@@ -34,6 +34,9 @@ def configure_logging(level: int = logging.INFO) -> None:
             renderer,
         ],
         wrapper_class=structlog.make_filtering_bound_logger(level),
+        # Логи — в stderr (Unix-конвенция: данные в stdout, логи в stderr).
+        # Критично для stdio-MCP (mcp_server.py): любой байт в stdout ломает JSONRPC.
+        logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
         cache_logger_on_first_use=True,
     )
     _configured = True
