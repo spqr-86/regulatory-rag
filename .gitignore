@@ -223,3 +223,5 @@ source_docs/
 docs/plans/2026-05-30-prompt-v8-plan.md
 .reranker_cache/
 HISTORY.md
+chroma_db_pb/
+source_docs_pb/
