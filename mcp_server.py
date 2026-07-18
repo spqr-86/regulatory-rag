@@ -48,6 +48,7 @@ class AppContext:
     vsearch: object  # callable(query, top_k) -> list[passage] (v7-формат)
     rerank: object  # callable(query, passages, top_k) -> passages
     collection_name: str
+    address: object  # AddressIndex | None — адресный слой (точная выборка пунктов)
 
 
 @asynccontextmanager
@@ -56,7 +57,10 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     # Гибрид vector+BM25 (как в проде v7): BM25 добирает попадания по номерам
     # пунктов и точным терминам, где эмбеддинг табличных строк проваливается
     # (eval: СП 486 «независимо от площади» без BM25 не поднимался).
+    import os
+
     from config.settings import settings
+    from src.address_layer import AddressIndex
     from src.backends.vector_store import get_vector_store_backend
     from src.v7.bridge import make_crossencoder_rerank_fn, make_vector_search_fn
     from src.v7.nlp_core import init_bm25_index
@@ -65,11 +69,16 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     init_bm25_index(list(backend.iter_all_documents()))  # BM25-корпус на процесс
     vsearch = make_vector_search_fn(backend)
     rerank = make_crossencoder_rerank_fn(settings.CROSSENCODER_MODEL)
+    # Адресный слой: точная выборка пунктов/строк таблиц. Нет файла → None,
+    # get_norm деградирует на chunk-scan (не падает).
+    address_path = os.environ.get("ADDRESS_INDEX_PATH", "address_index_pb.json")
+    address = AddressIndex.load(address_path)
     yield AppContext(
         backend=backend,
         vsearch=vsearch,
         rerank=rerank,
         collection_name=settings.CHROMA_COLLECTION_NAME,
+        address=address,
     )
 
 
@@ -102,13 +111,37 @@ def retrieve_chunks(ctx: Context, query: str, top_k: int = 5) -> dict:
     return {"collection": app.collection_name, "chunks": chunks}
 
 
+def _get_address_chunk(app, source: str, local_id: str) -> dict:
+    """Чанк адресного слоя по синтетическому id 'addr:kind:num[.row]'."""
+    spec = local_id[len(ADDR_PREFIX) :]
+    kind, _, rest = spec.partition(":")
+    if kind == "table":
+        num, _, row = rest.partition(".")
+        recs = (
+            app.address.lookup(source, "table", num, row or None) if app.address else []
+        )
+    else:
+        recs = app.address.lookup(source, kind, rest, None) if app.address else []
+    if recs:
+        return {
+            "found": True,
+            "chunk_id": f"{source}{ID_SEP}{ADDR_PREFIX}{spec}",
+            "doc_id": source,
+            "text": recs[0]["text"],
+        }
+    return {"found": False}
+
+
 @mcp.tool()
 def get_chunk(ctx: Context, chunk_id: str) -> dict:
-    """Чанк по его chunk_id (формат "source::N") — для контекста и верификации цитат."""
+    """Чанк по его chunk_id ("source::N" из retrieve_chunks или "source::addr:…" из
+    get_norm) — для контекста и верификации цитат."""
     app = ctx.request_context.lifespan_context
     source, local_id = split_public_id(chunk_id)
     if not source:
         return {"found": False, "error": "ожидается chunk_id формата source::N"}
+    if local_id.startswith(ADDR_PREFIX):
+        return _get_address_chunk(app, source, local_id)
     for str_or_int in (local_id, _as_int(local_id)):
         if str_or_int is None:
             continue
@@ -200,31 +233,59 @@ def find_norm(backend, source: str, address: tuple[str, str, str | None]) -> lis
     return [d for d in docs if _point_matches(kind, num, row, d)]
 
 
+ADDR_PREFIX = "addr:"
+
+
+def _addr_id(doc_id: str, kind: str, num: str, row: str | None) -> str:
+    """Синтетический chunk_id адресной записи: 'doc::addr:kind:num[.row]'.
+    Обратимо парсится в get_chunk — цитата из адресного слоя верифицируется как любая.
+    """
+    tail = f"{kind}:{num}" if row is None else f"{kind}:{num}.{row}"
+    return f"{doc_id}{ID_SEP}{ADDR_PREFIX}{tail}"
+
+
+def _address_hits(address_index, doc_id: str, kind, num, row) -> list[dict]:
+    """Записи адресного слоя → чанки в формате get_norm (с синтетическим chunk_id)."""
+    recs = address_index.lookup(doc_id, kind, num, row)
+    return [
+        {
+            "chunk_id": _addr_id(doc_id, kind, r.get("num", num), r.get("row")),
+            "text": r["text"],
+            "section": f"Таблица {r['table']}" if r["kind"] == "table" else "",
+        }
+        for r in recs
+    ]
+
+
 @mcp.tool()
 def get_norm(ctx: Context, doc_id: str, point: str) -> dict:
     """Точная адресная выборка текста пункта по (doc_id, point) — БЕЗ векторного поиска.
 
     doc_id — имя документа как в корпусе (source, напр. 'СП 486.1311500.2020.docx').
-    point — '218', 'п. 4.4', 'табл.1 п.18'. Надёжна для обычных нумерованных пунктов;
-    табличная адресация — best-effort (зависит от разметки таблиц в корпусе).
+    point — '218', 'п. 4.4', 'ст. 83', 'табл.1 п.18', 'табл.1' (вся таблица).
+    Источник — адресный слой (точный разбор docx); при промахе — скан чанков корпуса.
     found=false = пункт не найден в корпусе — НЕ доказательство, что его нет в документе
     (корпус может быть неполон). Тогда используй retrieve_chunks."""
     app = ctx.request_context.lifespan_context
     kind, num, row = normalize_point(point)
-    hits = find_norm(app.backend, doc_id, (kind, num, row))
-    return {
-        "found": bool(hits),
-        "doc_id": doc_id,
-        "point": num if row is None else f"{num}.{row}",
-        "kind": kind,
-        "chunks": [
+    chunks: list[dict] = []
+    if app.address is not None:
+        chunks = _address_hits(app.address, doc_id, kind, num, row)
+    if not chunks:  # адресного слоя нет или промах — деградируем на chunk-scan
+        chunks = [
             {
                 "chunk_id": make_public_id(d.metadata),
                 "text": d.page_content,
                 "section": (d.metadata or {}).get("parent_section", ""),
             }
-            for d in hits[:5]
-        ],
+            for d in find_norm(app.backend, doc_id, (kind, num, row))
+        ]
+    return {
+        "found": bool(chunks),
+        "doc_id": doc_id,
+        "point": num if row is None else f"{num}.{row}",
+        "kind": kind,
+        "chunks": chunks[:5],
     }
 
 

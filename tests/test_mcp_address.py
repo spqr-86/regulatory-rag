@@ -131,3 +131,72 @@ def test_find_norm_article():
     ]
     hits = m.find_norm(_FakeBackend(docs), "fz123.docx", m.normalize_point("ст. 83"))
     assert len(hits) == 1 and "Статья 83" in hits[0].page_content
+
+
+# ─────────── адресный слой в get_norm/get_chunk (Task 3-4) ───────────
+
+
+class _FakeApp:
+    def __init__(self, address, backend=None):
+        self.address = address
+        self.backend = backend
+
+
+@pytest.mark.unit
+def test_addr_id_roundtrip_table():
+    assert m._addr_id("d.docx", "table", "1", "18") == "d.docx::addr:table:1.18"
+    assert m._addr_id("d.docx", "point", "54", None) == "d.docx::addr:point:54"
+
+
+@pytest.mark.unit
+def test_address_hits_table_row():
+    from src.address_layer import AddressIndex
+
+    idx = AddressIndex(
+        [
+            {
+                "doc": "d.docx",
+                "kind": "table",
+                "table": "1",
+                "row": "18",
+                "text": "стр 18",
+            }
+        ]
+    )
+    hits = m._address_hits(idx, "d.docx", "table", "1", "18")
+    assert hits[0]["chunk_id"] == "d.docx::addr:table:1.18"
+    assert hits[0]["text"] == "стр 18" and hits[0]["section"] == "Таблица 1"
+
+
+@pytest.mark.unit
+def test_get_address_chunk_verifiable():
+    # цитата из адресного слоя достаётся обратно по синтетическому id
+    from src.address_layer import AddressIndex
+
+    idx = AddressIndex(
+        [
+            {
+                "doc": "d.docx",
+                "kind": "table",
+                "table": "1",
+                "row": "18",
+                "text": "стр 18",
+            }
+        ]
+    )
+    app = _FakeApp(idx)
+    out = m._get_address_chunk(app, "d.docx", "addr:table:1.18")
+    assert out["found"] and out["text"] == "стр 18"
+    miss = m._get_address_chunk(app, "d.docx", "addr:table:1.99")
+    assert miss == {"found": False}
+
+
+@pytest.mark.unit
+def test_get_address_chunk_point():
+    from src.address_layer import AddressIndex
+
+    idx = AddressIndex(
+        [{"doc": "d.docx", "kind": "point", "num": "54", "text": "54. x"}]
+    )
+    out = m._get_address_chunk(_FakeApp(idx), "d.docx", "addr:point:54")
+    assert out["found"] and out["text"] == "54. x"
