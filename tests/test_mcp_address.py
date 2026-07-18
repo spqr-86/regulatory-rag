@@ -1,8 +1,8 @@
 """Юнит-тесты адресной выборки get_norm (без Chroma: backend — фейк).
 
-get_norm — детерминированная выборка «документ + пункт» БЕЗ векторов. Надёжно работает
-для обычных нумерованных пунктов (текст чанка начинается с номера: «54. ...»). Табличная
-адресация (табл.1 п.18) — best-effort: текущий корпус не хранит номер таблицы в метаданных.
+get_norm — детерминированная выборка «документ + адрес» БЕЗ векторов. Адрес типизирован:
+пункт / статья / таблица(строка). Табличная ветка включается только по явной форме
+«табл.…» — точка в номере («4.4») таблицей не считается.
 """
 
 import pytest
@@ -25,7 +25,6 @@ class _FakeBackend:
         self._docs = docs
 
     def get_by_filter(self, where, limit=500):
-        # поддерживаем и {"source": x}, и {"$and": [{"source": x}, ...]}
         if "$and" in where:
             src = where["$and"][0]["source"]
         else:
@@ -35,16 +34,23 @@ class _FakeBackend:
 
 @pytest.mark.unit
 def test_normalize_point_plain():
-    assert m.normalize_point("п. 218") == "218"
-    assert m.normalize_point("пункт 4.4") == "4.4"
-    assert m.normalize_point("54") == "54"
-    assert m.normalize_point("ст. 83") == "83"
+    assert m.normalize_point("п. 218") == ("point", "218", None)
+    assert m.normalize_point("пункт 4.4") == ("point", "4.4", None)
+    assert m.normalize_point("54") == ("point", "54", None)
+
+
+@pytest.mark.unit
+def test_normalize_point_article():
+    assert m.normalize_point("ст. 83") == ("article", "83", None)
+    assert m.normalize_point("статья 12") == ("article", "12", None)
 
 
 @pytest.mark.unit
 def test_normalize_point_table():
-    assert m.normalize_point("табл.1 п.18") == "1.18"
-    assert m.normalize_point("таблица 3, п. 48") == "3.48"
+    assert m.normalize_point("табл.1 п.18") == ("table", "1", "18")
+    assert m.normalize_point("таблица 3, п. 48") == ("table", "3", "48")
+    # вся таблица без строки — легальный адрес (карта applicability даёт «табл.1»)
+    assert m.normalize_point("табл.1") == ("table", "1", None)
 
 
 @pytest.mark.unit
@@ -54,21 +60,40 @@ def test_find_norm_by_plain_point():
         _Doc("ppr.docx", 1, "54. Руководитель организует ремонт и ТО систем."),
         _Doc("ppr.docx", 2, "При монтаже — продолжение п.54 без номера."),
     ]
-    hits = m.find_norm(_FakeBackend(docs), "ppr.docx", "54")
+    hits = m.find_norm(_FakeBackend(docs), "ppr.docx", ("point", "54", None))
     assert len(hits) == 1 and "Руководитель" in hits[0].page_content
 
 
 @pytest.mark.unit
 def test_find_norm_absent_point_returns_empty():
     docs = [_Doc("ppr.docx", 0, "53. Требование A.")]
-    assert m.find_norm(_FakeBackend(docs), "ppr.docx", "999") == []
+    assert m.find_norm(_FakeBackend(docs), "ppr.docx", ("point", "999", None)) == []
 
 
 @pytest.mark.unit
 def test_find_norm_does_not_match_substring_number():
-    # пункт «5» не должен ловить «53. ...»
-    docs = [_Doc("ppr.docx", 0, "53. Требование A.")]
-    assert m.find_norm(_FakeBackend(docs), "ppr.docx", "5") == []
+    # «5» не ловит ни «53.», ни «5.1»; «54» не ловит «54.1» (ревью 18.07, major 1)
+    docs = [
+        _Doc("ppr.docx", 0, "53. Требование A."),
+        _Doc("ppr.docx", 1, "5.1. Подпункт."),
+        _Doc("ppr.docx", 2, "54.1. Подпункт пятьдесят четыре один."),
+        _Doc("ppr.docx", 3, "54. Сам пункт."),
+    ]
+    b = _FakeBackend(docs)
+    assert m.find_norm(b, "ppr.docx", ("point", "5", None)) == []
+    hits = m.find_norm(b, "ppr.docx", ("point", "54", None))
+    assert len(hits) == 1 and "Сам пункт" in hits[0].page_content
+
+
+@pytest.mark.unit
+def test_point_with_dot_is_not_table_guess():
+    # «4.4» — пункт 4.4, а не строка 4 таблицы 4 (ревью 18.07, major 3)
+    docs = [
+        _Doc("sp.docx", 0, "4. строка четыре", section="Таблица 4"),
+        _Doc("sp.docx", 1, "4.4. Обычный пункт четыре-четыре."),
+    ]
+    hits = m.find_norm(_FakeBackend(docs), "sp.docx", m.normalize_point("п. 4.4"))
+    assert len(hits) == 1 and "Обычный пункт" in hits[0].page_content
 
 
 @pytest.mark.unit
@@ -79,5 +104,30 @@ def test_find_norm_table_row_by_section():
             "sp486.docx", 61, "18. автономные извещатели до 100 м2", section="Таблица 1"
         ),
     ]
-    hits = m.find_norm(_FakeBackend(docs), "sp486.docx", "1.18")
+    hits = m.find_norm(_FakeBackend(docs), "sp486.docx", ("table", "1", "18"))
     assert len(hits) == 1 and "извещатели" in hits[0].page_content
+
+
+@pytest.mark.unit
+def test_find_norm_whole_table():
+    # «табл.1» без строки → все строки таблицы 1 (контракт с applicability-картой)
+    docs = [
+        _Doc("sp486.docx", 60, "17. строка", section="Таблица 1"),
+        _Doc("sp486.docx", 61, "18. строка", section="Таблица 1"),
+        _Doc("sp486.docx", 70, "48. строка", section="Таблица 3"),
+    ]
+    hits = m.find_norm(_FakeBackend(docs), "sp486.docx", ("table", "1", None))
+    assert len(hits) == 2
+
+
+@pytest.mark.unit
+def test_find_norm_article():
+    # статьи ФЗ начинаются со слова: «Статья 83. …» (ревью 18.07, minor 8)
+    docs = [
+        _Doc(
+            "fz123.docx", 0, "Статья 83. Требования к системам пожарной сигнализации."
+        ),
+        _Doc("fz123.docx", 1, "Статья 84. Оповещение людей о пожаре."),
+    ]
+    hits = m.find_norm(_FakeBackend(docs), "fz123.docx", m.normalize_point("ст. 83"))
+    assert len(hits) == 1 and "Статья 83" in hits[0].page_content

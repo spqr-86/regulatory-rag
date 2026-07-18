@@ -16,6 +16,8 @@ chunk_id в этом repo уникален только внутри докум�
 
 import re
 from collections.abc import AsyncIterator
+
+import structlog
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
@@ -131,43 +133,71 @@ def _as_int(s: str):
         return None
 
 
-_POINT_PREFIX = re.compile(r"^(?:п(?:ункт)?|ст(?:атья)?)\.?\s*", re.IGNORECASE)
+_POINT_PREFIX = re.compile(r"^п(?:ункт)?\.?\s*", re.IGNORECASE)
+_ARTICLE = re.compile(r"^ст(?:атья)?\.?\s*([\d.]+)", re.IGNORECASE)
 _TABLE = re.compile(
-    r"табл(?:ица)?\.?\s*(\d+)\s*,?\s*п(?:ункт)?\.?\s*([\d.]+)", re.IGNORECASE
+    r"табл(?:ица)?\.?\s*(\d+)\s*,?\s*(?:п(?:ункт)?\.?\s*([\d.]+))?", re.IGNORECASE
 )
+# Страница выборки метаданных на документ. Корпус ПБ — 647 чанков суммарно; при росте
+# документа за лимит find_norm логирует потерю хвоста (см. ниже), молча не режем.
+FIND_NORM_LIMIT = 2000
 
 
-def normalize_point(raw: str) -> str:
-    """'п. 218' → '218'; 'табл.1 п.18' → '1.18' (таблица.строка). Детерминированно."""
+def normalize_point(raw: str) -> tuple[str, str, str | None]:
+    """Разбор адреса в типизированный вид (kind, num, row). Детерминированно, без LLM.
+
+    'п. 218' / '218'   → ('point', '218', None)
+    'ст. 83'           → ('article', '83', None)
+    'табл.1 п.18'      → ('table', '1', '18')
+    'табл.1'           → ('table', '1', None)  — вся таблица
+    Табличная ветка включается ТОЛЬКО по явной форме «табл.…» — не угадывается по точке
+    в номере: «4.4» — это пункт 4.4, а не строка 4 таблицы 4."""
     raw = raw.strip()
     t = _TABLE.match(raw)
     if t:
-        return f"{t.group(1)}.{t.group(2)}"
-    return _POINT_PREFIX.sub("", raw).strip().rstrip(".")
+        return ("table", t.group(1), t.group(2))
+    a = _ARTICLE.match(raw)
+    if a:
+        return ("article", a.group(1), None)
+    return ("point", _POINT_PREFIX.sub("", raw).strip().rstrip("."), None)
 
 
 def _starts_with_number(text: str, number: str) -> bool:
-    """Текст чанка начинается с номера пункта: '54. ...', '18) ...'. Точная граница,
-    чтобы «5» не ловил «53. ...»."""
-    return bool(re.match(rf"^\s*{re.escape(number)}[.)\s]", text))
+    """Текст чанка начинается с номера пункта: '54. ...', '18) ...'. Граница точная:
+    «5» не ловит «53.» и «5.1», «54» не ловит «54.1» (после точки не должно идти цифры).
+    """
+    return bool(re.match(rf"^\s*{re.escape(number)}(?:\.(?!\d)|\)|\s)", text))
 
 
-def _point_matches(point: str, doc) -> bool:
+def _point_matches(kind: str, num: str, row: str | None, doc) -> bool:
     text = doc.page_content
     section = (doc.metadata or {}).get("parent_section", "") or ""
-    if "." in point:
-        # адрес вида таблица.строка ('1.18'): секция называет таблицу, текст — строку.
-        table_no, row = point.split(".", 1)
-        if f"аблица {table_no}" in section and _starts_with_number(text, row):
-            return True
-        # обычный многосоставный пункт ('4.4'): текст начинается с него целиком.
-    return _starts_with_number(text, point)
+    if kind == "table":
+        # секция называет таблицу; row=None — отдаём все строки таблицы.
+        if f"аблица {num}" not in section:
+            return False
+        return True if row is None else _starts_with_number(text, row)
+    if kind == "article":
+        # статьи начинаются со слова: «Статья 83. …»
+        return bool(
+            re.match(
+                rf"^\s*статья\s+{re.escape(num)}(?:\.(?!\d)|\)|\s)", text, re.IGNORECASE
+            )
+        )
+    return _starts_with_number(text, num)
 
 
-def find_norm(backend, source: str, point: str) -> list:
-    """Все чанки документа source, чей текст открывает пункт point. Без векторов."""
-    docs = backend.get_by_filter({"source": source}, limit=2000)
-    return [d for d in docs if _point_matches(point, d)]
+def find_norm(backend, source: str, address: tuple[str, str, str | None]) -> list:
+    """Все чанки документа source по типизированному адресу. Без векторов."""
+    kind, num, row = address
+    docs = backend.get_by_filter({"source": source}, limit=FIND_NORM_LIMIT)
+    if len(docs) >= FIND_NORM_LIMIT:
+        structlog.get_logger().warning(
+            "find_norm: документ упёрся в лимит выборки, хвост может быть потерян",
+            source=source,
+            limit=FIND_NORM_LIMIT,
+        )
+    return [d for d in docs if _point_matches(kind, num, row, d)]
 
 
 @mcp.tool()
@@ -180,12 +210,13 @@ def get_norm(ctx: Context, doc_id: str, point: str) -> dict:
     found=false = пункт не найден в корпусе — НЕ доказательство, что его нет в документе
     (корпус может быть неполон). Тогда используй retrieve_chunks."""
     app = ctx.request_context.lifespan_context
-    norm = normalize_point(point)
-    hits = find_norm(app.backend, doc_id, norm)
+    kind, num, row = normalize_point(point)
+    hits = find_norm(app.backend, doc_id, (kind, num, row))
     return {
         "found": bool(hits),
         "doc_id": doc_id,
-        "point": norm,
+        "point": num if row is None else f"{num}.{row}",
+        "kind": kind,
         "chunks": [
             {
                 "chunk_id": make_public_id(d.metadata),
