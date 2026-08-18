@@ -222,3 +222,6 @@ chroma_db_gosts/
 source_docs/
 docs/plans/2026-05-30-prompt-v8-plan.md
 .reranker_cache/
+
+# результаты eval-прогонов
+eval/results/
