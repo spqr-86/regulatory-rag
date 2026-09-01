@@ -62,7 +62,7 @@
 <li><code>src/v7/bridge.py</code>: <code>make_vector_search_fn</code>, <code>_rerank</code> (CrossEncoder), <code>make_section_fetch_fn</code></li>
 <li><code>src/v7/nodes/rag_simple.py</code> L80–91: <code>vector + bm25 → rrf_merge(top_k=12)</code> — движок simple-пути</li>
 <li><code>src/v7/nodes/rag_complex.py</code>: <code>vector(top_k=60) → section_fetch → rerank(top_n) → MMR</code> — движок complex-пути</li>
-<li><code>chunk_id</code> в метаданных чанка (<code>src/indexing/file_handler.py</code> L154, sha256 content hash) — стабильный ID есть</li>
+<li><code>chunk_id</code> в метаданных чанка (<code>src/indexing/file_handler.py</code> L154) — последовательный int внутри source (<code>source_chunk_counter</code>), не хеш; sha256 рядом — это отдельный <code>content_hash</code> для дедупа при индексации. Стабильный ID есть, идентичность собирается через <code>passage_identity</code></li>
 <li><code>eval/advanced_generation_metrics.py</code> — паттерн structured-output LLM-вызова с retry</li>
 </ul>
 

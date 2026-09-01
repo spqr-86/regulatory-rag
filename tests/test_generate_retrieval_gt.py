@@ -20,6 +20,9 @@ from eval.generate_retrieval_gt import (
     parse_questions,
     dedup_questions,
     build_gt_record,
+    to_passage,
+    iter_corpus_chunks,
+    _passage_identity,
 )
 
 pytestmark = pytest.mark.unit
@@ -126,3 +129,64 @@ class TestBuildGtRecord:
         assert rec["source"] == "trudkodeks.pdf"
         assert rec["chunk_preview"].startswith("Полный текст чанка")
         assert len(rec["chunk_preview"]) <= 200
+
+    def test_chunk_id_zero_is_not_treated_as_missing(self):
+        """chunk_id numbering is per-source and starts at 0 — a falsy but valid id."""
+        passage = {
+            "chunk_id": 0,
+            "text": "текст",
+            "metadata": {"source": "p2464.pdf", "chunk_id": 0},
+        }
+        assert build_gt_record("Q?", passage)["chunk_id"] == "p2464.pdf#0"
+
+
+class TestToPassage:
+    def test_lifts_chunk_id_to_top_level(self):
+        doc = {"text": "t", "metadata": {"source": "a.pdf", "chunk_id": 3}}
+        assert to_passage(doc) == {
+            "text": "t",
+            "metadata": {"source": "a.pdf", "chunk_id": 3},
+            "chunk_id": 3,
+        }
+
+    def test_no_chunk_id_key_when_metadata_lacks_it(self):
+        passage = to_passage({"text": "t", "metadata": {"source": "a.pdf"}})
+        assert "chunk_id" not in passage
+
+
+class TestIterCorpusChunks:
+    def test_uses_backend_iter_all_documents(self):
+        class FakeBackend:
+            def iter_all_documents(self):
+                yield {"text": "one", "metadata": {"source": "a.pdf", "chunk_id": 0}}
+                yield {"text": "two", "metadata": {"source": "a.pdf", "chunk_id": 1}}
+
+        passages = iter_corpus_chunks(backend=FakeBackend())
+        assert [_passage_identity(p) for p in passages] == ["a.pdf#0", "a.pdf#1"]
+
+
+class TestPassageIdentity:
+    """The GT ids must equal the ids the retrieval runners (#6) emit, otherwise
+    every Hit Rate silently reads 0."""
+
+    CASES = [
+        {"chunk_id": 4, "text": "x", "metadata": {"source": "a.pdf", "page_no": 2}},
+        {"chunk_id": 0, "text": "x", "metadata": {"source": "a.pdf"}},
+        {"text": "no chunk id here", "metadata": {"source": "a.pdf", "page_no": 7}},
+        {"chunk_id": "", "text": "empty id", "metadata": {"source": "b.pdf"}},
+        {"text": "no metadata at all", "metadata": None},
+    ]
+
+    def test_chunk_id_branch(self):
+        assert _passage_identity(self.CASES[0]) == "a.pdf#4"
+
+    def test_content_fallback_branch(self):
+        assert _passage_identity(self.CASES[2]) == "a.pdf|7|no chunk id here"
+
+    @pytest.mark.integration
+    def test_identity_matches_nlp_core(self):
+        """Pins the local mirror to the real passage_identity. Needs the full
+        env (nlp_core imports pymorphy3), so it is not part of the unit run."""
+        nlp_core = pytest.importorskip("src.v7.nlp_core")
+        for case in self.CASES:
+            assert _passage_identity(case) == nlp_core.passage_identity(case)

@@ -151,23 +151,34 @@ def dedup_questions(
     return survivors, removed
 
 
-def _passage_identity(chunk: dict) -> str:
-    """``"{source}#{chunk_id}"`` — mirrors src.v7.nlp_core.passage_identity for
-    the chunk_id branch. GT generation controls the index and requires chunk_id,
-    so the content-hash fallback is not needed here."""
-    meta = chunk.get("metadata") or {}
-    source = meta.get("source", chunk.get("source", ""))
-    cid = chunk.get("chunk_id", meta.get("chunk_id"))
-    return f"{source}#{cid}"
+def _passage_identity(passage: dict) -> str:
+    """Byte-for-byte mirror of ``src.v7.nlp_core.passage_identity``.
+
+    Copied rather than imported because ``nlp_core`` instantiates a pymorphy3
+    analyzer at module import, which the LLM-free unit tests must not pull in.
+    Divergence here would silently zero out Hit Rate — the GT ids would stop
+    matching the ids the retrieval runners emit — so
+    ``test_identity_matches_nlp_core`` pins the two implementations together.
+    """
+    cid = passage.get("chunk_id")
+    if cid is not None and cid != "":
+        meta = passage.get("metadata") or {}
+        source = meta.get("source", "")
+        return f"{source}#{cid}"
+    meta = passage.get("metadata") or {}
+    source = meta.get("source", "")
+    page_no = meta.get("page_no", "")
+    text = (passage.get("text", "") or "")[:80]
+    return f"{source}|{page_no}|{text}"
 
 
-def build_gt_record(question: str, chunk: dict) -> dict:
-    meta = chunk.get("metadata") or {}
+def build_gt_record(question: str, passage: dict) -> dict:
+    meta = passage.get("metadata") or {}
     return {
         "question": question.strip(),
-        "chunk_id": _passage_identity(chunk),
-        "source": meta.get("source", chunk.get("source", "")),
-        "chunk_preview": (chunk.get("text", "") or "")[:PREVIEW_CHARS],
+        "chunk_id": _passage_identity(passage),
+        "source": meta.get("source", ""),
+        "chunk_preview": (passage.get("text", "") or "")[:PREVIEW_CHARS],
     }
 
 
@@ -190,27 +201,30 @@ def estimate_cost(n_chunks: int, avg_chunk_tokens: int = 350) -> float:
     return per_call * n_chunks
 
 
-def iter_corpus_chunks(vs=None) -> list[dict]:
-    """All chunks of the Chroma collection as ``{text, chunk_id, source, metadata}``."""
-    if vs is None:
-        from src.indexing.vector_store import get_vector_store  # noqa: PLC0415
+def to_passage(doc: dict) -> dict:
+    """Shape a backend document as a v7 passage — same lift of ``chunk_id`` from
+    metadata to top level that ``src.v7.bridge._doc_to_passage`` does, so
+    :func:`_passage_identity` sees what the retrieval paths see."""
+    meta = doc.get("metadata") or {}
+    passage = {"text": doc.get("text", ""), "metadata": meta}
+    if "chunk_id" in meta:
+        passage["chunk_id"] = meta["chunk_id"]
+    return passage
 
-        vs = get_vector_store()
-    raw = vs.get(include=["documents", "metadatas"])
-    docs = raw.get("documents") or []
-    metas = raw.get("metadatas") or []
-    chunks: list[dict] = []
-    for i, text in enumerate(docs):
-        meta = metas[i] if i < len(metas) else {}
-        chunks.append(
-            {
-                "text": text,
-                "chunk_id": meta.get("chunk_id"),
-                "source": meta.get("source", ""),
-                "metadata": meta,
-            }
+
+def iter_corpus_chunks(backend=None) -> list[dict]:
+    """Every stored chunk as a v7 passage dict.
+
+    Goes through the backend's own paginated ``iter_all_documents()`` — the same
+    traversal the BM25 corpus build uses — rather than a raw collection query.
+    """
+    if backend is None:
+        from src.backends.vector_store import (  # noqa: PLC0415
+            get_vector_store_backend,
         )
-    return chunks
+
+        backend = get_vector_store_backend(load_existing=True)
+    return [to_passage(doc) for doc in backend.iter_all_documents()]
 
 
 def _make_llm():
