@@ -180,8 +180,10 @@ def get_simple_llm(**kwargs):
         settings.SIMPLE_LLM_PROVIDER,
         settings.SIMPLE_MODEL_NAME,
     )
+    # Applies to every provider: without this the OpenAI branch fell through to
+    # the ChatOpenAI default and the configured model name was silently ignored.
+    kwargs.setdefault("model_name", model)
     if provider == "gemini":
-        kwargs.setdefault("model_name", model)
         return get_gemini_llm(**kwargs)
     factory = _LLM_PROVIDERS.get(provider)
     if not factory:
@@ -198,8 +200,10 @@ def get_complex_llm(**kwargs):
         settings.COMPLEX_LLM_PROVIDER,
         settings.COMPLEX_MODEL_NAME,
     )
+    # Applies to every provider: without this the OpenAI branch fell through to
+    # the ChatOpenAI default and the configured model name was silently ignored.
+    kwargs.setdefault("model_name", model)
     if provider == "gemini":
-        kwargs.setdefault("model_name", model)
         return get_gemini_llm(**kwargs)
     factory = _LLM_PROVIDERS.get(provider)
     if not factory:
@@ -216,8 +220,10 @@ def get_judge_llm(**kwargs):
         settings.JUDGE_LLM_PROVIDER,
         settings.JUDGE_MODEL_NAME,
     )
+    # Applies to every provider: without this the OpenAI branch fell through to
+    # the ChatOpenAI default and the configured model name was silently ignored.
+    kwargs.setdefault("model_name", model)
     if provider == "gemini":
-        kwargs.setdefault("model_name", model)
         return get_gemini_llm(**kwargs)
     factory = _LLM_PROVIDERS.get(provider)
     if not factory:

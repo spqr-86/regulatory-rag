@@ -190,3 +190,69 @@ class TestPassageIdentity:
         nlp_core = pytest.importorskip("src.v7.nlp_core")
         for case in self.CASES:
             assert _passage_identity(case) == nlp_core.passage_identity(case)
+
+
+class TestPricing:
+    """Cost must be computed for the model actually used.
+
+    Regression: PRICE_PER_1M was a single hard-coded gpt-4o-mini rate applied to
+    whatever model the factory happened to return, so both the pre-flight
+    estimate and the COST_ABORT_USD guard could be off by the ratio between two
+    models' prices.
+    """
+
+    def test_known_model_rate(self):
+        from eval.generate_retrieval_gt import price_for
+
+        assert price_for("gpt-4o-mini") == {"input": 0.15, "output": 0.60}
+        assert price_for("gpt-4o") == {"input": 2.50, "output": 10.00}
+
+    def test_unknown_model_raises(self):
+        """Silently pricing an unknown model at some other model's rate is the bug."""
+        from eval.generate_retrieval_gt import price_for
+
+        with pytest.raises(ValueError, match="gpt-9-turbo"):
+            price_for("gpt-9-turbo")
+
+    def test_total_price_uses_given_model(self):
+        from eval.generate_retrieval_gt import calc_total_price
+
+        usages = [{"input": 1_000_000, "output": 1_000_000}]
+        assert calc_total_price(usages, model="gpt-4o-mini") == pytest.approx(0.75)
+        assert calc_total_price(usages, model="gpt-4o") == pytest.approx(12.50)
+
+    def test_estimate_scales_with_model_price(self):
+        from eval.generate_retrieval_gt import estimate_cost
+
+        cheap = estimate_cost(1000, model="gpt-4o-mini")
+        dear = estimate_cost(1000, model="gpt-4o")
+        assert dear > cheap * 15
+
+    def test_estimate_matches_manual_arithmetic(self):
+        from eval.generate_retrieval_gt import estimate_cost
+
+        # 500 input tokens (350 chunk + 150 overhead) + 60 output per chunk.
+        expected = (500 / 1_000_000 * 0.15 + 60 / 1_000_000 * 0.60) * 100
+        assert estimate_cost(100, model="gpt-4o-mini") == pytest.approx(expected)
+
+
+class TestGeneratorModel:
+    def test_generator_pins_its_own_model(self, monkeypatch):
+        """The generator must not inherit the eval judge's model: judging answers
+        and inventing questions are different jobs with different price tags."""
+        import eval.generate_retrieval_gt as g
+
+        captured = {}
+
+        def fake_get_judge_llm(**kwargs):
+            captured.update(kwargs)
+            return object()
+
+        import src.infra.llm_factory as lf
+
+        monkeypatch.setattr(lf, "get_judge_llm", fake_get_judge_llm)
+
+        g._make_llm()
+
+        assert captured.get("model_name") == g.GEN_MODEL
+        assert g.GEN_MODEL == "gpt-4o-mini"

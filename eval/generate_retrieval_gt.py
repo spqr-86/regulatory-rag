@@ -41,8 +41,29 @@ MAX_WORKERS = 6
 COST_ABORT_USD = 2.0
 PREVIEW_CHARS = 200
 
-# gpt-4o-mini list price, USD per 1M tokens (2026-09).
-PRICE_PER_1M = {"input": 0.15, "output": 0.60}
+# Model the generator runs on. Pinned here on purpose: writing questions from a
+# given chunk is a cheap job, and inheriting the eval judge's model (get_judge_llm)
+# would silently retag it at 17x the price if JUDGE_MODEL_NAME changes.
+GEN_MODEL = "gpt-4o-mini"
+
+# OpenAI list prices, USD per 1M tokens (checked 2026-09-02).
+PRICE_PER_1M = {
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+}
+
+
+def price_for(model: str) -> dict:
+    """Rate card for ``model``. Unknown model is an error, not a default: pricing
+    it at some other model's rate is exactly how the cost guard gets fooled."""
+    try:
+        return PRICE_PER_1M[model]
+    except KeyError:
+        known = ", ".join(sorted(PRICE_PER_1M))
+        raise ValueError(
+            f"No price for model {model!r}. Known: {known}. "
+            "Add its rate to PRICE_PER_1M before running."
+        ) from None
 
 
 class Questions(BaseModel):
@@ -185,19 +206,24 @@ def build_gt_record(question: str, passage: dict) -> dict:
 # ─── LLM + corpus (lazy heavy imports) ──────────────────────────────────────
 
 
-def calc_total_price(usages: Iterable[dict]) -> float:
+def calc_total_price(usages: Iterable[dict], model: str = GEN_MODEL) -> float:
     """Sum USD cost from a list of ``{"input": n, "output": n}`` token counts."""
+    rate = price_for(model)
     total = 0.0
     for u in usages:
-        total += u.get("input", 0) / 1_000_000 * PRICE_PER_1M["input"]
-        total += u.get("output", 0) / 1_000_000 * PRICE_PER_1M["output"]
+        total += u.get("input", 0) / 1_000_000 * rate["input"]
+        total += u.get("output", 0) / 1_000_000 * rate["output"]
     return total
 
 
-def estimate_cost(n_chunks: int, avg_chunk_tokens: int = 350) -> float:
+def estimate_cost(
+    n_chunks: int, model: str = GEN_MODEL, avg_chunk_tokens: int = 350
+) -> float:
     """Rough pre-flight estimate: prompt ≈ chunk + 150 tokens overhead,
     output ≈ 60 tokens per generation call."""
-    per_call = calc_total_price([{"input": avg_chunk_tokens + 150, "output": 60}])
+    per_call = calc_total_price(
+        [{"input": avg_chunk_tokens + 150, "output": 60}], model=model
+    )
     return per_call * n_chunks
 
 
@@ -227,10 +253,11 @@ def iter_corpus_chunks(backend=None) -> list[dict]:
     return [to_passage(doc) for doc in backend.iter_all_documents()]
 
 
-def _make_llm():
-    from src.infra.llm_factory import get_judge_llm  # noqa: PLC0415
+def _make_llm(model: str = GEN_MODEL):
+    from src.infra import llm_factory  # noqa: PLC0415
 
-    return get_judge_llm()
+    # Explicit model_name wins over JUDGE_MODEL_NAME in the factory.
+    return llm_factory.get_judge_llm(model_name=model)
 
 
 def generate_questions_for_chunk(chunk: dict, llm, n: int = QUESTIONS_PER_CHUNK):
@@ -286,21 +313,23 @@ def run(
     limit: int | None = None,
     out_path: Path = GT_PATH,
     dry_run: bool = False,
+    model: str = GEN_MODEL,
 ) -> dict:
     chunks = [c for c in iter_corpus_chunks() if not is_junk_chunk(c["text"])]
     if limit:
         chunks = chunks[:limit]
 
-    projected = estimate_cost(len(chunks))
+    projected = estimate_cost(len(chunks), model=model)
     print(
-        f"chunks (after junk filter): {len(chunks)}  projected cost: ${projected:.2f}"
+        f"chunks (after junk filter): {len(chunks)}  model: {model}  "
+        f"projected cost: ${projected:.2f}"
     )
     if projected > COST_ABORT_USD:
         sys.exit(f"ABORT: projected ${projected:.2f} > ${COST_ABORT_USD:.2f} budget")
     if dry_run:
-        return {"chunks": len(chunks), "projected_usd": projected}
+        return {"chunks": len(chunks), "projected_usd": projected, "model": model}
 
-    llm = _make_llm()
+    llm = _make_llm(model)
     records: list[dict] = []
     usages: list[dict] = []
     failures = 0
@@ -328,7 +357,7 @@ def run(
         for rec in kept:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-    spent = calc_total_price(usages)
+    spent = calc_total_price(usages, model=model)
     print(
         f"wrote {len(kept)} questions ({removed} dups removed, {failures} chunk failures) "
         f"to {out_path}  spent: ${spent:.4f}"
@@ -338,6 +367,7 @@ def run(
         "removed_dups": removed,
         "failures": failures,
         "spent_usd": spent,
+        "model": model,
     }
 
 
@@ -359,9 +389,14 @@ def _parse_args(argv=None):
     p.add_argument(
         "--dry-run", action="store_true", help="estimate cost, write nothing"
     )
+    p.add_argument(
+        "--model",
+        default=GEN_MODEL,
+        help=f"generation model (default: {GEN_MODEL}); must be priced in PRICE_PER_1M",
+    )
     return p.parse_args(argv)
 
 
 if __name__ == "__main__":
     args = _parse_args()
-    run(limit=args.limit, out_path=args.out, dry_run=args.dry_run)
+    run(limit=args.limit, out_path=args.out, dry_run=args.dry_run, model=args.model)
