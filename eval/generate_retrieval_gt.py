@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -37,6 +38,8 @@ GT_PATH = REPO_ROOT / "eval" / "data" / "retrieval_gt.jsonl"
 QUESTIONS_PER_CHUNK = 3
 MIN_CHUNK_CHARS = 200
 NEAR_DUP_THRESHOLD = 0.95
+# Между разными чанками похожий вопрос ядовит: отвечают оба, размечен один.
+CROSS_CHUNK_THRESHOLD = 0.88
 MAX_WORKERS = 6
 COST_ABORT_USD = 2.0
 PREVIEW_CHARS = 200
@@ -74,13 +77,30 @@ class Questions(BaseModel):
 
 GEN_PROMPT = """Ты — специалист по охране труда, который ищет ответ в нормативной базе.
 Ниже фрагмент нормативного документа. Сформулируй {n} естественных вопросов,
-ответ на которые содержится ИМЕННО в этом фрагменте.
+ответ на которые содержится ИМЕННО в этом фрагменте и больше нигде.
 
-Требования к вопросам:
-- используй как можно меньше слов из самого фрагмента (перефразируй);
-- пиши так, как реально спрашивают коллеги — не канцелярит, не слишком коротко и не слишком длинно;
+Главное требование — зацепка. В каждом вопросе должна быть конкретная деталь
+из фрагмента: срок, периодичность, числовое значение или порог, вид работ,
+условие применения, категория работников или адресат обязанности. Без этой детали
+вопрос отвечается половиной нормативной базы, и разметка становится ложью.
+
+Не задавай вопросов, на которые можно ответить, не читая фрагмент:
+«Какие документы регулируют охрану труда?», «Что говорит закон о медосмотрах?»,
+«Каковы основные требования к обучению?» — такие формулировки запрещены.
+
+Зацепка — из содержания нормы, а не из её реквизитов. Запрещены вопросы про
+историю редакции и нумерацию: «Каким законом внесены изменения», «(в ред. …)»,
+«Какой номер пункта указывает на …», «Когда статья утратила силу». Спрашивают
+о том, что нужно сделать и в какие сроки, а не о том, каким актом это введено.
+
+Остальные требования:
+- перефразируй, не переписывай фразы фрагмента дословно;
+- пиши так, как реально спрашивают коллеги — не канцелярит;
 - каждый вопрос самодостаточен (без «здесь», «в этом пункте»);
-- разные формулировки, не три перифраза одного и того же.
+- разные вопросы о разных деталях, не три перифраза одного и того же.
+
+Если во фрагменте нет ни одной такой зацепки (это титульный лист, преамбула со
+ссылками или оглавление) — верни пустой список вопросов.
 
 Фрагмент:
 {chunk}
@@ -93,6 +113,28 @@ _PUNCT_RE = re.compile(r"[^\w\s]", flags=re.UNICODE)
 _WS_RE = re.compile(r"\s+")
 _TOC_LEADER_RE = re.compile(r"\.{3,}\s*\d+\s*$")
 
+# Реквизиты: ссылка на источник опубликования и на статью/пункт другого акта.
+_CITATION_RE = re.compile(
+    r"собрание законодательства|ст\.\s*\d+|стать[ияею]{1,2}\s+\d+"
+    r"|[nN№]\s*\d+-фз|пункт(?:ом|ами)?\s+\d+",
+    flags=re.IGNORECASE | re.UNICODE,
+)
+# Долженствование и порядок действий — признак того, что во фрагменте есть норма,
+# а не только перечень оснований, по которым акт издан.
+_OBLIGATION_RE = re.compile(
+    r"обязан|должен|должна|должны|вправе|запрещ|не допускается|подлежит"
+    r"|устанавлива|проводится|проводятся|осуществля|включает|применяется"
+    r"|оформляется|выда[её]тся|направляется|не реже|не позднее",
+    flags=re.IGNORECASE | re.UNICODE,
+)
+
+# Строка, набранная в основном заглавными, — заголовок акта; чанкер повторяет его
+# в каждом чанке документа, поэтому в объём содержания он не идёт.
+HEADING_UPPERCASE_RATIO = 0.5
+# Доля знаков, занятых реквизитами. Замер по корпусу 02.09.2026: преамбулы 0.19–0.29,
+# обычные статьи со ссылками на редакции 0.06–0.16.
+MAX_CITATION_SHARE = 0.17
+
 
 def normalize_question(q: str) -> str:
     """Lowercase, drop punctuation, collapse whitespace — key for exact dedup."""
@@ -100,10 +142,38 @@ def normalize_question(q: str) -> str:
     return _WS_RE.sub(" ", q).strip()
 
 
+def _uppercase_ratio(text: str) -> float:
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return 0.0
+    return sum(1 for c in letters if c.isupper()) / len(letters)
+
+
+def _body_without_headings(text: str) -> str:
+    """Text minus the all-caps heading lines the chunker repeats in every chunk."""
+    return "\n".join(
+        ln for ln in text.splitlines() if _uppercase_ratio(ln) <= HEADING_UPPERCASE_RATIO
+    ).strip()
+
+
 def is_junk_chunk(text: str, min_chars: int = MIN_CHUNK_CHARS) -> bool:
-    """True for chunks not worth generating questions from: too short, or a
-    table of contents (several lines ending in a dotted leader + page number,
-    or an explicit 'содержание' / 'оглавление' header)."""
+    """True for chunks not worth generating questions from.
+
+    Four cases, all seen in the corpus: too short; a table of contents; a title
+    page (nothing but the act's caps header); a preamble of citations
+    ("… (Собрание законодательства …, ст. 3), пунктом 6 статьи 34 …") that lists
+    the grounds for issuing the act and states no rule of its own.
+
+    The last two matter because they are long, so the length filter kept them,
+    and every question generated from them ("какие документы регулируют охрану
+    здоровья граждан?") is answered by half the corpus while the GT marks a
+    single chunk — measuring the labelling, not the retrieval.
+
+    Both new rules are deliberately about proportion, not count: the heading is
+    excluded from the content budget rather than triggering a caps check, and
+    citations are measured as a share of the text, because "(в ред. Федеральных
+    законов от … N 90-ФЗ, …)" sits at the end of perfectly ordinary articles.
+    """
     stripped = (text or "").strip()
     if len(stripped) < min_chars:
         return True
@@ -116,7 +186,40 @@ def is_junk_chunk(text: str, min_chars: int = MIN_CHUNK_CHARS) -> bool:
     if len(lines) >= 3 and leader_lines >= len(lines) - 1:
         return True
 
+    if len(_body_without_headings(stripped)) < min_chars:
+        return True
+
+    citation_chars = sum(len(m) for m in _CITATION_RE.findall(stripped))
+    if citation_chars / len(stripped) > MAX_CITATION_SHARE and not _OBLIGATION_RE.search(
+        stripped
+    ):
+        return True
+
     return False
+
+
+# Вопрос о реквизитах акта, а не о его содержании: каким актом введена норма,
+# когда утратила силу, какой у пункта номер. Поиску по нормативке их не задают.
+_META_QUESTION_RE = re.compile(
+    r"как(?:ой|им|ая|ие)\s+(?:федеральн\w+\s+)?закон\w*\s+"
+    r"(?:ввёл|ввел|введ\w+|внес\w+|изменил|утратил|отменил|дополнил)"
+    r"|каким\s+(?:актом|приказом|постановлением)\s+"
+    r"|утратил\w*\s+силу"
+    r"|номер\s+(?:пункта|статьи|части|подпункта)"
+    r"|нов\w+\s+редакц|введена\s+редакц|в\s+ред\.",
+    flags=re.IGNORECASE | re.UNICODE,
+)
+
+
+def is_meta_question(question: str) -> bool:
+    """True для вопроса о реквизитах нормы (каким законом введена, когда утратила
+    силу, какой номер у пункта) вместо её содержания."""
+    return bool(_META_QUESTION_RE.search(question or ""))
+
+
+def filter_questions(questions: Iterable[str]) -> list[str]:
+    """Отбрасывает мета-вопросы, сохраняя порядок."""
+    return [q for q in questions if not is_meta_question(q)]
 
 
 def parse_questions(raw: object) -> list[str]:
@@ -144,9 +247,17 @@ def dedup_questions(
     records: list[dict],
     embed_fn: Callable[[list[str]], list[Sequence[float]]] | None = None,
     near_dup_threshold: float = NEAR_DUP_THRESHOLD,
+    cross_chunk_threshold: float = CROSS_CHUNK_THRESHOLD,
 ) -> tuple[list[dict], int]:
     """Remove exact duplicate questions (by :func:`normalize_question`) and, when
-    ``embed_fn`` is given, near-duplicates (cosine > ``near_dup_threshold``).
+    ``embed_fn`` is given, near-duplicates by cosine similarity.
+
+    Two thresholds. Inside one chunk the three questions deliberately paraphrase
+    the same text, so only a near-identical pair is a duplicate
+    (``near_dup_threshold``). Across chunks a merely similar pair is worse than a
+    duplicate: both chunks answer it, but the GT marks one, so Hit Rate drops for
+    a retrieval that was right — hence the stricter ``cross_chunk_threshold``.
+
     Returns ``(kept_records, removed_count)`` preserving input order."""
     kept: list[dict] = []
     seen_norm: set[str] = set()
@@ -164,12 +275,42 @@ def dedup_questions(
     survivors: list[dict] = []
     survivor_vecs: list[Sequence[float]] = []
     for rec, vec in zip(kept, vectors):
-        if any(_cosine(vec, sv) > near_dup_threshold for sv in survivor_vecs):
+        duplicate = False
+        for survivor, sv in zip(survivors, survivor_vecs):
+            same_chunk = survivor["chunk_id"] == rec["chunk_id"]
+            threshold = near_dup_threshold if same_chunk else cross_chunk_threshold
+            if _cosine(vec, sv) > threshold:
+                duplicate = True
+                break
+        if duplicate:
             removed += 1
             continue
         survivors.append(rec)
         survivor_vecs.append(vec)
     return survivors, removed
+
+
+def select_chunks(
+    chunks: list[dict],
+    limit: int | None = None,
+    sample: int | None = None,
+    seed: int = 0,
+) -> list[dict]:
+    """Pick the chunks to generate from.
+
+    ``sample`` draws a random subset with a fixed ``seed`` — a smoke run on
+    ``chunks[:N]`` lands entirely inside the first document and says nothing about
+    the corpus. ``limit`` keeps the old head-slice for reproducing a specific run;
+    ``sample`` wins when both are given.
+    """
+    if sample:
+        rng = random.Random(seed)
+        if sample >= len(chunks):
+            return list(chunks)
+        return rng.sample(chunks, sample)
+    if limit:
+        return chunks[:limit]
+    return list(chunks)
 
 
 def _passage_identity(passage: dict) -> str:
@@ -293,7 +434,7 @@ def generate_questions_for_chunk(chunk: dict, llm, n: int = QUESTIONS_PER_CHUNK)
         return structured.invoke(prompt)
 
     result = _call()
-    parsed = (
+    parsed = filter_questions(
         parse_questions(result["parsed"])
         if isinstance(result, dict)
         else parse_questions(result)
@@ -314,10 +455,11 @@ def run(
     out_path: Path = GT_PATH,
     dry_run: bool = False,
     model: str = GEN_MODEL,
+    sample: int | None = None,
+    seed: int = 0,
 ) -> dict:
     chunks = [c for c in iter_corpus_chunks() if not is_junk_chunk(c["text"])]
-    if limit:
-        chunks = chunks[:limit]
+    chunks = select_chunks(chunks, limit=limit, sample=sample, seed=seed)
 
     projected = estimate_cost(len(chunks), model=model)
     print(
@@ -384,7 +526,16 @@ def _embedding_fn():
 
 def _parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--limit", type=int, default=None, help="cap chunks (smoke test)")
+    p.add_argument(
+        "--limit", type=int, default=None, help="first N chunks (reproduce a run)"
+    )
+    p.add_argument(
+        "--sample",
+        type=int,
+        default=None,
+        help="random N chunks (smoke test); wins over --limit",
+    )
+    p.add_argument("--seed", type=int, default=0, help="seed for --sample")
     p.add_argument("--out", type=Path, default=GT_PATH)
     p.add_argument(
         "--dry-run", action="store_true", help="estimate cost, write nothing"
@@ -399,4 +550,11 @@ def _parse_args(argv=None):
 
 if __name__ == "__main__":
     args = _parse_args()
-    run(limit=args.limit, out_path=args.out, dry_run=args.dry_run, model=args.model)
+    run(
+        limit=args.limit,
+        out_path=args.out,
+        dry_run=args.dry_run,
+        model=args.model,
+        sample=args.sample,
+        seed=args.seed,
+    )
