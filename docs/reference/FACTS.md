@@ -38,7 +38,12 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 
 ## corpus
 - documents: 12 НТД
-- chunks: 7718  (reindex 2026-05-30, session 61; chunk_id 100%, per-source int)
+- chunks: 7792  (reindex 2026-09-02; chunk_id 100%, per-source int)
+- chunks after GT junk filter: 7276  (`eval/generate_retrieval_gt.py`, `MIN_CHUNK_CHARS=200`)
+- full `index.py` run: ≈54 min, peak ≈3 GB RSS + 4.3 GB swap (docling/torch dominates;
+  embeddings go over the API). The run wipes `chroma_db/` and the docling cache first,
+  so a crashed run restarts from zero.
+- previous: 7718 chunks (reindex 2026-05-30, session 61)
 
 ## nodes
 Graph nodes (`src/v7/graph.py`), entry = `intent_gate`:
@@ -58,7 +63,13 @@ visual_enrichment → generate_answer → END
 - No `llm_verifier` / `rewriter` (removed session 61): `evaluate_triage` routes sufficient→generate, otherwise→`rag_complex`. <!--freshness:ignore-->
 
 ## metrics
-Source: `benchmarks/eval_v7_2026-05-30_chunkid.jsonl` (dataset 57, valid 54, judge `gpt-4o`).
+Source: `benchmarks/eval_v7_2026-05-30_chunkid.jsonl` (dataset 57, valid 54).
+
+> **Judge caveat (found 2026-09-02):** this run was judged by **`gpt-4o-mini`, not `gpt-4o`**.
+> `llm_factory` carried the resolved settings model into the constructor only on the gemini
+> branch, so every OpenAI getter fell back to the `ChatOpenAI` default and `JUDGE_MODEL_NAME`
+> / `COMPLEX_MODEL_NAME` were silently ignored. Fixed 2026-09-02; the numbers below are not
+> comparable with runs made after that fix, and the complex path ran on mini as well.
 
 | metric | value |
 |---|---|
