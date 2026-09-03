@@ -6,6 +6,11 @@ For every non-junk chunk in the vector collection the generator asks an LLM for
 
     {"question": str, "chunk_id": str, "source": str, "chunk_preview": str}
 
+Generation is crash-safe: every finished chunk is appended to
+``<out>.raw`` immediately, a restart resumes from that log (already generated
+chunks are not re-paid for), and ``--finalize`` derives the deduped final file
+from the log without any API calls.
+
 ``chunk_id`` uses the same ``"{source}#{chunk_id}"`` identity as retrieval fusion
 (``src.v7.nlp_core.passage_identity``), so the file feeds
 ``eval.retrieval_metrics.evaluate_retrieval_batch`` directly.
@@ -20,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import re
 import sys
@@ -167,7 +173,9 @@ def _uppercase_ratio(text: str) -> float:
 def _body_without_headings(text: str) -> str:
     """Text minus the all-caps heading lines the chunker repeats in every chunk."""
     return "\n".join(
-        ln for ln in text.splitlines() if _uppercase_ratio(ln) <= HEADING_UPPERCASE_RATIO
+        ln
+        for ln in text.splitlines()
+        if _uppercase_ratio(ln) <= HEADING_UPPERCASE_RATIO
     ).strip()
 
 
@@ -205,9 +213,9 @@ def is_junk_chunk(text: str, min_chars: int = MIN_CHUNK_CHARS) -> bool:
         return True
 
     citation_chars = sum(len(m) for m in _CITATION_RE.findall(stripped))
-    if citation_chars / len(stripped) > MAX_CITATION_SHARE and not _OBLIGATION_RE.search(
+    if citation_chars / len(
         stripped
-    ):
+    ) > MAX_CITATION_SHARE and not _OBLIGATION_RE.search(stripped):
         return True
 
     return False
@@ -516,6 +524,77 @@ def generate_questions_for_chunk(chunk: dict, llm, n: int = QUESTIONS_PER_CHUNK)
     return parsed[:n], usage
 
 
+def raw_path_for(out_path: Path) -> Path:
+    """Append-only companion log of ``out_path``.
+
+    The dedup pass needs every record at once, so the final file can only be
+    written at the end — and a run that dies before it (killed shell, OOM,
+    exhausted daily quota) used to lose hours of paid generation. Each finished
+    chunk is therefore appended here immediately; the final file is derived from
+    it by :func:`finalize`.
+    """
+    return Path(str(out_path) + ".raw")
+
+
+def load_raw(raw_path: Path) -> tuple[set[str], list[dict]]:
+    """``(chunk ids already generated, their records)`` from the raw log.
+
+    A run killed mid-write leaves a truncated last line: it is skipped, not
+    fatal — losing three questions beats losing the file.
+    """
+    done: set[str] = set()
+    records: list[dict] = []
+    if not raw_path.exists():
+        return done, records
+    with raw_path.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                print(f"  raw log: skipping corrupt line in {raw_path}")
+                continue
+            chunk_id = entry.get("chunk_id")
+            if not chunk_id:
+                continue
+            done.add(chunk_id)
+            records.extend(entry.get("records") or [])
+    return done, records
+
+
+def _append_raw(handle, chunk_id: str, records: list[dict]) -> None:
+    """One durable line per chunk. fsync on purpose: the whole point is
+    surviving a process that never gets to flush."""
+    handle.write(
+        json.dumps({"chunk_id": chunk_id, "records": records}, ensure_ascii=False)
+        + "\n"
+    )
+    handle.flush()
+    os.fsync(handle.fileno())
+
+
+def finalize(
+    raw_path: Path,
+    out_path: Path = GT_PATH,
+    embed_fn: Callable[[list[str]], list[Sequence[float]]] | None = None,
+) -> dict:
+    """Dedup the raw log into the final GT file. No API calls — a run that died
+    after generation is finished with ``--finalize``, not re-paid for."""
+    _, records = load_raw(raw_path)
+    kept, removed = dedup_questions(records, embed_fn=embed_fn)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8") as f:
+        for rec in kept:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    return {
+        "questions": len(kept),
+        "removed_dups": removed,
+        "raw_records": len(records),
+    }
+
+
 def run(
     limit: int | None = None,
     out_path: Path = GT_PATH,
@@ -523,56 +602,68 @@ def run(
     model: str = GEN_MODEL,
     sample: int | None = None,
     seed: int = 0,
+    resume: bool = True,
+    max_workers: int = MAX_WORKERS,
 ) -> dict:
     chunks = [c for c in iter_corpus_chunks() if not is_junk_chunk(c["text"])]
     chunks = select_chunks(chunks, limit=limit, sample=sample, seed=seed)
 
-    projected = estimate_cost(len(chunks), model=model)
+    raw_path = raw_path_for(out_path)
+    done: set[str] = set()
+    if resume:
+        done, _ = load_raw(raw_path)
+        if done:
+            print(f"resume: {len(done)} chunks already in {raw_path.name}")
+    pending = [c for c in chunks if _passage_identity(c) not in done]
+
+    projected = estimate_cost(len(pending), model=model)
     print(
-        f"chunks (after junk filter): {len(chunks)}  model: {model}  "
-        f"projected cost: ${projected:.2f}"
+        f"chunks (after junk filter): {len(chunks)}  to generate: {len(pending)}  "
+        f"model: {model}  projected cost: ${projected:.2f}"
     )
     if projected > COST_ABORT_USD:
         sys.exit(f"ABORT: projected ${projected:.2f} > ${COST_ABORT_USD:.2f} budget")
     if dry_run:
-        return {"chunks": len(chunks), "projected_usd": projected, "model": model}
+        return {"chunks": len(pending), "projected_usd": projected, "model": model}
 
     llm = _make_llm(model)
-    records: list[dict] = []
     usages: list[dict] = []
     failures = 0
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futs = {pool.submit(generate_questions_for_chunk, c, llm): c for c in chunks}
-        for fut in as_completed(futs):
-            chunk = futs[fut]
-            try:
-                questions, usage = fut.result()
-            except Exception as e:  # noqa: BLE001 — one bad chunk must not kill the run
-                failures += 1
-                print(f"  chunk {_passage_identity(chunk)} failed: {e}")
-                continue
-            if usage:
-                usages.append(usage)
-            for q in questions:
-                records.append(build_gt_record(q, chunk))
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    with raw_path.open("a", encoding="utf-8") as raw_f:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futs = {
+                pool.submit(generate_questions_for_chunk, c, llm): c for c in pending
+            }
+            for fut in as_completed(futs):
+                chunk = futs[fut]
+                try:
+                    questions, usage = fut.result()
+                except (
+                    Exception
+                ) as e:  # noqa: BLE001 — one bad chunk must not kill the run
+                    failures += 1
+                    print(f"  chunk {_passage_identity(chunk)} failed: {e}")
+                    continue
+                if usage:
+                    usages.append(usage)
+                _append_raw(
+                    raw_f,
+                    _passage_identity(chunk),
+                    [build_gt_record(q, chunk) for q in questions],
+                )
 
-    embed_fn = _embedding_fn()
-    kept, removed = dedup_questions(records, embed_fn=embed_fn)
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8") as f:
-        for rec in kept:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    stats = finalize(raw_path, out_path=out_path, embed_fn=_embedding_fn())
 
     spent = calc_total_price(usages, model=model)
     print(
-        f"wrote {len(kept)} questions ({removed} dups removed, {failures} chunk failures) "
-        f"to {out_path}  spent: ${spent:.4f}"
+        f"wrote {stats['questions']} questions ({stats['removed_dups']} dups removed, "
+        f"{failures} chunk failures) to {out_path}  spent this run: ${spent:.4f}"
     )
     return {
-        "questions": len(kept),
-        "removed_dups": removed,
+        "questions": stats["questions"],
+        "removed_dups": stats["removed_dups"],
         "failures": failures,
         "spent_usd": spent,
         "model": model,
@@ -607,6 +698,22 @@ def _parse_args(argv=None):
         "--dry-run", action="store_true", help="estimate cost, write nothing"
     )
     p.add_argument(
+        "--no-resume",
+        action="store_true",
+        help="ignore the .raw log and regenerate every chunk (pays again)",
+    )
+    p.add_argument(
+        "--finalize",
+        action="store_true",
+        help="dedup an existing .raw log into --out and exit; makes no API calls",
+    )
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=MAX_WORKERS,
+        help=f"threads (default: {MAX_WORKERS})",
+    )
+    p.add_argument(
         "--model",
         default=GEN_MODEL,
         help=f"generation model (default: {GEN_MODEL}); must be priced in PRICE_PER_1M",
@@ -616,6 +723,14 @@ def _parse_args(argv=None):
 
 if __name__ == "__main__":
     args = _parse_args()
+    if args.finalize:
+        raw = raw_path_for(args.out)
+        stats = finalize(raw, out_path=args.out, embed_fn=_embedding_fn())
+        print(
+            f"finalize: {stats['raw_records']} raw records -> {stats['questions']} "
+            f"questions ({stats['removed_dups']} dups removed) in {args.out}"
+        )
+        sys.exit(0)
     run(
         limit=args.limit,
         out_path=args.out,
@@ -623,4 +738,6 @@ if __name__ == "__main__":
         model=args.model,
         sample=args.sample,
         seed=args.seed,
+        resume=not args.no_resume,
+        max_workers=args.workers,
     )

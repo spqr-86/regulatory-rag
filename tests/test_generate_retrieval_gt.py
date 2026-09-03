@@ -6,6 +6,7 @@ GT-record construction. The LLM call and Chroma iteration are exercised
 elsewhere (integration).
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -367,7 +368,10 @@ class TestCrossChunkDedup:
     def test_similar_questions_from_different_chunks_are_dropped(self):
         recs = [self._rec("A", "s.pdf#2"), self._rec("B", "s.pdf#3")]
         kept, removed = dedup_questions(
-            recs, embed_fn=self._embed, near_dup_threshold=0.98, cross_chunk_threshold=0.90
+            recs,
+            embed_fn=self._embed,
+            near_dup_threshold=0.98,
+            cross_chunk_threshold=0.90,
         )
         assert removed == 1
         assert [r["question"] for r in kept] == ["A"]
@@ -377,7 +381,10 @@ class TestCrossChunkDedup:
         их отсеивает только более высокий порог."""
         recs = [self._rec("A", "s.pdf#2"), self._rec("B", "s.pdf#2")]
         kept, removed = dedup_questions(
-            recs, embed_fn=self._embed, near_dup_threshold=0.98, cross_chunk_threshold=0.90
+            recs,
+            embed_fn=self._embed,
+            near_dup_threshold=0.98,
+            cross_chunk_threshold=0.90,
         )
         assert removed == 0
         assert [r["question"] for r in kept] == ["A", "B"]
@@ -385,7 +392,10 @@ class TestCrossChunkDedup:
     def test_unrelated_question_from_another_chunk_survives(self):
         recs = [self._rec("A", "s.pdf#2"), self._rec("C", "s.pdf#3")]
         kept, removed = dedup_questions(
-            recs, embed_fn=self._embed, near_dup_threshold=0.98, cross_chunk_threshold=0.90
+            recs,
+            embed_fn=self._embed,
+            near_dup_threshold=0.98,
+            cross_chunk_threshold=0.90,
         )
         assert removed == 0
 
@@ -420,7 +430,7 @@ class TestJunkFilterKeepsRealNorms:
         "средства измерений, дату окончания срока действия его поверки, дату "
         "проведения измерений, наименования измерявшихся вредного и (или) опасного "
         "производственных факторов;\n"
-        '- з) сведения, предусмотренные частью 1.1 статьи 19 настоящего Федерального '
+        "- з) сведения, предусмотренные частью 1.1 статьи 19 настоящего Федерального "
         'закона. (пп. "з" введен Федеральным законом от 24.07.2023 N 381-ФЗ)'
     )
 
@@ -630,3 +640,179 @@ class TestFilterEvasionsFromSecondSmoke:
 
         for q in self.KEEP:
             assert is_weak_question(q) is False, q
+
+
+# ─── Crash-safety: incremental raw log + resume ─────────────────────────────
+
+
+def _long_chunk(cid: str, text: str | None = None) -> dict:
+    """Non-junk passage: run() drops anything is_junk_chunk() rejects."""
+    body = (
+        text
+        or (
+            "Работодатель обязан обеспечить обучение по охране труда и проверку знания "
+            "требований охраны труда в порядке, установленном Правительством Российской "
+            "Федерации, с учётом мнения профсоюзного органа. "
+        )
+        * 2
+    )
+    return {
+        "text": body,
+        "chunk_id": cid,
+        "metadata": {"source": "n.pdf", "chunk_id": cid},
+    }
+
+
+class TestRawLogAndResume:
+    def _install(self, monkeypatch, chunks, answers, calls=None):
+        """Wire run() to a fake generator: no LLM, no embeddings, no Chroma."""
+        import eval.generate_retrieval_gt as gt
+
+        monkeypatch.setattr(gt, "iter_corpus_chunks", lambda *a, **k: list(chunks))
+        monkeypatch.setattr(gt, "_make_llm", lambda *a, **k: object())
+        monkeypatch.setattr(gt, "_embedding_fn", lambda *a, **k: None)
+
+        def fake_generate(chunk, llm, n=gt.QUESTIONS_PER_CHUNK):
+            if calls is not None:
+                calls.append(gt._passage_identity(chunk))
+            answer = answers[chunk["chunk_id"]]
+            if isinstance(answer, BaseException):
+                raise answer
+            return answer, {"input": 10, "output": 5}
+
+        monkeypatch.setattr(gt, "generate_questions_for_chunk", fake_generate)
+        return gt
+
+    def test_raw_line_written_per_finished_chunk(self, monkeypatch, tmp_path):
+        chunks = [_long_chunk("1"), _long_chunk("2")]
+        answers = {"1": ["Вопрос один?"], "2": ["Вопрос два?"]}
+        gt = self._install(monkeypatch, chunks, answers)
+
+        out = tmp_path / "gt.jsonl"
+        gt.run(out_path=out)
+
+        raw_lines = gt.raw_path_for(out).read_text(encoding="utf-8").splitlines()
+        assert [json.loads(ln)["chunk_id"] for ln in raw_lines] == [
+            "n.pdf#1",
+            "n.pdf#2",
+        ]
+
+    def test_raw_survives_crash_midway(self, monkeypatch, tmp_path):
+        chunks = [_long_chunk("1"), _long_chunk("2")]
+        answers = {"1": ["Вопрос один?"], "2": KeyboardInterrupt("session died")}
+        gt = self._install(monkeypatch, chunks, answers)
+
+        out = tmp_path / "gt.jsonl"
+        with pytest.raises(KeyboardInterrupt):
+            gt.run(out_path=out, max_workers=1)
+
+        raw_lines = gt.raw_path_for(out).read_text(encoding="utf-8").splitlines()
+        assert [json.loads(ln)["chunk_id"] for ln in raw_lines] == ["n.pdf#1"]
+
+    def test_resume_skips_chunks_already_in_raw(self, monkeypatch, tmp_path):
+        chunks = [_long_chunk("1"), _long_chunk("2")]
+        answers = {"1": ["Вопрос один?"], "2": ["Вопрос два?"]}
+        calls: list[str] = []
+        gt = self._install(monkeypatch, chunks, answers, calls=calls)
+
+        out = tmp_path / "gt.jsonl"
+        raw = gt.raw_path_for(out)
+        raw.parent.mkdir(parents=True, exist_ok=True)
+        raw.write_text(
+            json.dumps(
+                {
+                    "chunk_id": "n.pdf#1",
+                    "records": [
+                        {
+                            "question": "Вопрос один?",
+                            "chunk_id": "n.pdf#1",
+                            "source": "n.pdf",
+                            "chunk_preview": "x",
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        gt.run(out_path=out)
+
+        assert calls == ["n.pdf#2"]
+        written = [
+            json.loads(ln) for ln in out.read_text(encoding="utf-8").splitlines()
+        ]
+        assert {r["chunk_id"] for r in written} == {"n.pdf#1", "n.pdf#2"}
+
+    def test_finalize_writes_output_from_raw_without_llm(self, tmp_path):
+        import eval.generate_retrieval_gt as gt
+
+        out = tmp_path / "gt.jsonl"
+        raw = gt.raw_path_for(out)
+        raw.parent.mkdir(parents=True, exist_ok=True)
+
+        def rec(q, cid):
+            return {
+                "question": q,
+                "chunk_id": cid,
+                "source": "n.pdf",
+                "chunk_preview": "x",
+            }
+
+        raw.write_text(
+            "\n".join(
+                json.dumps(line, ensure_ascii=False)
+                for line in [
+                    {
+                        "chunk_id": "n.pdf#1",
+                        "records": [rec("Кто обучает?", "n.pdf#1")],
+                    },
+                    {
+                        "chunk_id": "n.pdf#2",
+                        "records": [rec("кто обучает??", "n.pdf#2")],
+                    },
+                    {
+                        "chunk_id": "n.pdf#3",
+                        "records": [rec("Что такое СОУТ?", "n.pdf#3")],
+                    },
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        stats = gt.finalize(raw_path=raw, out_path=out, embed_fn=None)
+
+        assert stats["removed_dups"] == 1
+        written = [
+            json.loads(ln) for ln in out.read_text(encoding="utf-8").splitlines()
+        ]
+        assert [r["question"] for r in written] == ["Кто обучает?", "Что такое СОУТ?"]
+
+    def test_truncated_last_raw_line_is_ignored(self, tmp_path):
+        import eval.generate_retrieval_gt as gt
+
+        out = tmp_path / "gt.jsonl"
+        raw = gt.raw_path_for(out)
+        raw.parent.mkdir(parents=True, exist_ok=True)
+        good = {
+            "chunk_id": "n.pdf#1",
+            "records": [
+                {
+                    "question": "Кто обучает?",
+                    "chunk_id": "n.pdf#1",
+                    "source": "n.pdf",
+                    "chunk_preview": "x",
+                }
+            ],
+        }
+        raw.write_text(
+            json.dumps(good, ensure_ascii=False) + '\n{"chunk_id": "n.pdf#2", "rec',
+            encoding="utf-8",
+        )
+
+        done, records = gt.load_raw(raw)
+
+        assert done == {"n.pdf#1"}
+        assert [r["question"] for r in records] == ["Кто обучает?"]
