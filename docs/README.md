@@ -10,6 +10,10 @@ Reference.
 
 - [getting-started.md](./getting-started.md) — install, configure, index, run the UI and API
 
+## Roadmap
+
+- [roadmap.md](./roadmap.md) — **where the project is going and why** — the single place the plan lives
+
 ## Explanation — how and why it works
 
 - [explanation/architecture.md](./explanation/architecture.md) — pipeline, the V7 graph, node map
