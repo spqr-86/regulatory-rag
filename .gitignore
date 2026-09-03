@@ -228,3 +228,6 @@ source_docs_pb/
 
 # Адресный слой — производный артефакт (пересобирается scripts/build_address_index.py)
 address_index_pb.json
+
+# intermediate crash-safety log of the GT generator (final file is committed)
+*.jsonl.raw
