@@ -231,3 +231,5 @@ address_index_pb.json
 
 # intermediate crash-safety log of the GT generator (final file is committed)
 *.jsonl.raw
+# Кеш эмбеддингов дедупа: 99 МБ, воспроизводим из .raw за минуты
+*.embcache.npz
