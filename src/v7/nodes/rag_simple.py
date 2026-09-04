@@ -7,7 +7,7 @@ from typing import Callable, List, Optional
 
 from src.v7.config import v7_config
 from src.v7.hard_gates import compute_attempt_metrics, validate_filters
-from src.v7.nlp_core import bm25_search, rrf_merge
+from src.v7.nlp_core import bm25_search, passage_identity, rrf_merge
 from src.v7.state_types import RAGState, RetrievalAttempt
 
 logger = logging.getLogger(__name__)
@@ -97,10 +97,13 @@ def rag_simple(state: RAGState) -> RAGState:
     # BM25 guarantee: ensure top-3 BM25 results from each query variant are always
     # included. Handles cases where BM25 finds exact-match factoid chunks that
     # vector search misses (e.g. "как часто" → "не реже чем один раз в пять лет").
-    existing_ids = {p.get("chunk_id") or p.get("text", "")[:50] for p in passages}
+    # Identity, not the bare chunk_id: the latter is a per-source counter and
+    # collides across documents, so a BM25 hit would be dropped as a duplicate
+    # of a same-numbered chunk from an unrelated file. rrf_merge keys the same way.
+    existing_ids = {passage_identity(p) for p in passages}
     for bm25_list in all_bm25_lists:
         for p in bm25_list[:3]:
-            pid = p.get("chunk_id") or p.get("text", "")[:50]
+            pid = passage_identity(p)
             if pid not in existing_ids:
                 passages.append(p)
                 existing_ids.add(pid)
