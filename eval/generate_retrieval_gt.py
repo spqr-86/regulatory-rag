@@ -9,7 +9,9 @@ For every non-junk chunk in the vector collection the generator asks an LLM for
 Generation is crash-safe: every finished chunk is appended to
 ``<out>.raw`` immediately, a restart resumes from that log (already generated
 chunks are not re-paid for), and ``--finalize`` derives the deduped final file
-from the log without any API calls.
+from the log without generating anything again. Dedup itself embeds the surviving
+questions, so those embeddings are cached next to the output (``<out>.embcache.npz``)
+and a repeated ``--finalize`` costs nothing.
 
 ``chunk_id`` uses the same ``"{source}#{chunk_id}"`` identity as retrieval fusion
 (``src.v7.nlp_core.passage_identity``), so the file feeds
@@ -308,13 +310,55 @@ def parse_questions(raw: object) -> list[str]:
     return [s.strip() for s in items if isinstance(s, str) and s.strip()]
 
 
-def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    na = sum(x * x for x in a) ** 0.5
-    nb = sum(y * y for y in b) ** 0.5
-    if na == 0.0 or nb == 0.0:
-        return 0.0
-    return dot / (na * nb)
+def _greedy_near_dup_pass(
+    records: list[dict],
+    vectors: list[Sequence[float]],
+    near_dup_threshold: float,
+    cross_chunk_threshold: float,
+) -> list[dict]:
+    """Жадный проход: запись выживает, если ни с одним уже выжившим её косинус не
+    выше порога (порог зависит от того, из одного ли они чанка).
+
+    Проход векторизован намеренно. Наивный двойной цикл на чистом Python — это
+    ``n**2 / 2`` косинусов; на реальном GT (15 тыс. вопросов, 1536 измерений) он
+    считался больше часа и на smoke-прогоне в 160 вопросов это не проявлялось.
+    Здесь каждая итерация — одно матрично-векторное умножение по выжившим."""
+    import numpy as np  # noqa: PLC0415 — тяжёлый импорт только на реальном прогоне
+
+    mat = np.asarray(vectors, dtype=np.float64)
+    norms = np.linalg.norm(mat, axis=1)
+    unit = np.zeros_like(mat)
+    nonzero = norms > 0.0
+    unit[nonzero] = mat[nonzero] / norms[nonzero, None]
+
+    # chunk_id сравниваем как целочисленные коды: строковое сравнение внутри цикла
+    # вернуло бы ту самую квадратичность, ради ухода от которой всё и переписано.
+    code_of: dict[str, int] = {}
+    codes = np.fromiter(
+        (code_of.setdefault(r["chunk_id"], len(code_of)) for r in records),
+        dtype=np.int64,
+        count=len(records),
+    )
+
+    survivors: list[dict] = []
+    survivor_unit = np.empty_like(unit)
+    survivor_codes = np.empty(len(records), dtype=np.int64)
+    count = 0
+    for i, rec in enumerate(records):
+        if count:
+            sims = survivor_unit[:count] @ unit[i]
+            thresholds = np.where(
+                survivor_codes[:count] == codes[i],
+                near_dup_threshold,
+                cross_chunk_threshold,
+            )
+            if bool(np.any(sims > thresholds)):
+                continue
+        survivors.append(rec)
+        survivor_unit[count] = unit[i]
+        survivor_codes[count] = codes[i]
+        count += 1
+    return survivors
 
 
 def dedup_questions(
@@ -346,21 +390,10 @@ def dedup_questions(
         return kept, removed
 
     vectors = embed_fn([r["question"] for r in kept])
-    survivors: list[dict] = []
-    survivor_vecs: list[Sequence[float]] = []
-    for rec, vec in zip(kept, vectors):
-        duplicate = False
-        for survivor, sv in zip(survivors, survivor_vecs):
-            same_chunk = survivor["chunk_id"] == rec["chunk_id"]
-            threshold = near_dup_threshold if same_chunk else cross_chunk_threshold
-            if _cosine(vec, sv) > threshold:
-                duplicate = True
-                break
-        if duplicate:
-            removed += 1
-            continue
-        survivors.append(rec)
-        survivor_vecs.append(vec)
+    survivors = _greedy_near_dup_pass(
+        kept, vectors, near_dup_threshold, cross_chunk_threshold
+    )
+    removed += len(kept) - len(survivors)
     return survivors, removed
 
 
@@ -580,8 +613,9 @@ def finalize(
     out_path: Path = GT_PATH,
     embed_fn: Callable[[list[str]], list[Sequence[float]]] | None = None,
 ) -> dict:
-    """Dedup the raw log into the final GT file. No API calls — a run that died
-    after generation is finished with ``--finalize``, not re-paid for."""
+    """Dedup the raw log into the final GT file. No generation calls — a run that
+    died after generation is finished with ``--finalize``, not re-paid for. The
+    near-dup pass still embeds the questions; ``_embedding_fn`` caches those on disk."""
     _, records = load_raw(raw_path)
     kept, removed = dedup_questions(records, embed_fn=embed_fn)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -654,7 +688,11 @@ def run(
                     [build_gt_record(q, chunk) for q in questions],
                 )
 
-    stats = finalize(raw_path, out_path=out_path, embed_fn=_embedding_fn())
+    stats = finalize(
+        raw_path,
+        out_path=out_path,
+        embed_fn=_embedding_fn(emb_cache_path_for(out_path)),
+    )
 
     spent = calc_total_price(usages, model=model)
     print(
@@ -670,15 +708,60 @@ def run(
     }
 
 
-def _embedding_fn():
+def emb_cache_path_for(out_path: Path) -> Path:
+    """Companion embedding cache of ``out_path``.
+
+    Dedup embeds every surviving question. Without a cache each ``--finalize``
+    re-embeds the same 15 thousand questions from scratch — paid again and slow
+    for a step whose whole point is that it costs nothing to repeat.
+    """
+    return Path(str(out_path) + ".embcache.npz")
+
+
+def _disk_cached(
+    embed_fn: Callable[[list[str]], list[Sequence[float]]], cache_path: Path
+) -> Callable[[list[str]], list[Sequence[float]]]:
+    """Wrap ``embed_fn`` in a disk cache keyed by the exact question text."""
+    import numpy as np  # noqa: PLC0415
+
+    def wrapped(texts):
+        texts = list(texts)
+        cache: dict[str, Sequence[float]] = {}
+        if cache_path.exists():
+            try:
+                with np.load(cache_path, allow_pickle=False) as data:
+                    cache = dict(zip(data["keys"].tolist(), data["vecs"]))
+            except Exception as e:  # noqa: BLE001 — битый кеш не должен ронять прогон
+                print(f"  embedding cache ignored ({cache_path.name}): {e}")
+
+        missing = [t for t in dict.fromkeys(texts) if t not in cache]
+        if missing:
+            print(f"  embedding {len(missing)} questions ({len(cache)} cached)")
+            cache.update(zip(missing, embed_fn(missing)))
+            keys = list(cache)
+            np.savez(
+                cache_path,
+                keys=np.array(keys, dtype=np.str_),
+                vecs=np.asarray([cache[k] for k in keys], dtype=np.float32),
+            )
+        return [cache[t] for t in texts]
+
+    return wrapped
+
+
+def _embedding_fn(cache_path: Path | None = None):
     try:
         from src.infra.llm_factory import get_embedding_model  # noqa: PLC0415
 
         model = get_embedding_model()
-        return lambda texts: model.embed_documents(list(texts))
     except Exception as e:  # noqa: BLE001
         print(f"  near-dup dedup skipped (no embedding model): {e}")
         return None
+
+    def embed(texts):
+        return model.embed_documents(list(texts))
+
+    return _disk_cached(embed, cache_path) if cache_path else embed
 
 
 def _parse_args(argv=None):
@@ -705,7 +788,7 @@ def _parse_args(argv=None):
     p.add_argument(
         "--finalize",
         action="store_true",
-        help="dedup an existing .raw log into --out and exit; makes no API calls",
+        help="dedup an existing .raw log into --out and exit; no generation calls",
     )
     p.add_argument(
         "--workers",
@@ -725,7 +808,11 @@ if __name__ == "__main__":
     args = _parse_args()
     if args.finalize:
         raw = raw_path_for(args.out)
-        stats = finalize(raw, out_path=args.out, embed_fn=_embedding_fn())
+        stats = finalize(
+            raw,
+            out_path=args.out,
+            embed_fn=_embedding_fn(emb_cache_path_for(args.out)),
+        )
         print(
             f"finalize: {stats['raw_records']} raw records -> {stats['questions']} "
             f"questions ({stats['removed_dups']} dups removed) in {args.out}"

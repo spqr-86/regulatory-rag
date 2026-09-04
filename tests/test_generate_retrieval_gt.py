@@ -816,3 +816,85 @@ class TestRawLogAndResume:
 
         assert done == {"n.pdf#1"}
         assert [r["question"] for r in records] == ["Кто обучает?"]
+
+
+class TestDedupAtScale:
+    """Дедуп на реальном GT — 15 тыс. вопросов; наивный двойной цикл на чистом
+    Python считал его больше часа. Векторизованная версия обязана давать ровно тот
+    же результат, что и эталонный жадный проход, включая порядок и два порога."""
+
+    @staticmethod
+    def _naive(records, vectors, near, cross):
+        def cos(a, b):
+            dot = sum(x * y for x, y in zip(a, b))
+            na = sum(x * x for x in a) ** 0.5
+            nb = sum(y * y for y in b) ** 0.5
+            return 0.0 if na == 0.0 or nb == 0.0 else dot / (na * nb)
+
+        survivors, vecs = [], []
+        for rec, vec in zip(records, vectors):
+            threshold_hit = False
+            for s, sv in zip(survivors, vecs):
+                t = near if s["chunk_id"] == rec["chunk_id"] else cross
+                if cos(vec, sv) > t:
+                    threshold_hit = True
+                    break
+            if not threshold_hit:
+                survivors.append(rec)
+                vecs.append(vec)
+        return survivors
+
+    def test_matches_the_naive_greedy_pass(self):
+        import random as _random
+
+        rng = _random.Random(17)
+        dim, n = 32, 400
+        records, vectors = [], []
+        for i in range(n):
+            # часть векторов — почти копии предыдущих, чтобы пороги реально срабатывали
+            if i and rng.random() < 0.3:
+                base = vectors[rng.randrange(len(vectors))]
+                vec = [x + rng.gauss(0, 0.02) for x in base]
+            else:
+                vec = [rng.gauss(0, 1) for _ in range(dim)]
+            vectors.append(vec)
+            records.append(
+                {
+                    "question": f"вопрос {i}",
+                    "chunk_id": f"s.pdf#{i % 40}",
+                    "source": "s.pdf",
+                    "chunk_preview": "x",
+                }
+            )
+
+        by_q = dict(zip((r["question"] for r in records), vectors))
+        kept, removed = dedup_questions(
+            records,
+            embed_fn=lambda texts: [by_q[t] for t in texts],
+            near_dup_threshold=0.98,
+            cross_chunk_threshold=0.90,
+        )
+
+        expected = self._naive(records, vectors, near=0.98, cross=0.90)
+        assert [r["question"] for r in kept] == [r["question"] for r in expected]
+        assert removed == len(records) - len(expected)
+
+    def test_zero_vector_is_never_a_duplicate(self):
+        records = [
+            {
+                "question": q,
+                "chunk_id": "s.pdf#1",
+                "source": "s.pdf",
+                "chunk_preview": "x",
+            }
+            for q in ("A", "B", "C")
+        ]
+        vectors = {"A": [0.0, 0.0], "B": [0.0, 0.0], "C": [1.0, 0.0]}
+        kept, removed = dedup_questions(
+            records,
+            embed_fn=lambda texts: [vectors[t] for t in texts],
+            near_dup_threshold=0.5,
+            cross_chunk_threshold=0.5,
+        )
+        assert [r["question"] for r in kept] == ["A", "B", "C"]
+        assert removed == 0
