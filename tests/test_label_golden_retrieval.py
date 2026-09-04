@@ -16,6 +16,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 import pytest
 
 from eval.label_golden_retrieval import (
+    apply_arbitration,
     build_labeled_gt,
     build_review_rows,
     human_priority,
@@ -25,6 +26,7 @@ from eval.label_golden_retrieval import (
     load_labeled,
     merge_candidates,
     merge_passes,
+    needs_arbitration,
     needs_human,
     parse_labels,
     pick_controls,
@@ -461,3 +463,129 @@ class TestReviewRowsOrder:
         rows = build_review_rows(records, results, controls=1, seed=1)
         assert [r["role"] for r in rows] == ["blocking", "optional", "control"]
         assert [r["n"] for r in rows] == [2, 1, 3]
+
+
+class TestApplyArbitration:
+    """Third pass on the stronger judge, called only where the two passes differ."""
+
+    CANDIDATES = [_candidate("a.pdf#1"), _candidate("a.pdf#2"), _candidate("a.pdf#3")]
+
+    def _merged(self, **over):
+        base = {
+            "status": "disputed",
+            "gold_chunk_ids": ["a.pdf#1"],
+            "disputed_chunk_ids": ["a.pdf#2"],
+            "disputed_indices": [2],
+            "quotes": [],
+            "note": "",
+        }
+        base.update(over)
+        return base
+
+    def test_arbiter_confirming_a_disputed_chunk_promotes_it_to_gold(self):
+        arbitration = {"relevant": [{"index": 2, "quote": "цитата", "verified": True}]}
+        out = apply_arbitration(self._merged(), arbitration, self.CANDIDATES)
+        assert out["gold_chunk_ids"] == ["a.pdf#1", "a.pdf#2"]
+        assert out["disputed_chunk_ids"] == []
+        assert out["status"] == "arbitrated"
+
+    def test_arbiter_rejecting_a_disputed_chunk_drops_it(self):
+        arbitration = {"relevant": []}
+        out = apply_arbitration(self._merged(), arbitration, self.CANDIDATES)
+        assert out["gold_chunk_ids"] == ["a.pdf#1"]
+        assert out["disputed_chunk_ids"] == []
+        assert out["status"] == "arbitrated"
+
+    def test_arbiter_verdict_without_a_verified_quote_is_not_trusted(self):
+        """Same rule as for the passes: a quote absent from the chunk is not evidence."""
+        arbitration = {
+            "relevant": [{"index": 2, "quote": "выдумка", "verified": False}]
+        }
+        out = apply_arbitration(self._merged(), arbitration, self.CANDIDATES)
+        assert out["gold_chunk_ids"] == ["a.pdf#1"]
+        assert out["status"] == "unverified_quote"
+
+    def test_arbiter_may_not_add_a_chunk_nobody_disputed(self):
+        """The arbiter rules on the disagreement, it does not relabel the pool."""
+        arbitration = {"relevant": [{"index": 3, "quote": "цитата", "verified": True}]}
+        out = apply_arbitration(self._merged(), arbitration, self.CANDIDATES)
+        assert out["gold_chunk_ids"] == ["a.pdf#1"]
+
+    def test_case_with_nothing_found_can_be_rescued_by_the_arbiter(self):
+        merged = self._merged(
+            status="none_found",
+            gold_chunk_ids=[],
+            disputed_chunk_ids=[],
+            disputed_indices=[],
+        )
+        arbitration = {"relevant": [{"index": 1, "quote": "цитата", "verified": True}]}
+        out = apply_arbitration(merged, arbitration, self.CANDIDATES)
+        assert out["gold_chunk_ids"] == ["a.pdf#1"]
+        assert out["status"] == "arbitrated"
+
+    def test_no_arbitration_leaves_the_verdict_alone(self):
+        merged = self._merged()
+        assert apply_arbitration(merged, None, self.CANDIDATES) == merged
+
+    def test_arbitrated_case_with_a_gold_chunk_is_off_the_human_queue(self):
+        arbitration = {"relevant": [{"index": 2, "quote": "цитата", "verified": True}]}
+        out = apply_arbitration(self._merged(), arbitration, self.CANDIDATES)
+        assert needs_human(out) is False
+
+    def test_arbitrated_case_without_a_gold_chunk_still_goes_to_the_human(self):
+        merged = self._merged(
+            status="none_found",
+            gold_chunk_ids=[],
+            disputed_chunk_ids=[],
+            disputed_indices=[],
+        )
+        out = apply_arbitration(merged, {"relevant": []}, self.CANDIDATES)
+        assert needs_human(out) is True
+        assert human_priority(out) == "blocking"
+
+
+class TestMergePassesCarriesIndices:
+    def test_disputed_indices_are_kept_for_the_arbiter(self):
+        strict = {"relevant": [{"index": 1, "quote": "a", "verified": True}]}
+        lenient = {
+            "relevant": [
+                {"index": 1, "quote": "a", "verified": True},
+                {"index": 3, "quote": "b", "verified": True},
+            ]
+        }
+        merged = merge_passes(strict, lenient, TestApplyArbitration.CANDIDATES)
+        assert merged["disputed_indices"] == [3]
+
+    def test_unverified_agreement_is_offered_to_the_arbiter_too(self):
+        strict = {"relevant": [{"index": 1, "quote": "a", "verified": False}]}
+        lenient = {"relevant": [{"index": 1, "quote": "a", "verified": True}]}
+        merged = merge_passes(strict, lenient, TestApplyArbitration.CANDIDATES)
+        assert merged["disputed_indices"] == [1]
+
+
+class TestNeedsArbitration:
+    def test_clean_agreement_needs_none(self):
+        assert needs_arbitration({"status": "agreed"}) is False
+
+    def test_dispute_needs_it(self):
+        assert needs_arbitration({"status": "disputed"}) is True
+
+    def test_unverified_quote_needs_it(self):
+        assert needs_arbitration({"status": "unverified_quote"}) is True
+
+    def test_nothing_found_needs_it(self):
+        """The cheap judge finding nothing is exactly where a stronger one earns its price."""
+        assert needs_arbitration({"status": "none_found"}) is True
+
+
+class TestSummarizeArbitration:
+    def test_arbitrated_cases_are_counted_and_not_queued(self):
+        summary = summarize(
+            [
+                {"status": "arbitrated", "gold_chunk_ids": ["a#1"]},
+                {"status": "arbitrated", "gold_chunk_ids": []},
+            ]
+        )
+        assert summary["arbitrated"] == 2
+        assert summary["with_gold"] == 1
+        assert summary["needs_human"] == 1

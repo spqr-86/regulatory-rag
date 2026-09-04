@@ -54,7 +54,11 @@ DEFAULT_OUT = REPO_ROOT / "eval" / "data" / "golden_retrieval_labeled.jsonl"
 # Судья сильный намеренно: разметка релевантности — дорогая ошибка, а объём
 # смешной (десятки вызовов), поэтому экономить тут нечего. Потолок нашего ключа
 # (аккаунт не верифицирован, astra недоступен) — см. reference/llm_apis.md.
-JUDGE_MODEL = "gpt-5.6-sol"
+JUDGE_MODEL = "gpt-5.6-terra"
+# Арбитр по всему, что дешёвая пара не закрыла сама. Замер 04.09 на 5 вопросах:
+# terra дважды сослалась на цитату, которой в чанке нет, sol — ни разу; сильная
+# модель зовётся только там, где решается эталон, и стоит поэтому копейки.
+ARBITER_MODEL = "gpt-5.6-sol"
 # Глубина пула на путь. Больше 20 человек не вычитает, а метрика меряется по
 # top-12 — кандидат с 30-го места ничего в ней не меняет.
 TOP_K = 20
@@ -74,6 +78,7 @@ STATUS_AGREED = "agreed"
 STATUS_DISPUTED = "disputed"
 STATUS_NONE_FOUND = "none_found"
 STATUS_UNVERIFIED = "unverified_quote"
+STATUS_ARBITRATED = "arbitrated"
 
 
 class RelevantChunk(BaseModel):
@@ -137,6 +142,32 @@ LENIENT_PROMPT = """Ты размечаешь эталон для поисков
 
 Заголовок в начале фрагмента бывает от чужого раздела — это дефект нарезки корпуса.
 Суди по тексту нормы, а не по заголовку.
+
+ВОПРОС: {question}
+
+ФРАГМЕНТЫ:
+{candidates}
+"""
+
+
+ARBITER_PROMPT = """Ты — арбитр в разметке эталона для поисковой системы по нормативной
+базе (охрана труда, пожарная безопасность). Два предыдущих разметчика — строгий и
+снисходительный — разошлись во мнении или не нашли ответа вовсе. Решаешь ты.
+
+Тебе дан вопрос и пронумерованные фрагменты. Укажи те, которые ДЕЙСТВИТЕЛЬНО отвечают
+на вопрос: во фрагменте есть текст, из которого человек получит ответ. Не «фрагмент про
+ту же тему», не «фрагмент из нужного документа», а ответ.
+
+На каждый указанный фрагмент выпиши в quote ДОСЛОВНУЮ фразу из него. Цитата проверяется
+автоматически: если такой фразы в тексте фрагмента нет, твой вердикт не будет засчитан.
+Не восстанавливай норму по памяти — только то, что видишь в тексте.
+
+Пустой список — нормальный ответ: поиск мог не найти ничего.
+
+Заголовок в начале фрагмента бывает от чужого раздела — это дефект нарезки корпуса.
+Суди по тексту нормы, а не по заголовку.
+
+ПРЕДМЕТ СПОРА: фрагменты {disputed}
 
 ВОПРОС: {question}
 
@@ -306,10 +337,18 @@ def merge_passes(strict: dict, lenient: dict, candidates: Sequence[dict]) -> dic
     else:
         status = STATUS_AGREED
 
+    unverified = [
+        i
+        for i in agreed
+        if not (strict_idx[i].get("verified") and lenient_idx[i].get("verified"))
+    ]
     return {
         "status": status,
         "gold_chunk_ids": gold,
         "disputed_chunk_ids": _chunk_ids(disputed, candidates),
+        # Что именно предъявляется арбитру: спорные кандидаты и согласия,
+        # подпёртые цитатой, которой в чанке нет.
+        "disputed_indices": sorted(set(disputed) | set(unverified)),
         "quotes": [
             strict_idx.get(i, lenient_idx.get(i, {})).get("quote", "") for i in agreed
         ],
@@ -322,11 +361,81 @@ def merge_passes(strict: dict, lenient: dict, candidates: Sequence[dict]) -> dic
 def needs_human(result: dict) -> bool:
     """Whether the verdict has to be looked at by a person.
 
-    Anything but a clean, quote-backed agreement: a dispute, a question the
-    search found no answer for (it drops out of the metric, and a wrongly
-    dropped question quietly inflates Hit Rate) and an unverified quote.
+    Settled cases are a clean agreement of the two passes and a case the arbiter
+    closed with a chunk to show for it. Everything else goes to the person: an
+    open dispute, an unverified quote, and any question left without ground
+    truth — it drops out of the metric, and a set that quietly loses its hard
+    questions reads better than it is.
+    """
+    status = result.get("status")
+    if status == STATUS_AGREED:
+        return False
+    if status == STATUS_ARBITRATED:
+        return not result.get("gold_chunk_ids")
+    return True
+
+
+def needs_arbitration(result: dict) -> bool:
+    """Whether the stronger judge is called for this question.
+
+    Everything the cheap pair could not settle by itself: a disagreement, an
+    agreement resting on a quote that is not in the chunk, and a question they
+    found no answer for at all — the last is where a stronger model most often
+    earns its price, since a weak judge missing the answer looks exactly like
+    retrieval missing it.
     """
     return result.get("status") != STATUS_AGREED
+
+
+def apply_arbitration(
+    merged: dict, arbitration: dict | None, candidates: Sequence[dict]
+) -> dict:
+    """Settle the open part of a verdict with the stronger judge's answer.
+
+    The arbiter rules only on what was open — the disputed candidates and the
+    unverified agreements. It cannot relabel the rest of the pool: a chunk both
+    cheap passes ignored was never in question, and letting a third opinion add
+    it would make the эталон the arbiter's alone. Its own verdict is held to the
+    same evidence rule: a quote absent from the chunk buys nothing.
+    """
+    if arbitration is None:
+        return merged
+    open_indices = set(merged.get("disputed_indices") or [])
+    if not open_indices:
+        # none_found: спорить не о чем, арбитр смотрит весь пул сам.
+        open_indices = set(range(1, len(candidates) + 1))
+
+    confirmed: list[int] = []
+    unverified = False
+    for item in arbitration.get("relevant") or []:
+        idx = item.get("index")
+        if idx not in open_indices:
+            continue
+        if item.get("verified"):
+            confirmed.append(idx)
+        else:
+            unverified = True
+
+    out = dict(merged)
+    gold = list(merged.get("gold_chunk_ids") or [])
+    for cid in _chunk_ids(sorted(confirmed), candidates):
+        if cid not in gold:
+            gold.append(cid)
+    # Согласие, снятое арбитром, из эталона уходит: подтверждения цитатой нет.
+    rejected = set(_chunk_ids(sorted(open_indices - set(confirmed)), candidates))
+    gold = [
+        cid
+        for cid in gold
+        if cid not in rejected or cid in _chunk_ids(confirmed, candidates)
+    ]
+
+    out["gold_chunk_ids"] = gold
+    out["disputed_chunk_ids"] = []
+    out["disputed_indices"] = []
+    out["status"] = STATUS_UNVERIFIED if unverified else STATUS_ARBITRATED
+    if arbitration.get("note"):
+        out["note"] = f"{merged.get('note', '')} арбитр: {arbitration['note']}".strip()
+    return out
 
 
 def human_priority(result: dict) -> str:
@@ -339,7 +448,7 @@ def human_priority(result: dict) -> str:
     on a chunk and differ over an extra one: Hit Rate is already decided, only
     recall moves. Everything else is not queued.
     """
-    if result.get("status") == STATUS_AGREED:
+    if not needs_human(result):
         return ""
     if result.get("status") == STATUS_UNVERIFIED or not result.get("gold_chunk_ids"):
         return "blocking"
@@ -476,6 +585,7 @@ def summarize(results: Iterable[dict]) -> dict:
     return {
         "total": len(results),
         "agreed": counts.get(STATUS_AGREED, 0),
+        "arbitrated": counts.get(STATUS_ARBITRATED, 0),
         "disputed": counts.get(STATUS_DISPUTED, 0),
         "none_found": counts.get(STATUS_NONE_FOUND, 0),
         "unverified_quote": counts.get(STATUS_UNVERIFIED, 0),
@@ -559,6 +669,15 @@ def label_one(
     return labels, usage
 
 
+def arbitrate_one(
+    question: str, candidates: Sequence[dict], open_indices: Sequence[int], llm
+) -> tuple[dict, dict]:
+    """Stronger judge on one unsettled question. Returns ``(labels, usage)``."""
+    disputed = ", ".join(f"[{i}]" for i in open_indices) or "весь список"
+    prompt = ARBITER_PROMPT.replace("{disputed}", disputed)
+    return label_one(question, candidates, llm, prompt)
+
+
 def build_candidate_pools(question: str, top_k: int = TOP_K) -> list[list[dict]]:
     """Candidate pools for one question, one per retrieval path."""
     from eval.run_retrieval_eval import make_retrieval_fn  # noqa: PLC0415
@@ -579,11 +698,23 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    parser.add_argument("--model", default=JUDGE_MODEL)
+    parser.add_argument("--model", default=JUDGE_MODEL, help="модель обоих проходов")
+    parser.add_argument(
+        "--arbiter-model", default=ARBITER_MODEL, help="модель арбитра по спорным"
+    )
+    parser.add_argument(
+        "--no-arbitrate", action="store_true", help="без третьего прохода"
+    )
     parser.add_argument(
         "--limit", type=int, default=None, help="label only the first N questions"
     )
     parser.add_argument("--top-k", type=int, default=TOP_K)
+    parser.add_argument(
+        "--candidates",
+        type=int,
+        default=CANDIDATE_LIMIT,
+        help="сколько кандидатов уходит судье после объединения путей",
+    )
     parser.add_argument("--controls", type=int, default=CONTROL_SAMPLE)
     parser.add_argument("--seed", type=int, default=CONTROL_SEED)
     parser.add_argument("--workers", type=int, default=MAX_WORKERS)
@@ -597,11 +728,29 @@ def main() -> int:
         records = records[: args.limit]
 
     price = price_for(args.model)
-    estimate = estimate_cost(len(records), model=args.model)
-    print(
-        f"вопросов: {len(records)} · судья: {args.model} "
-        f"(${price['input']}/${price['output']} за 1M) · оценка: ${estimate:.2f}"
+    estimate = estimate_cost(
+        len(records), model=args.model, n_candidates=args.candidates
     )
+    line = (
+        f"вопросов: {len(records)} · судья: {args.model} "
+        f"(${price['input']}/${price['output']} за 1M)"
+    )
+    if not args.no_arbitrate:
+        # По смоуку 04.09 арбитр зовётся примерно на половине вопросов.
+        arb = (
+            estimate_cost(
+                len(records), model=args.arbiter_model, n_candidates=args.candidates
+            )
+            / 2
+            * 0.5
+        )
+        estimate += arb
+        price_a = price_for(args.arbiter_model)
+        line += (
+            f" · арбитр: {args.arbiter_model} "
+            f"(${price_a['input']}/${price_a['output']} за 1M, ~половина вопросов)"
+        )
+    print(f"{line} · оценка: ${estimate:.2f}")
     if args.dry_run:
         return 0
     if estimate > COST_ABORT_USD:
@@ -612,16 +761,18 @@ def main() -> int:
 
     init_engine()
     llm = _make_llm(args.model)
+    arbiter_llm = None if args.no_arbitrate else _make_llm(args.arbiter_model)
 
     raw_path = Path(str(args.out) + ".raw")
     done = load_labeled(raw_path)
     usages: list[dict] = []
+    arbiter_usages: list[dict] = []
     results: dict[int, dict] = {}
     candidates_by_n: dict[int, list[dict]] = {}
 
     def _process(rec: dict) -> tuple[dict, list[dict], list[dict]]:
         pools = build_candidate_pools(rec["question"], top_k=args.top_k)
-        candidates = merge_candidates(pools, pool_names=PATHS)
+        candidates = merge_candidates(pools, limit=args.candidates, pool_names=PATHS)
         if not candidates:
             return (
                 {
@@ -636,7 +787,18 @@ def main() -> int:
             )
         strict, u1 = label_one(rec["question"], candidates, llm, STRICT_PROMPT)
         lenient, u2 = label_one(rec["question"], candidates, llm, LENIENT_PROMPT)
-        return merge_passes(strict, lenient, candidates), candidates, [u1, u2]
+        merged = merge_passes(strict, lenient, candidates)
+        arb_usage: list[dict] = []
+        if arbiter_llm is not None and needs_arbitration(merged):
+            open_idx = merged.get("disputed_indices") or list(
+                range(1, len(candidates) + 1)
+            )
+            arbitration, u3 = arbitrate_one(
+                rec["question"], candidates, open_idx, arbiter_llm
+            )
+            merged = apply_arbitration(merged, arbitration, candidates)
+            arb_usage = [u3]
+        return merged, candidates, ([u1, u2], arb_usage)
 
     pending = [r for r in records if r["n"] not in done]
     for n, verdict in done.items():
@@ -649,8 +811,9 @@ def main() -> int:
             futures = {pool.submit(_process, rec): rec for rec in pending}
             for fut in as_completed(futures):
                 rec = futures[fut]
-                verdict, candidates, call_usages = fut.result()
-                usages.extend(call_usages)
+                verdict, candidates, (pass_usages, arb_usages) = fut.result()
+                usages.extend(pass_usages)
+                arbiter_usages.extend(arb_usages)
                 results[rec["n"]] = verdict
                 candidates_by_n[rec["n"]] = candidates
                 raw_fh.write(
@@ -661,7 +824,9 @@ def main() -> int:
 
     ordered = [{**results[r["n"]], "n": r["n"]} for r in records if r["n"] in results]
     summary = summarize(ordered)
-    spent = calc_total_price(usages, model=args.model)
+    spent = calc_total_price(usages, model=args.model) + calc_total_price(
+        arbiter_usages, model=args.arbiter_model
+    )
 
     gt = build_labeled_gt(records, results)
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -675,8 +840,9 @@ def main() -> int:
     write_tsv(rows, tsv_path)
 
     print(
-        f"\nитог: {summary['agreed']} согласий · {summary['disputed']} споров · "
-        f"{summary['none_found']} без ответа · {summary['unverified_quote']} без цитаты"
+        f"\nитог: {summary['agreed']} согласий · {summary['arbitrated']} решено арбитром · "
+        f"{summary['disputed']} споров · {summary['none_found']} без ответа · "
+        f"{summary['unverified_quote']} без цитаты"
     )
     print(f"эталон: {len(gt)} вопросов → {args.out}")
     blocking = sum(1 for r in rows if r["role"] == "blocking")

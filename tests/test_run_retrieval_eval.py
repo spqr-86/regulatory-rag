@@ -329,3 +329,40 @@ class TestReturnPassages(TestRetrievalFnParity):
 
     def test_short_query_returns_empty(self, stub_engine):
         assert make_retrieval_fn("simple", return_passages=True)("что?") == []
+
+
+class TestMultipleGoldChunks:
+    """Held-out labelling marks every chunk that answers, not just one."""
+
+    def test_load_gt_reads_the_relevant_list(self, tmp_path):
+        p = _write_jsonl(
+            tmp_path / "gt.jsonl",
+            [
+                {
+                    "question": "Вопрос?",
+                    "chunk_id": "a.pdf#1",
+                    "relevant_chunk_ids": ["a.pdf#1", "b.pdf#5"],
+                }
+            ],
+        )
+        assert load_gt(p)[0]["relevant_chunk_ids"] == ["a.pdf#1", "b.pdf#5"]
+
+    def test_single_chunk_gt_still_loads(self, tmp_path):
+        """The synthetic GT has one chunk per question and must keep working."""
+        p = _write_jsonl(
+            tmp_path / "gt.jsonl", [{"question": "Вопрос?", "chunk_id": "a.pdf#1"}]
+        )
+        assert load_gt(p)[0]["relevant_chunk_ids"] == ["a.pdf#1"]
+
+    def test_hit_on_any_relevant_chunk_counts(self):
+        gt = [
+            {
+                "question": "Вопрос?",
+                "chunk_id": "a.pdf#1",
+                "source": "a.pdf",
+                "relevant_chunk_ids": ["a.pdf#1", "b.pdf#5"],
+            }
+        ]
+        result = evaluate(gt, lambda q: ["z.pdf#9", "b.pdf#5"], ks=(5,))
+        assert result["metrics"]["hit_rate@5"] == 1.0
+        assert result["records"][0]["rank"] == 2

@@ -52,10 +52,18 @@ def load_gt(path: Path, limit: int | None = None) -> List[dict]:
             chunk_id = (raw.get("chunk_id") or "").strip()
             if not question or not chunk_id:
                 continue
+            # Held-out разметка отмечает все чанки, которые отвечают на вопрос;
+            # синтетическая GT — ровно один. Оба вида читаются одинаково.
+            relevant = [
+                str(cid).strip()
+                for cid in (raw.get("relevant_chunk_ids") or [chunk_id])
+                if str(cid).strip()
+            ]
             records.append(
                 {
                     "question": question,
                     "chunk_id": chunk_id,
+                    "relevant_chunk_ids": relevant,
                     "source": raw.get("source") or chunk_id.split("#")[0],
                 }
             )
@@ -180,9 +188,16 @@ def init_engine() -> None:
 # ── Metrics ───────────────────────────────────────────────────────────────
 
 
-def _first_rank(retrieved: Sequence[str], relevant: str) -> int | None:
+def _first_rank(retrieved: Sequence[str], relevant: Sequence[str] | str) -> int | None:
+    """Rank of the first retrieved chunk that is relevant, 1-based.
+
+    ``relevant`` is a list: a held-out question can be answered by several
+    chunks (a norm repeated across documents), and a hit on any of them is a
+    hit. A bare string is accepted so the synthetic GT keeps working.
+    """
+    wanted = {relevant} if isinstance(relevant, str) else set(relevant)
     for i, cid in enumerate(retrieved, start=1):
-        if cid == relevant:
+        if cid in wanted:
             return i
     return None
 
@@ -206,9 +221,10 @@ def evaluate(
             retrieved = []
             errors += 1
             print(f"  ! retrieval failed: {rec['question'][:60]}… — {exc}")
-        rank = _first_rank(retrieved, rec["chunk_id"])
+        relevant = rec.get("relevant_chunk_ids") or [rec["chunk_id"]]
+        rank = _first_rank(retrieved, relevant)
         retrieved_list.append(retrieved)
-        relevant_list.append([rec["chunk_id"]])
+        relevant_list.append(list(relevant))
         records.append(
             {
                 "question": rec["question"],
