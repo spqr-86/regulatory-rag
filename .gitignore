@@ -225,3 +225,10 @@ docs/plans/2026-05-30-prompt-v8-plan.md
 
 # результаты eval-прогонов
 eval/results/
+
+HISTORY.md
+chroma_db_pb/
+source_docs_pb/
+
+# Адресный слой — производный артефакт (пересобирается scripts/build_address_index.py)
+address_index_pb.json

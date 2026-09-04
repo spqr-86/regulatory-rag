@@ -47,6 +47,9 @@ from eval.advanced_generation_metrics import (
 from src.backends.vector_store import get_vector_store_backend
 from src.v7.bridge import init_v7_pipeline
 from src.v7.graph import build_graph
+from utils.logging import configure_logging
+
+configure_logging()
 
 # ── Config ────────────────────────────────────────────────────────────────────
 

@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from typing import cast
 
+import structlog
+
 from src.v7.hard_gates import check_hard_gates, make_sufficiency
 from src.v7.nlp_core import merge_all_passages
 from src.v7.state_types import NextAfterEvalComplex, RAGState, RetrievalPlan
+
+logger = structlog.get_logger()
 
 
 def evaluate_complex(state: RAGState) -> RAGState:
@@ -23,8 +27,14 @@ def evaluate_complex(state: RAGState) -> RAGState:
     original_q = state.get("query", "")
     active_q = state.get("active_query", original_q)
 
+    total_passages = sum(len(a.get("passages", [])) for a in attempts)
+    logger.info(
+        "evaluate_complex.enter", attempts=len(attempts), total_passages=total_passages
+    )
+
     # 1. Merge passages from all attempts
     merged = merge_all_passages(attempts, top_k=24, mmr_lambda=plan.get("mmr_lambda"))
+    logger.info("evaluate_complex.merged", merged=len(merged))
     if merged:
         hard_m = check_hard_gates(original_q, active_q, merged, plan)
         if hard_m["sufficient"]:

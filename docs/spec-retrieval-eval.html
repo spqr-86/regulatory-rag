@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spec — Retrieval Eval Increment (regulatory-rag)</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.6 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; max-width: 860px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 1.7rem; margin-bottom: .2em; }
+  h2 { font-size: 1.25rem; margin-top: 2em; border-bottom: 1px solid #8884; padding-bottom: .3em; }
+  h3 { font-size: 1.05rem; margin-top: 1.5em; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em; background: #8882; padding: .1em .35em; border-radius: 3px; }
+  pre { background: #8881; padding: 12px 14px; border-radius: 6px; overflow-x: auto; font-size: .84em; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .92em; }
+  th, td { border: 1px solid #8884; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #8882; }
+  .pro::before { content: "+ "; color: #2a8; font-weight: bold; }
+  .con::before { content: "\2212 "; color: #d55; font-weight: bold; }
+  .card { border: 1px solid #8884; border-radius: 8px; padding: 4px 18px 14px; margin: 14px 0; }
+  .rec { border-color: #2a8; box-shadow: 0 0 0 1px #2a8; }
+  .badge { display: inline-block; font-size: .7rem; background: #2a8; color: #fff; padding: 2px 8px; border-radius: 10px; vertical-align: middle; margin-left: 8px; }
+  ul.crit { list-style: none; padding-left: 0; }
+  ul.crit li { padding: 4px 0 4px 26px; position: relative; }
+  ul.crit li::before { content: "\2610"; position: absolute; left: 0; font-size: 1.1em; }
+  .muted { color: #8889; font-size: .9em; }
+</style>
+</head>
+<body>
+
+<h1>Retrieval Eval Increment — regulatory-rag</h1>
+<p class="muted">Спек. Создан 2026-09-01. Источник контекста: конспект LLM Zoomcamp модуль 4 (<code>~/career/courses/llm-zoomcamp/notes/module-04-evaluation.md</code>), handoff сессии 17.</p>
+
+<h2>Задача</h2>
+<p>
+Генеративный контур eval в regulatory-rag закрыт (correctness / faithfulness / OOS-отказ через <code>eval/run_v7_eval.py</code>).
+Дыра — <b>offline-оценка поиска на реальном корпусе отсутствует</b>: <code>eval/retrieval_metrics.py</code> (Hit Rate / MRR / nDCG)
+реализован и покрыт юнит-тестами, но нигде вне <code>tests/</code> не вызывается. У golden set <code>tests/dataset.csv</code> нет
+колонки «вопрос → релевантный <code>chunk_id</code>», поэтому Hit Rate/MRR не на чем считать. Веса слияния и rerank тюнятся на глаз.
+</p>
+<p>
+Инкремент добавляет три вещи по урокам 02–06 модуля 4: (1) генератор ground truth <code>A→Q*→A'</code> по корпусу,
+(2) прогон retrieval через существующий <code>evaluate_retrieval_batch</code> с получением baseline Hit Rate@k / MRR,
+(3) grid search параметров поиска по этим метрикам. Плюс ручная разметка существующих 57 вопросов как held-out
+валидации против завышения на синтетике.
+</p>
+
+<h3>Зафиксированные решения (интервью 2026-09-01)</h3>
+<table>
+<tr><th>Вопрос</th><th>Решение</th></tr>
+<tr><td>Датасет</td><td>Оба: синтетический <code>retrieval_gt.jsonl</code> (основной) + ручная разметка 57 существующих вопросов как held-out</td></tr>
+<tr><td>Релевантных чанков на вопрос</td><td>Ровно один (курсовая схема). Вопрос рождён из чанка → он и есть метка</td></tr>
+<tr><td>Что тюним</td><td>Simple и complex пути раздельно (у них разные движки и <code>top_k</code>)</td></tr>
+<tr><td>Grid search</td><td><code>RRF_K</code> (simple) · rerank <code>top_n</code> + <code>MMR_LAMBDA</code> (complex). <code>top_k</code> путей в грид не входит — выдаём кривую Hit Rate@{5,10,12}, k выбирается отдельно как product-решение по цене контекста</td></tr>
+<tr><td>Валидация судьи (Streamlit, дыра #5)</td><td>Вне scope. Отдельный issue — это генеративный контур, не retrieval</td></tr>
+</table>
+
+<h3>Что уже есть в коде (переиспользуем, не пишем заново)</h3>
+<ul>
+<li><code>eval/retrieval_metrics.py</code> → <code>evaluate_retrieval_batch(retrieved_docs_list, relevant_docs_list, k)</code> — метрики готовы</li>
+<li><code>src/v7/nlp_core.py</code>: <code>bm25_search</code>, <code>rrf_merge(*lists, k=RRF_K)</code>, <code>mmr_select</code>, <code>passage_identity(p)</code> → <code>"{source}#{chunk_id}"</code></li>
+<li><code>src/v7/bridge.py</code>: <code>make_vector_search_fn</code>, <code>_rerank</code> (CrossEncoder), <code>make_section_fetch_fn</code></li>
+<li><code>src/v7/nodes/rag_simple.py</code> L80–91: <code>vector + bm25 → rrf_merge(top_k=12)</code> — движок simple-пути</li>
+<li><code>src/v7/nodes/rag_complex.py</code>: <code>vector(top_k=60) → section_fetch → rerank(top_n) → MMR</code> — движок complex-пути</li>
+<li><code>chunk_id</code> в метаданных чанка (<code>src/indexing/file_handler.py</code> L154, sha256 content hash) — стабильный ID есть</li>
+<li><code>eval/advanced_generation_metrics.py</code> — паттерн structured-output LLM-вызова с retry</li>
+</ul>
+
+<h2>Подходы</h2>
+
+<div class="card rec">
+<h3>Вариант A — Per-chunk генератор + два изолированных прогона <span class="badge">рекомендуемый</span></h3>
+<p>
+<b>Генерация GT.</b> Скрипт <code>eval/generate_retrieval_gt.py</code>: итерируется по всем чанкам коллекции Chroma
+(не по <code>source_docs/</code> — берём ровно те чанки, что видит retrieval). Для каждого чанка один LLM-вызов со
+structured output <code>Questions(questions: list[str])</code>, промпт из урока 03 («эмулируй специалиста по ОТ,
+задай 3 вопроса, минимум слов из текста чанка, естественные формулировки»). Запись
+<code>{"question": q, "chunk_id": passage_identity(chunk), "source": ..., "chunk_preview": ...}</code> в
+<code>eval/data/retrieval_gt.jsonl</code>. Батч <code>ThreadPoolExecutor(max_workers=6)</code> + retry на 429/5xx,
+<code>calc_total_price</code> в конце. Фильтр мусорных чанков (&lt; 200 символов, оглавления) до генерации.
+Дедуп вопросов: нормализация (lower, strip пунктуации) + отсев точных дублей; near-dup через косинус эмбеддингов &gt; 0.95.
+</p>
+<p>
+<b>Прогон.</b> Два тонких раннера поверх <code>evaluate_retrieval_batch</code>:
+</p>
+<pre>eval/run_retrieval_eval.py --path simple    # vector+bm25 → rrf_merge(RRF_K, top_k)
+eval/run_retrieval_eval.py --path complex   # vector → rerank(top_n) → mmr(MMR_LAMBDA)</pre>
+<p>
+Каждый раннер строит <code>retrieval_fn(query) -> [chunk_id, ...]</code>, дёргая ровно движок нужного пути
+(вызвать внутренние функции из <code>rag_simple</code>/<code>rag_complex</code> в обход графа и роутера),
+прогоняет <code>retrieval_gt.jsonl</code>, печатает Hit Rate@{5,10,12}, MRR, пишет
+<code>benchmarks/retrieval_eval_{path}_{date}.json</code>.
+</p>
+<p>
+<b>Тюнинг.</b> <code>eval/tune_retrieval.py --path {simple|complex}</code>. Simple: 1D-скан <code>RRF_K ∈ {10,20,40,60,80}</code>.
+Complex: grid <code>rerank_top_n ∈ {3,5,8,12} × MMR_LAMBDA ∈ {0.3,0.5,0.7,0.9}</code> (16 комбинаций).
+Обучение на синтетике, <b>финальная цифра — на held-out 57</b>. Лучшая комбинация пишется в отчёт с числом (не интуицией),
+применение в <code>V7Config</code> — отдельным ручным шагом после ревью.
+</p>
+<p>
+<b>Held-out.</b> <code>eval/label_golden_retrieval.py</code>: для каждого из 57 вопросов <code>dataset.csv</code> прогнать retrieval top-20,
+показать кандидатов + <code>ground_truth</code>, оператор выбирает номер релевантного чанка (или «нет» → вопрос выпадает).
+Результат — колонка <code>relevant_chunk_id</code> в <code>dataset.csv</code> (или сайдкар <code>tests/retrieval_golden.jsonl</code>).
+</p>
+<p class="pro">Изоляция: метрика поиска не смешана с роутером/генерацией — дыра #1 закрывается точно.</p>
+<p class="pro">Максимум переиспользования: метрики, RRF, rerank, identity уже есть.</p>
+<p class="pro">Held-out ловит завышение на синтетике (предупреждение уроков 05/15) численно.</p>
+<p class="con">Нужно аккуратно вызвать движок пути в обход графа — риск разойтись с прод-поведением, нужен тест на паритет.</p>
+<p class="con">Ручная разметка 57 вопросов — ~40–60 мин работы оператора.</p>
+</div>
+
+<div class="card">
+<h3>Вариант B — Генерация по секциям документа, multi-chunk relevance</h3>
+<p>
+GT генерируется не по чанку, а по логической секции НПА (статья / пункт), релевантными считаются <b>все</b> чанки секции.
+<code>evaluate_retrieval</code> уже принимает список релевантных. Ближе к реальности регуляторки, где ответ размазан по пунктам.
+</p>
+<p class="pro">Реалистичнее: Hit Rate не штрафует за «соседний абзац той же статьи».</p>
+<p class="pro">Меньше шумных «промахов» от того, что вопрос покрывается двумя чанками.</p>
+<p class="con">Противоречит зафиксированному решению «ровно один чанк».</p>
+<p class="con">Нужна надёжная границаструктуры секций из docling-метаданных — не для всех 12 PDF одинаково чисто.</p>
+<p class="con">MRR теряет смысл «позиция первого точного попадания».</p>
+</div>
+
+<div class="card">
+<h3>Вариант C — Прогон через полный граф V7, retrieval снимается из state</h3>
+<p>
+Не трогаем внутренности путей. Гоняем вопрос через весь граф (как <code>run_v7_eval.py</code>), из финального
+<code>state["passages"]</code> достаём <code>chunk_id</code> и считаем метрики. Роутер сам решает simple/complex.
+</p>
+<p class="pro">Ноль риска разойтись с продом — это и есть прод-путь.</p>
+<p class="pro">Минимум нового кода: хук в существующий раннер.</p>
+<p class="con">Метрика смешивает retrieval + роутер + rewrite. Плохой Hit Rate не говорит, где чинить — дыра #1 закрывается лишь частично.</p>
+<p class="con">«Раздельно simple/complex» не получить — роутер не заставить.</p>
+<p class="con">Тюнинг медленный и дорогой: каждая комбинация = полный прогон графа с LLM-вызовами вместо ~1 сек.</p>
+</div>
+
+<div class="card">
+<h3>Вариант D — Внешний фреймворк (Ragas context precision/recall)</h3>
+<p>Отдать retrieval-оценку в Ragas: <code>context_precision</code>, <code>context_recall</code> поверх сгенерированного GT.</p>
+<p class="pro">Меньше своего кода для метрик.</p>
+<p class="con">Конспект прямо решил «Ragas/DeepEval не берём» — контур глубже курсового, лишняя зависимость.</p>
+<p class="con">Ragas-метрики LLM-based → каждая grid-комбинация стоит денег, не ~1 сек.</p>
+<p class="con">Дублирует уже написанный и протестированный <code>retrieval_metrics.py</code>.</p>
+</div>
+
+<h2>Критерии приёмки</h2>
+<ul class="crit">
+<li><code>eval/generate_retrieval_gt.py</code> проходит по всем чанкам коллекции, пишет <code>eval/data/retrieval_gt.jsonl</code> со схемой <code>{question, chunk_id, source, chunk_preview}</code></li>
+<li>3 вопроса на чанк; мусорные чанки (&lt; 200 симв., оглавления) отфильтрованы до генерации</li>
+<li>Дедуп: нет точных дублей вопросов; near-dup (косинус &gt; 0.95) отсеяны, счётчик удалённых в логе</li>
+<li>Скрипт печатает суммарную стоимость через <code>calc_total_price</code>; прогон укладывается в &lt; $2, при прогнозе выше — abort с сообщением</li>
+<li>Батч устойчив к 429/5xx: retry с backoff, одиночный сбой чанка не роняет весь прогон</li>
+<li><code>eval/run_retrieval_eval.py --path simple</code> строит <code>retrieval_fn</code> на движке <code>rag_simple</code> и печатает Hit Rate@{5,10,12}, MRR на <code>retrieval_gt.jsonl</code></li>
+<li><code>--path complex</code> то же на движке <code>rag_complex</code> (vector → rerank → MMR)</li>
+<li>Тест паритета: <code>retrieval_fn</code> обоих путей на 5 контрольных запросах даёт тот же список <code>chunk_id</code>, что полный граф с форсированным путём</li>
+<li>Результаты пишутся в <code>benchmarks/retrieval_eval_{path}_{YYYY-MM-DD}.json</code>, формат совместим с будущим A/B в <code>compare.py</code></li>
+<li><code>eval/tune_retrieval.py --path simple</code> сканирует <code>RRF_K</code>, выводит таблицу «параметр → Hit Rate@10, MRR», отмечает лучшую</li>
+<li><code>--path complex</code> — grid <code>rerank_top_n × MMR_LAMBDA</code>, та же таблица</li>
+<li>Тюнинг: обучение на <code>retrieval_gt.jsonl</code>, итоговая цифра лучшей комбинации подтверждена на held-out 57 — обе цифры в отчёте</li>
+<li>Лучшие параметры <b>не</b> применяются к <code>V7Config</code> автоматически — только рекомендация в отчёте + ручной PR</li>
+<li><code>eval/label_golden_retrieval.py</code> добавляет <code>relevant_chunk_id</code> к 57 вопросам; вопросы без релевантного чанка помечены и исключены из held-out метрики</li>
+<li>Отчёт-сводка (markdown в <code>benchmarks/</code> или дополнение <code>eval/README.md</code>): baseline до/после тюнинга, Hit Rate@k кривая, разрыв синтетика↔held-out, вывод по каждому пути</li>
+<li>Если Hit Rate на синтетике &gt; 0.95 — в отчёте явное предупреждение «вопросы слишком близки к тексту чанка, доверять held-out»</li>
+<li><code>eval/README.md</code> обновлён: <code>retrieval_metrics.py</code> больше не «мёртвый», описаны новые скрипты и порядок запуска</li>
+<li>Юнит-тесты на <code>generate_retrieval_gt</code> (парсинг structured output, дедуп, фильтр мусора) и на построение <code>retrieval_fn</code> (моки движков)</li>
+</ul>
+
+<h2>Открытые вопросы к реализации</h2>
+<ul>
+<li>Индекс Chroma локально не построен (<code>chroma_db/</code> пуст) — до прогона нужен <code>python -m src.indexing...</code>; число чанков после билда уточнить (оценка: 12 PDF → ~800–1500 чанков → ~2400–4500 вопросов)</li>
+<li>Формат held-out меток: колонка в <code>dataset.csv</code> vs сайдкар <code>tests/retrieval_golden.jsonl</code> — решить при реализации (сайдкар безопаснее, не ломает <code>run_v7_eval.py</code>)</li>
+<li>Целевой порог Hit Rate@10 как gate в CI — пока не назначаем, сначала смотрим baseline</li>
+</ul>
+
+<h2>Следующий шаг</h2>
+<p>После выбора варианта — 3 GitHub issue с проверяемыми acceptance criteria (генератор GT / раннеры + baseline / тюнинг), груминг issue про генератор. Затем TDD: первый падающий тест на <code>generate_retrieval_gt</code>.</p>
+
+</body>
+</html>

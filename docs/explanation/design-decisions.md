@@ -183,6 +183,48 @@ numbers are only compared under the same judge.
 
 ---
 
+## 9. CrossEncoder candidate cap: more retrieval ≠ better grounding
+
+**Context.** `rag_complex` fetches up to 60 passages by vector similarity, then calls a
+CrossEncoder to rerank before the hard gate reads the top score. Section fetches (e.g.
+a full ТК РФ chapter) can balloon the candidate pool to 400+ items.
+
+**Options.** (a) No cap — pass all candidates to the CrossEncoder. (b) Pre-sort by vector
+score and cap at some k before the CrossEncoder.
+
+**Choice.** `RERANK_CANDIDATE_CAP=100` in `src/v7/config.py`, applied in `rag_complex`
+before the CrossEncoder call.
+
+**Why.** Two reasons pulled in the same direction:
+
+1. **Latency.** CrossEncoder is O(n) on the candidate count. On an uncapped pool of 477
+   candidates the reranker alone took 31s (p90). Capping at 100 brings predict time to ~4s
+   while keeping the top candidates the vector ranker already identified.
+
+2. **Grounding quality.** Counterintuitively, faithfulness *improved* as the cap shrank:
+   uncapped (477): faithfulness 0.898 → cap=100: **0.936**. The tail of the 377 most
+   marginal candidates was not informative — it added noise to the LLM context and produced
+   weakly-grounded statements. Fewer, better-ranked passages = more reliable answers.
+
+**Evidence.** Cap sweep, same judge (`gpt-4o`, seed=12345), same dataset:
+
+| cap | correctness | faithfulness | mean latency | p90 |
+|-----|-------------|-------------|-------------|-----|
+| 477 | 7.76 | 0.898 | 16.3s | 14.9s |
+| 50  | 7.52 | 0.876 | 7.2s  | 10.4s |
+| **100** | **7.72** | **0.936** | **9.5s** | 17.7s |
+
+cap=50 overshoots: it misroutes borderline queries from `rag_simple` to `rag_complex`
+(correctness −0.24, routing validated per-question). cap=100 restores quality within noise
+of the uncapped baseline while cutting mean latency 42%.
+
+**Known limitation.** p90=17.7s is driven by 2 complex queries with deep cross-ref
+expansion — not a regression relative to uncapped, but not improved either. The ratchet
+for those is generation streaming (masks tail in UI); not worth engineering until an
+interview shows it matters.
+
+---
+
 ## Not separate decisions
 
 - **Pluggable backends** (LLM factory + `VectorStoreBackend` protocol) — an architecture

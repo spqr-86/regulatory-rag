@@ -11,6 +11,7 @@ Responsibilities:
 from __future__ import annotations
 
 import threading
+import time  # used for generate.timing.crossref / generate.timing.llm logs
 from typing import Callable, List
 
 import structlog
@@ -150,8 +151,11 @@ def make_crossencoder_rerank_fn(
         if not passages:
             return passages
 
+        t0 = time.perf_counter()
         pairs = [(query, p.get("text", "")) for p in passages]
         raw_scores = _model.predict(pairs, batch_size=batch_size)
+        t_predict = time.perf_counter() - t0
+
         scored = [(p, _sigmoid(float(s))) for p, s in zip(passages, raw_scores)]
         scored.sort(key=lambda item: item[1], reverse=True)
 
@@ -167,6 +171,12 @@ def make_crossencoder_rerank_fn(
                     "score": rerank_score,
                 }
             )
+        logger.info(
+            "rerank.timing",
+            candidates=len(passages),
+            top_k=top_k,
+            predict_s=round(t_predict, 3),
+        )
         return reranked
 
     return _rerank
@@ -185,8 +195,14 @@ def make_vector_search_fn(vector_store) -> Callable[..., List[dict]]:
         top_k: int = 12,
         **kwargs,
     ) -> List[dict]:
+        t0 = time.perf_counter()
         docs_and_scores = vector_store.similarity_search_with_score(
             query, k=top_k, filter=filters or None
+        )
+        logger.info(
+            "vector_search.timing",
+            top_k=top_k,
+            search_s=round(time.perf_counter() - t0, 3),
         )
         results = []
         for doc, distance in docs_and_scores:
@@ -235,9 +251,10 @@ def make_section_fetch_fn(
                     },
                     limit=max_section_chunks,
                 )
+                # get_by_filter paginates until exhausted — hard cap here.
                 return [
                     _doc_to_passage(d.page_content, dict(d.metadata or {}))
-                    for d in docs
+                    for d in docs[:max_section_chunks]
                 ]
             col = vector_store._collection
             results = col.get(
@@ -308,12 +325,15 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
     If backend is provided, cross-reference expansion is applied before generation.
     """
 
-    def _call_llm(prompt: str) -> str:
+    def _call_llm(prompt: str) -> tuple[str, int | None]:
         response = llm.invoke([HumanMessage(content=prompt)])
         answer = extract_text(response.content).strip()
         if not answer:
             raise ValueError("Empty generation response")
-        return answer
+        # Extract completion tokens from provider metadata (LangChain standard).
+        meta = getattr(response, "usage_metadata", None) or {}
+        completion_tokens = meta.get("output_tokens") or meta.get("completion_tokens")
+        return answer, completion_tokens
 
     def _score_label(score: float) -> str:
         if score >= 0.6:
@@ -354,27 +374,45 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
     def _generate(query: str, active_query: str, passages: List[dict]) -> str:
         if not passages:
             return ""
+        t0 = time.perf_counter()
         expanded = (
             expand_cross_references(passages, backend, query=query)
             if backend
             else passages
         )
+        t_crossref = time.perf_counter() - t0
         # final_passages is already capped at 24 upstream (merge_all_passages);
         # cross-reference expansion appends extra passages — allow up to 30 so
-        # low-ranked but answer-bearing cross-refs (e.g. п.60 for программа В) are included.
+        # low-ranked but answer-bearing cross-refs (e.g. п.60 для программа В) are included.
         top_passages = expanded[:30]
         passages_text = "\n\n".join(
             f"{_chunk_header(i, p)}\n{sanitize_for_llm(p.get('text', ''))}"
             for i, p in enumerate(top_passages)
         )
+        prompt_tokens_approx = len(passages_text) // 4
         prompt = _pm.render(
             "generate_answer",
             query=query,
             context=passages_text,
             passages_count=len(top_passages),
         )
+        logger.info(
+            "generate.timing.crossref",
+            crossref_s=round(t_crossref, 3),
+            passages_in=len(passages),
+            passages_out=len(top_passages),
+            prompt_tokens_approx=prompt_tokens_approx,
+        )
+        t1 = time.perf_counter()
         try:
-            return _call_llm(prompt)
+            result, completion_tokens = _call_llm(prompt)
+            logger.info(
+                "generate.timing.llm",
+                llm_s=round(time.perf_counter() - t1, 3),
+                completion_tokens=completion_tokens,
+                answer_chars=len(result),
+            )
+            return result
         except Exception as exc:
             logger.warning(
                 "LLM generate failed after retries: %s, falling back to stub", exc
