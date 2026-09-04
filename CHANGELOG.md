@@ -4,6 +4,26 @@ All notable changes are documented here. Format: [Keep a Changelog](https://keep
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- `llm_factory`: the model name resolved from settings never reached `ChatOpenAI` —
+  `kwargs.setdefault("model_name", model)` sat in the gemini branch only, so every
+  OpenAI getter silently fell back to the constructor default (`gpt-4o-mini`) and
+  `JUDGE_MODEL_NAME` / `COMPLEX_MODEL_NAME` were ignored. All eval runs before
+  2026-09-02 were judged by mini rather than the configured model.
+- `eval/generate_retrieval_gt.py`: a single hard-coded gpt-4o-mini rate was applied to
+  whatever model the factory returned, so both the pre-flight estimate and the
+  `COST_ABORT_USD` guard could be off by the ratio between two models' prices.
+
+### Added
+- Per-model price table with `price_for()` (unknown model raises instead of silently
+  pricing at another model's rate); `model` threaded through `calc_total_price`,
+  `estimate_cost` and `run`; `--model` CLI flag.
+- GT generator pins its own `GEN_MODEL = "gpt-4o-mini"` instead of inheriting the eval judge.
+
+---
+
 ## [1.1.0] — 2026-05-25
 
 ### Changed

@@ -232,3 +232,15 @@ source_docs_pb/
 
 # Адресный слой — производный артефакт (пересобирается scripts/build_address_index.py)
 address_index_pb.json
+
+# intermediate crash-safety log of the GT generator (final file is committed)
+*.jsonl.raw
+# Кеш эмбеддингов дедупа: 99 МБ, воспроизводим из .raw за минуты
+*.embcache.npz
+
+# Промежуточные логи вычитки GT (воспроизводятся прогоном review_retrieval_gt.py)
+*.review.raw.jsonl
+*.review.arb.jsonl
+*.jsonl.review.tsv
+# Сырьё GT на 13k вопросов — рабочий эталон это retrieval_gt_reviewed.jsonl
+eval/data/retrieval_gt.jsonl
