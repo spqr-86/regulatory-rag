@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Callable, List, Optional
 
 from src.v7.config import v7_config
 from src.v7.hard_gates import compute_attempt_metrics, validate_filters
+from src.v7.nlp_core import bm25_search, rrf_merge
 from src.v7.nodes.utils import make_retrieval_id
 from src.v7.state_types import RAGState, RetrievalAttempt, RetrievalPlan
+
+logger = logging.getLogger(__name__)
 
 # ─── Retriever interface (injected, same as rag_simple) ──────────────────
 
@@ -77,11 +81,35 @@ def rag_complex(state: RAGState) -> RAGState:
     ):
         return {}
 
-    passages = _vector_search(
+    # Hybrid candidate pool: dense + BM25 → RRF, same recipe as rag_simple.
+    # A dense-only pool was the reason the slow path scored WORSE than the fast
+    # one on Hit Rate@12 (baseline 04.09.2026): the reranker sorts well, but in
+    # 22 of 26 misses the right chunk never entered the pool, while BM25 found
+    # it in 19 of them. The cross-encoder re-scores everything anyway, so what
+    # matters here is membership, not the order this merge produces.
+    vector_results = _vector_search(
         query=active_q,
         filters=safe_filters,
         top_k=slow_plan["top_k"],
     )
+    try:
+        bm25_results = bm25_search(
+            query=active_q,
+            filters=safe_filters,
+            top_k=slow_plan["top_k"],
+        )
+    except Exception as exc:  # a missing BM25 index must not kill the slow path
+        logger.warning("bm25_search failed, complex pool stays dense-only: %s", exc)
+        bm25_results = []
+
+    if bm25_results:
+        passages = rrf_merge(
+            vector_results,
+            bm25_results,
+            top_k=len(vector_results) + len(bm25_results),
+        )
+    else:
+        passages = list(vector_results)
 
     # Section-aware expansion: fetch all chunks from the same section as the top anchor.
     # Helps for queries where the answer is scattered across multiple paragraphs of one section.
@@ -97,21 +125,20 @@ def rag_complex(state: RAGState) -> RAGState:
     # Cap candidates before CrossEncoder to prevent O(n) latency blowup.
     # Section-fetch can pull entire large sections (e.g. ТК РФ = 477 chunks).
     # Pre-sort by vector_score so the best candidates survive the cut.
+    # The cut keeps the fused order: retrieved candidates first, section-fetched
+    # filler after. Sorting by vector_score here would drop every BM25-only
+    # candidate first (BM25 passages carry no vector_score) and undo the merge.
     cap = v7_config.RERANK_CANDIDATE_CAP
     if len(passages) > cap:
-        passages = sorted(
-            passages,
-            key=lambda p: p.get("vector_score", p.get("score", 0.0)),
-            reverse=True,
-        )[:cap]
+        passages = passages[:cap]
 
     # FlashRank reranking (if injected): reorders by cross-encoder score,
     # but top_score stays anchored to vector similarity (not inflated FlashRank probs).
     if _rerank_fn is not None and passages:
         passages = _rerank_fn(active_q, passages, slow_plan["top_k"])
-    top_score = max(
-        (p.get("vector_score", p.get("score", 0.0)) for p in passages), default=0.0
-    )
+    # Anchored to the dense list only: the BM25 `score` is a squashed BM25 value,
+    # not a similarity, and must not lift the threshold gate.
+    top_score = max((p.get("vector_score", 0.0) for p in vector_results), default=0.0)
 
     _, metrics = compute_attempt_metrics(original_q, active_q, passages, slow_plan)
 
