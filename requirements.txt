@@ -48,3 +48,6 @@ uvicorn[standard]>=0.29
 structlog>=24.0
 slowapi>=0.1.9
 langfuse>=2.0.0
+
+# MCP server (mcp_server.py)
+mcp<2  # 2.x переименовал FastMCP в MCPServer; код написан под 1.x
