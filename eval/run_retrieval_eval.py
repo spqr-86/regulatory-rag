@@ -89,11 +89,45 @@ def extract_chunk_ids(passages: Iterable[dict]) -> List[str]:
     return ids
 
 
-def make_retrieval_fn(path: str) -> Callable[[str], List[str]]:
+def to_candidates(passages: Iterable[dict]) -> List[dict]:
+    """Retrieved passages as labelling candidates: identity, text, source.
+
+    Same order and same deduplication as ``extract_chunk_ids`` — a human
+    labelling one pool while the metric measures another is the failure this
+    shared shape exists to prevent.
+    """
+    from src.v7.nlp_core import passage_identity
+
+    out: List[dict] = []
+    seen: set[str] = set()
+    for p in passages or []:
+        if not p:
+            continue
+        pid = passage_identity(p)
+        if not pid or pid in seen:
+            continue
+        seen.add(pid)
+        out.append(
+            {
+                "chunk_id": pid,
+                "text": p.get("text", "") or "",
+                "source": (p.get("metadata") or {}).get("source")
+                or p.get("doc_id")
+                or pid.split("#")[0],
+            }
+        )
+    return out
+
+
+def make_retrieval_fn(
+    path: str, return_passages: bool = False
+) -> Callable[[str], List[str]] | Callable[[str], List[dict]]:
     """Build query → [chunk_id] on the engine of the given path.
 
     The router node builds the plan so that thresholds, top_k and the glossary
     expansion match production exactly; only the LLM-bearing nodes are skipped.
+    With ``return_passages`` the same call returns the candidate dicts (identity
+    plus text and source) that held-out labelling needs.
     """
     if path not in PATHS:
         raise ValueError(f"unknown path {path!r}, expected one of {PATHS}")
@@ -116,7 +150,10 @@ def make_retrieval_fn(path: str) -> Callable[[str], List[str]]:
         ]
         if not attempts:
             return []
-        return extract_chunk_ids(attempts[-1]["passages"])
+        passages = attempts[-1]["passages"]
+        return (
+            to_candidates(passages) if return_passages else extract_chunk_ids(passages)
+        )
 
     return _retrieve
 

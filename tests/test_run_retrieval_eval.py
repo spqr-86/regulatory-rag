@@ -304,3 +304,28 @@ class TestRetrievalFnParity:
     def test_unknown_path_rejected(self):
         with pytest.raises(ValueError):
             make_retrieval_fn("medium")
+
+
+class TestReturnPassages(TestRetrievalFnParity):
+    """Labelling needs the chunk texts, not only their identities.
+
+    Same stub engine as the parity tests: the passage form must line up with
+    the id form exactly, or the human would be labelling one pool while the
+    metric measures another.
+    """
+
+    def test_passages_carry_identity_text_and_source(self, stub_engine):
+        passages = make_retrieval_fn("simple", return_passages=True)(self.QUERY)
+        assert passages, "stub engine returned nothing"
+        first = passages[0]
+        assert first["chunk_id"] == make_retrieval_fn("simple")(self.QUERY)[0]
+        assert first["text"]
+        assert first["source"] == "gost.pdf"
+
+    def test_order_matches_the_id_form(self, stub_engine):
+        ids = make_retrieval_fn("complex")(self.QUERY)
+        passages = make_retrieval_fn("complex", return_passages=True)(self.QUERY)
+        assert [p["chunk_id"] for p in passages] == ids
+
+    def test_short_query_returns_empty(self, stub_engine):
+        assert make_retrieval_fn("simple", return_passages=True)("что?") == []
