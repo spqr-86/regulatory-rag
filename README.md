@@ -104,6 +104,14 @@ uvicorn api:app --port 8503  # REST API at http://localhost:8503/docs
 
 Defaults to Gemini + Chroma + OpenAI embeddings. See [Backend abstraction](#backend-abstraction) to swap any layer via `.env`.
 
+Optional monitoring stack (Postgres for query events, Grafana on top):
+
+```bash
+docker compose up -d   # Grafana at http://localhost:3000, schema applied on first start
+```
+
+See [docs/how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md).
+
 ---
 
 ## Architecture
