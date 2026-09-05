@@ -21,6 +21,12 @@ from typing import Any, Dict, Iterator, Protocol
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from dotenv import load_dotenv  # noqa: E402  — after the path fix above
+
+# DSN собирается из POSTGRES_* ; без .env документированная команда падает
+# на чистом клоне, хотя все переменные лежат рядом в файле.
+load_dotenv()
+
 from src.v7 import pg_writer  # noqa: E402  — after the path fix above
 
 

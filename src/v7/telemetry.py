@@ -160,6 +160,32 @@ class JsonlWriter:
             fh.write(line + "\n")
 
 
+class FallbackWriter:
+    """Основной писатель, за спиной которого журнал.
+
+    Критерий приёмки спека модуля 05: остановленный Postgres не ломает ответ
+    **и не съедает событие** — строка уходит в файл, откуда её потом заливает
+    ``scripts/ingest_events.py``. Фолбэк на уровне записи, а не только конфига:
+    отсутствие DSN ловится при старте, а упавшая база — на каждом запросе.
+    """
+
+    def __init__(self, primary: EventWriter, backup: EventWriter) -> None:
+        self.primary = primary
+        self.backup = backup
+
+    def write(self, event: Dict[str, Any]) -> None:
+        try:
+            self.primary.write(event)
+        except Exception as exc:  # noqa: BLE001 — падение базы не теряет строку
+            logger.warning(
+                "telemetry.primary_failed_using_journal",
+                query_id=event.get("query_id"),
+                writer=type(self.primary).__name__,
+                error=str(exc),
+            )
+            self.backup.write(event)
+
+
 def write_event(writer: EventWriter, event: Dict[str, Any]) -> bool:
     """Write the event, swallowing any failure. Returns whether it landed.
 

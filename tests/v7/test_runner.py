@@ -71,7 +71,9 @@ class TestHappyPath:
     def test_writes_exactly_one_event_with_caller_source(self):
         writer = FakeWriter()
 
-        runner.run_query(FakeGraph(result=simple_state()), "вопрос", source="api", writer=writer)
+        runner.run_query(
+            FakeGraph(result=simple_state()), "вопрос", source="api", writer=writer
+        )
 
         assert len(writer.events) == 1
         assert writer.events[0]["source"] == "api"
@@ -102,7 +104,9 @@ class TestHappyPath:
     def test_latency_covers_the_whole_call(self):
         writer = FakeWriter()
 
-        runner.run_query(FakeGraph(result=simple_state()), "вопрос", source="ui", writer=writer)
+        runner.run_query(
+            FakeGraph(result=simple_state()), "вопрос", source="ui", writer=writer
+        )
 
         assert writer.events[0]["latency_ms"] >= 0
         assert isinstance(writer.events[0]["latency_ms"], int)
@@ -111,7 +115,11 @@ class TestHappyPath:
         graph = FakeGraph(result=simple_state())
 
         runner.run_query(
-            graph, "вопрос", source="mcp", writer=FakeWriter(), filters={"doc_type": "СП"}
+            graph,
+            "вопрос",
+            source="mcp",
+            writer=FakeWriter(),
+            filters={"doc_type": "СП"},
         )
 
         assert graph.calls == [{"query": "вопрос", "filters": {"doc_type": "СП"}}]
@@ -174,7 +182,9 @@ class TestFailures:
 
 
 class TestWiring:
-    def test_default_writer_appends_to_the_configured_journal(self, tmp_path, monkeypatch):
+    def test_default_writer_appends_to_the_configured_journal(
+        self, tmp_path, monkeypatch
+    ):
         journal = tmp_path / "events.jsonl"
         monkeypatch.setenv("V7_TELEMETRY_JSONL_PATH", str(journal))
         monkeypatch.setenv("V7_TELEMETRY_ENABLED", "true")
@@ -182,7 +192,9 @@ class TestWiring:
         writer = runner.default_writer()
         assert writer is not None
 
-        runner.run_query(FakeGraph(result=simple_state()), "вопрос", source="ui", writer=writer)
+        runner.run_query(
+            FakeGraph(result=simple_state()), "вопрос", source="ui", writer=writer
+        )
 
         row = json.loads(journal.read_text(encoding="utf-8").splitlines()[0])
         assert row["source"] == "ui"
@@ -195,7 +207,9 @@ class TestWiring:
         writer = runner.default_writer()
         assert writer is None
 
-        runner.run_query(FakeGraph(result=simple_state()), "вопрос", source="ui", writer=writer)
+        runner.run_query(
+            FakeGraph(result=simple_state()), "вопрос", source="ui", writer=writer
+        )
 
         assert not journal.exists()
 
@@ -203,12 +217,29 @@ class TestWiring:
         """Switching journals is a config value, not a change at the call sites (#23)."""
         monkeypatch.setenv("V7_TELEMETRY_ENABLED", "true")
         monkeypatch.setenv("V7_TELEMETRY_WRITER", "postgres")
-        monkeypatch.setenv("V7_TELEMETRY_PG_DSN", "postgresql://regrag:pw@127.0.0.1:5432/regrag")
+        monkeypatch.setenv(
+            "V7_TELEMETRY_PG_DSN", "postgresql://regrag:pw@127.0.0.1:5432/regrag"
+        )
 
         writer = runner.default_writer()
 
-        assert isinstance(writer, pg_writer.PostgresWriter)
-        assert writer.dsn == "postgresql://regrag:pw@127.0.0.1:5432/regrag"
+        assert isinstance(writer, telemetry.FallbackWriter)
+        assert isinstance(writer.primary, pg_writer.PostgresWriter)
+        assert writer.primary.dsn == "postgresql://regrag:pw@127.0.0.1:5432/regrag"
+
+    def test_postgres_writer_keeps_the_journal_behind_it(self, tmp_path, monkeypatch):
+        """Спек, критерий 4: упавшая база не должна стоить события."""
+        monkeypatch.setenv("V7_TELEMETRY_ENABLED", "true")
+        monkeypatch.setenv("V7_TELEMETRY_WRITER", "postgres")
+        monkeypatch.setenv(
+            "V7_TELEMETRY_PG_DSN", "postgresql://regrag:pw@127.0.0.1:5432/regrag"
+        )
+        journal = tmp_path / "events.jsonl"
+        monkeypatch.setenv("V7_TELEMETRY_JSONL_PATH", str(journal))
+
+        writer = runner.default_writer()
+        assert isinstance(writer.backup, telemetry.JsonlWriter)
+        assert writer.backup.path == journal
 
     def test_jsonl_stays_the_default_writer(self, tmp_path, monkeypatch):
         monkeypatch.setenv("V7_TELEMETRY_ENABLED", "true")
@@ -217,7 +248,9 @@ class TestWiring:
 
         assert isinstance(runner.default_writer(), telemetry.JsonlWriter)
 
-    def test_unusable_postgres_config_falls_back_to_the_journal(self, tmp_path, monkeypatch):
+    def test_unusable_postgres_config_falls_back_to_the_journal(
+        self, tmp_path, monkeypatch
+    ):
         """A missing DSN must not cost the whole answer path (#23)."""
         monkeypatch.setenv("V7_TELEMETRY_ENABLED", "true")
         monkeypatch.setenv("V7_TELEMETRY_WRITER", "postgres")

@@ -103,7 +103,9 @@ def new_run_id() -> str:
     return f"eval-{stamp}-{uuid.uuid4().hex[:4]}"
 
 
-def run_query(graph, question: str, writer=None, run_id: str | None = None) -> dict[str, Any]:
+def run_query(
+    graph, question: str, writer=None, run_id: str | None = None
+) -> dict[str, Any]:
     """Run one question through V7 graph, return structured result.
 
     Goes through the telemetry runner so an eval run lands in the same table as

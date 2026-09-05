@@ -16,7 +16,9 @@ class _FakeLLM:
 
     def __init__(self, text, usage=None, model_name="gpt-4o-mini"):
         self._text = text
-        self._usage = {"input_tokens": 100, "output_tokens": 20} if usage is None else usage
+        self._usage = (
+            {"input_tokens": 100, "output_tokens": 20} if usage is None else usage
+        )
         self.model_name = model_name
         self.calls = []
 

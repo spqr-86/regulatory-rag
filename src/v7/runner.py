@@ -19,12 +19,14 @@ from typing import Any, Dict, Optional, Tuple
 import structlog
 
 from src.v7 import pg_writer, telemetry
-from src.v7.config import V7Config, v7_config
+from src.v7.config import V7Config
 
 logger = structlog.get_logger()
 
 
-def default_writer(config: Optional[V7Config] = None) -> Optional[telemetry.EventWriter]:
+def default_writer(
+    config: Optional[V7Config] = None,
+) -> Optional[telemetry.EventWriter]:
     """The writer the app runs with: Postgres, a JSONL journal, or nothing.
 
     Config is read at call time (not import time) so a test or a deployment can
@@ -38,13 +40,16 @@ def default_writer(config: Optional[V7Config] = None) -> Optional[telemetry.Even
     cfg = config or V7Config()
     if not cfg.TELEMETRY_ENABLED:
         return None
+    journal = telemetry.JsonlWriter(cfg.TELEMETRY_JSONL_PATH)
     if cfg.TELEMETRY_WRITER == "postgres":
         try:
             dsn = cfg.TELEMETRY_PG_DSN.strip() or pg_writer.dsn_from_env()
-            return pg_writer.PostgresWriter(dsn)
+            # Журнал остаётся за спиной базы: упавший Postgres стоит задержки,
+            # а не события (критерий приёмки спека).
+            return telemetry.FallbackWriter(pg_writer.PostgresWriter(dsn), journal)
         except ValueError as exc:
             logger.warning("telemetry.pg_config_unusable", error=str(exc))
-    return telemetry.JsonlWriter(cfg.TELEMETRY_JSONL_PATH)
+    return journal
 
 
 def run_query(

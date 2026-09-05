@@ -106,8 +106,16 @@ class TestBuildEvent:
     def test_unpriced_model_is_named_not_silently_free(self):
         state = make_state(
             llm_usage=[
-                {"model": "gemini-3-pro", "prompt_tokens": 500, "completion_tokens": 100},
-                {"model": "gpt-4o-mini", "prompt_tokens": 1000, "completion_tokens": 200},
+                {
+                    "model": "gemini-3-pro",
+                    "prompt_tokens": 500,
+                    "completion_tokens": 100,
+                },
+                {
+                    "model": "gpt-4o-mini",
+                    "prompt_tokens": 1000,
+                    "completion_tokens": 200,
+                },
             ]
         )
         event = telemetry.build_event(state, source="ui", latency_ms=1)
@@ -134,20 +142,29 @@ class TestPathResolution:
             clarify_message="уточните",
             retrieval_attempts=[{"stage": "complex"}],
         )
-        assert telemetry.build_event(state, source="ui", latency_ms=1)["path"] == "abstain"
+        assert (
+            telemetry.build_event(state, source="ui", latency_ms=1)["path"] == "abstain"
+        )
 
     def test_clarify_when_no_abstain(self):
         state = make_state(clarify_message="уточните год", retrieval_attempts=[])
-        assert telemetry.build_event(state, source="ui", latency_ms=1)["path"] == "clarify"
+        assert (
+            telemetry.build_event(state, source="ui", latency_ms=1)["path"] == "clarify"
+        )
 
     def test_complex_when_escalated(self):
         state = make_state(
             retrieval_attempts=[{"stage": "simple"}, {"stage": "complex"}]
         )
-        assert telemetry.build_event(state, source="ui", latency_ms=1)["path"] == "complex"
+        assert (
+            telemetry.build_event(state, source="ui", latency_ms=1)["path"] == "complex"
+        )
 
     def test_simple_by_default(self):
-        assert telemetry.build_event(make_state(), source="ui", latency_ms=1)["path"] == "simple"
+        assert (
+            telemetry.build_event(make_state(), source="ui", latency_ms=1)["path"]
+            == "simple"
+        )
 
 
 class TestSafeWrite:
@@ -206,6 +223,54 @@ class TestJsonlWriter:
             writer.write(event)
 
 
+class TestFallbackWriter:
+    """Спек, критерий 4: остановленный Postgres не должен стоить события."""
+
+    class Failing:
+        def __init__(self):
+            self.calls = 0
+
+        def write(self, event):
+            self.calls += 1
+            raise RuntimeError("connection refused")
+
+    class Recording:
+        def __init__(self):
+            self.events = []
+
+        def write(self, event):
+            self.events.append(event)
+
+    def test_primary_success_leaves_the_journal_untouched(self):
+        primary, backup = self.Recording(), self.Recording()
+        event = telemetry.build_event(make_state(), source="ui", latency_ms=1)
+
+        telemetry.FallbackWriter(primary, backup).write(event)
+
+        assert primary.events == [event]
+        assert backup.events == []
+
+    def test_failed_primary_lands_the_event_in_the_journal(self):
+        primary, backup = self.Failing(), self.Recording()
+        event = telemetry.build_event(make_state(), source="ui", latency_ms=1)
+
+        with structlog.testing.capture_logs() as logs:
+            telemetry.FallbackWriter(primary, backup).write(event)
+
+        assert backup.events == [event]
+        assert [entry["log_level"] for entry in logs] == ["warning"]
+
+    def test_both_writers_failing_propagates_to_write_event(self):
+        primary, backup = self.Failing(), self.Failing()
+        event = telemetry.build_event(make_state(), source="ui", latency_ms=1)
+        writer = telemetry.FallbackWriter(primary, backup)
+
+        with structlog.testing.capture_logs():
+            assert telemetry.write_event(writer, event) is False
+
+        assert primary.calls == 1 and backup.calls == 1
+
+
 class TestContextSize:
     """Issue #22: n_passages is what reached the LLM, not what retrieval found."""
 
@@ -213,7 +278,12 @@ class TestContextSize:
         state = make_state(
             final_passages=[{"id": str(i)} for i in range(14)],
             llm_usage=[
-                {"model": "gpt-4o-mini", "node": "expand", "prompt_tokens": 50, "completion_tokens": 10},
+                {
+                    "model": "gpt-4o-mini",
+                    "node": "expand",
+                    "prompt_tokens": 50,
+                    "completion_tokens": 10,
+                },
                 {
                     "model": "gpt-4o-mini",
                     "node": "generate",

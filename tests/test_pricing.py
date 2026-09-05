@@ -31,7 +31,11 @@ class TestCalcTotalPrice:
 class TestCostForUsages:
     def test_prices_each_record_by_its_own_model(self):
         usages = [
-            {"model": "gpt-4o-mini", "prompt_tokens": 1_000_000, "completion_tokens": 0},
+            {
+                "model": "gpt-4o-mini",
+                "prompt_tokens": 1_000_000,
+                "completion_tokens": 0,
+            },
             {"model": "gpt-4o", "prompt_tokens": 0, "completion_tokens": 1_000_000},
         ]
         result = cost_for_usages(usages)

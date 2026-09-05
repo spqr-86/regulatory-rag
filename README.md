@@ -107,14 +107,27 @@ Defaults to Gemini + Chroma + OpenAI embeddings. See [Backend abstraction](#back
 Optional monitoring stack (Postgres for query events, Grafana on top):
 
 ```bash
-docker compose up -d              # dashboard at http://localhost:3000/d/regrag-queries, schema applied on first start
+cp .env.example .env              # set POSTGRES_PASSWORD and GF_SECURITY_ADMIN_PASSWORD
+docker compose up -d              # both services healthy; schema applied by db/migrations on an empty volume
 V7_TELEMETRY_WRITER=postgres      # in .env: write query events to the stack instead of JSONL
 ```
 
-With the stack on, the Streamlit answer carries 👍/👎 buttons (with an optional comment on
-👎); the votes land next to the query they judge and feed the feedback panels. Without the
-stack, events go to a JSONL journal, the buttons are hidden and nothing has to be running.
-See [docs/how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md).
+**Where to look:** dashboard *Regulatory RAG — запросы* at
+`http://localhost:3000/d/regrag-queries` (login from `.env`) — cost for the period, 👎 rate,
+queries per day split by `source`, routes, cost and latency at p50/p95, and the latest 👎
+with the question behind each one.
+
+**Where to click:** under every Streamlit answer there are 👍/👎 buttons (a 👎 opens an
+optional comment box). One vote per answer — pressing again overwrites the row, so the
+panels count answers, not clicks. Without the stack the buttons are hidden: a vote would
+have nowhere to land.
+
+**If Postgres is not up:** nothing breaks. Answers keep working, events go to the
+`logs/events.jsonl` journal — also when the database dies mid-flight — and
+`python scripts/ingest_events.py logs/events.jsonl` replays them into the table once it is
+back (idempotent by `query_id`). Port conflicts, a volume with an old password, empty
+panels: [docs/how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md),
+section «Если стек не поднялся».
 
 ---
 
@@ -274,6 +287,7 @@ No code changes needed — edit the YAML and restart.
 - ✅ Eval framework — golden dataset, in-scope correctness 7.4/10, faithfulness 0.86
 - ✅ GOST RAG — 108 docs, 9,344 chunks, separate ChromaDB collection
 - ✅ Deployed on VPS (port 8502, Streamlit)
+- ✅ Online monitoring — every query is a row in Postgres (cost, latency, route, tokens, `source`), Grafana dashboard on top, 👍/👎 under the answer with a feedback panel; the whole stack is one `docker compose up`
 - 🔄 Value↔condition robustness on multi-value queries (e.g. program-type periodicity)
 - 🔄 Corpus expansion (SOAT methodology, fire safety details)
 

@@ -158,8 +158,10 @@ class TestFailure:
 
     def test_database_down_raises_for_write_event_to_swallow(self):
         writer = pg_writer.PostgresWriter(
-            "dsn", connect=connector(RuntimeError("connection refused"),
-                                     RuntimeError("connection refused"))
+            "dsn",
+            connect=connector(
+                RuntimeError("connection refused"), RuntimeError("connection refused")
+            ),
         )
 
         with pytest.raises(RuntimeError):
@@ -168,8 +170,10 @@ class TestFailure:
     def test_write_event_keeps_the_answer_alive_when_postgres_is_down(self):
         structlog.configure(processors=[structlog.testing.LogCapture()])
         writer = pg_writer.PostgresWriter(
-            "dsn", connect=connector(RuntimeError("connection refused"),
-                                     RuntimeError("connection refused"))
+            "dsn",
+            connect=connector(
+                RuntimeError("connection refused"), RuntimeError("connection refused")
+            ),
         )
 
         landed = telemetry.write_event(writer, make_event())

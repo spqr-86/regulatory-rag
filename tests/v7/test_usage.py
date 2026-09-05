@@ -38,7 +38,11 @@ class TestUsageFromResponse:
         assert u["completion_tokens"] == 5
 
     def test_falls_back_to_response_metadata(self):
-        r = _Resp(response_metadata={"token_usage": {"prompt_tokens": 9, "completion_tokens": 2}})
+        r = _Resp(
+            response_metadata={
+                "token_usage": {"prompt_tokens": 9, "completion_tokens": 2}
+            }
+        )
         u = usage_from_response(r, model="gpt-4o", node="generate")
         assert u["prompt_tokens"] == 9
         assert u["completion_tokens"] == 2
@@ -58,7 +62,9 @@ class TestUsageFromResponse:
 
 class TestUnpack:
     def test_tuple_result_splits_into_value_and_usage(self):
-        value, usages = unpack(("answer", [{"model": "m", "prompt_tokens": 1, "completion_tokens": 2}]))
+        value, usages = unpack(
+            ("answer", [{"model": "m", "prompt_tokens": 1, "completion_tokens": 2}])
+        )
         assert value == "answer"
         assert len(usages) == 1
 
@@ -69,7 +75,9 @@ class TestUnpack:
         assert usages == []
 
     def test_single_usage_dict_wrapped_into_list(self):
-        value, usages = unpack(("answer", {"model": "m", "prompt_tokens": 1, "completion_tokens": 0}))
+        value, usages = unpack(
+            ("answer", {"model": "m", "prompt_tokens": 1, "completion_tokens": 0})
+        )
         assert usages == [{"model": "m", "prompt_tokens": 1, "completion_tokens": 0}]
 
     def test_tuple_value_is_not_mistaken_for_usage(self):

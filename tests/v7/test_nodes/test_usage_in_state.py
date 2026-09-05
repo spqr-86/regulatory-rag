@@ -68,9 +68,7 @@ class TestGenerateAnswerUsage:
 
     def test_plain_string_fn_still_works(self):
         """Back-compat: an fn that returns only text yields no usage, no crash."""
-        ga_mod.set_generate_fns(
-            simple=lambda q, aq, p: "просто текст", complex_=None
-        )
+        ga_mod.set_generate_fns(simple=lambda q, aq, p: "просто текст", complex_=None)
         out = ga_mod.generate_answer(
             {"query": "q", "final_passages": [{"text": "t"}], "retrieval_attempts": []}
         )
@@ -88,7 +86,9 @@ class TestRagSimpleExpandUsage:
     def test_expand_usage_reaches_state(self, monkeypatch):
         monkeypatch.setattr(rs_mod.v7_config, "V8_ENABLE_MULTI_QUERY", True)
         monkeypatch.setattr(rs_mod.v7_config, "V8_EXPAND_N", 2)
-        rs_mod.set_expand_fn(lambda q, n=2: (["alt1", "alt2"], _usage((7, 4), "expand")))
+        rs_mod.set_expand_fn(
+            lambda q, n=2: (["alt1", "alt2"], _usage((7, 4), "expand"))
+        )
         monkeypatch.setattr(rs_mod, "_vector_search", lambda **kw: [])
         monkeypatch.setattr(rs_mod, "bm25_search", lambda **kw: [])
 
