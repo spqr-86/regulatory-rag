@@ -53,4 +53,4 @@ langfuse>=2.0.0
 psycopg[binary]>=3.2
 
 # MCP server (mcp_server.py)
-mcp<2  # 2.x переименовал FastMCP в MCPServer; код написан под 1.x
+mcp>=2,<3  # 2.x: FastMCP → MCPServer, Context из mcp.server.mcpserver
