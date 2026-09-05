@@ -48,6 +48,8 @@ from eval.advanced_generation_metrics import (
 from src.backends.vector_store import get_vector_store_backend
 from src.v7.bridge import init_v7_pipeline
 from src.v7.graph import build_graph
+from src.v7.runner import default_writer
+from src.v7.runner import run_query as run_with_telemetry
 from utils.logging import configure_logging
 
 configure_logging()
@@ -90,10 +92,16 @@ def load_dataset(path: Path) -> list[dict[str, str]]:
 # ── Graph runner ──────────────────────────────────────────────────────────────
 
 
-def run_query(graph, question: str) -> dict[str, Any]:
-    """Run one question through V7 graph, return structured result."""
+def run_query(graph, question: str, writer=None) -> dict[str, Any]:
+    """Run one question through V7 graph, return structured result.
+
+    Goes through the telemetry runner so an eval run lands in the same table as
+    live traffic, separated only by ``source`` (monitoring module 05).
+    """
     start = time.time()
-    state = graph.invoke({"query": question})
+    state, _query_id = run_with_telemetry(
+        graph, question, source="eval", writer=writer
+    )
     elapsed = round(time.time() - start, 2)
 
     answer = state.get("answer", "")
@@ -248,6 +256,7 @@ def run(
     vector_store = get_vector_store_backend(load_existing=True)
     init_v7_pipeline(vector_store)
     graph = build_graph().compile()
+    telemetry_writer = default_writer()
     print("  Graph ready.")
 
     judge_llm = None
@@ -268,7 +277,7 @@ def run(
 
         # Run graph
         try:
-            run_result = run_query(graph, question)
+            run_result = run_query(graph, question, writer=telemetry_writer)
         except Exception as e:
             print(f"  ERROR running graph: {e}")
             results.append({"question": question, "error": str(e)})

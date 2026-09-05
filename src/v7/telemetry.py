@@ -54,6 +54,11 @@ EVENT_FIELDS = (
 )
 
 
+def new_query_id() -> str:
+    """The id the row is written under and the UI shows to the user."""
+    return str(uuid.uuid4())
+
+
 def resolve_path(state: Dict[str, Any]) -> Path_:
     """Which route the query took — derived, because the state has no such field.
 
@@ -90,7 +95,7 @@ def build_event(
     priced = cost_for_usages(usage)
 
     return {
-        "query_id": query_id or str(uuid.uuid4()),
+        "query_id": query_id or new_query_id(),
         "ts": ts or datetime.now(timezone.utc),
         "source": source,
         "question": state.get("query", ""),

@@ -27,6 +27,8 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
+from src.v7.runner import run_query as run_v7_query
+
 load_dotenv()
 
 from utils.logging import configure_logging  # noqa: E402
@@ -60,11 +62,13 @@ async def lifespan(app: FastAPI):
         from src.backends.vector_store import get_vector_store_backend
         from src.v7.bridge import init_v7_pipeline
         from src.v7.graph import build_graph
+        from src.v7.runner import default_writer
 
         vector_store = get_vector_store_backend(load_existing=True)
         init_v7_pipeline(vector_store)
         app.state.vector_store = vector_store
         app.state.pipeline = build_graph().compile()
+        app.state.telemetry_writer = default_writer()
         logger.info("api.startup: v7 pipeline ready")
     except Exception as exc:
         logger.error(
@@ -256,7 +260,12 @@ def query(request: Request, req: QueryRequest) -> QueryResponse:
     rid = getattr(request.state, "request_id", "no-rid")
     t0 = time.perf_counter()
     try:
-        result = pipeline_app.invoke({"query": req.question.strip()})
+        result, _query_id = run_v7_query(
+            pipeline_app,
+            req.question.strip(),
+            source="api",
+            writer=getattr(request.app.state, "telemetry_writer", None),
+        )
     except Exception as exc:
         logger.error(
             "api.query: pipeline error",

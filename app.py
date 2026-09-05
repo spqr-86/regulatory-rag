@@ -23,6 +23,7 @@ from utils.logging import logger
 # V7 Graph
 try:
     from src.v7.graph import build_graph as build_v7_graph
+    from src.v7.runner import default_writer, run_query as run_v7_query
 
     V7_AVAILABLE = True
 except Exception as e:
@@ -100,6 +101,12 @@ with st.sidebar:
 #     RESOURCE LOADING
 # =========================
 @st.cache_resource(show_spinner=False)
+def get_telemetry_writer():
+    """One writer per Streamlit process — monitoring module 05, issue #17."""
+    return default_writer()
+
+
+@st.cache_resource(show_spinner=False)
 def load_resources():
     if not os.path.exists(settings.CHROMA_DB_PATH) or not os.listdir(
         settings.CHROMA_DB_PATH
@@ -164,7 +171,9 @@ if user_query:
 
     with st.chat_message("assistant"):
         with st.spinner("Ищу в нормативных документах..."):
-            result = v7_app.invoke({"query": user_query})
+            result, query_id = run_v7_query(
+                v7_app, user_query, source="ui", writer=get_telemetry_writer()
+            )
 
         if result.get("clarify_message"):
             answer = result["clarify_message"]
