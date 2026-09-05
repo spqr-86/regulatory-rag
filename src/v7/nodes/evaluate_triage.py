@@ -201,7 +201,9 @@ def _legacy_triage(state: RAGState) -> RAGState:
                     logger.warning("triage gap expansion failed: %s", exc)
                     expanded = None
 
-            closed_in_place = False
+            # Nothing missing: the counter fired, but every clause it saw is
+            # already in the list — there is nothing for rag_complex to find.
+            closed_in_place = not gap["open"]
             if expanded:
                 gap = build_gap(passages, resolve_in=expanded)
                 if not gap["open"]:
@@ -215,11 +217,14 @@ def _legacy_triage(state: RAGState) -> RAGState:
                         closed_in_place = True
 
             if not closed_in_place:
-                fallback = expanded if expanded else passages
+                # The expansion is discarded when it fails to close the gap:
+                # the real expander inserts bbox siblings after their parent,
+                # so handing on the inflated list pushes relevant chunks out of
+                # the top-12 (measured on held-out 05.09.2026).
                 return {
                     "sufficient": False,
                     "sufficiency_details": result,
-                    "fallback_passages": fallback,
+                    "fallback_passages": passages,
                     "fallback_score": result["top_score"],
                     "triage_gap": gap,
                 }

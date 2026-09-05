@@ -198,8 +198,14 @@ class TestGapClosing:
         assert result["final_passages"][: len(passages)] == passages
 
     @pytest.mark.unit
-    def test_unclosed_gap_escalates_with_expanded_fallback(self):
-        """Expansion that closes nothing → escalation carrying the gap."""
+    def test_unclosed_gap_escalates_with_the_original_fallback(self):
+        """Expansion that closes nothing is discarded, not handed on.
+
+        The real expander inserts bbox siblings right after their parent, so a
+        list that grew from 12 to 42 pushes relevant chunks out of the top-12 —
+        measured on held-out 05.09.2026, one question lost its hit. When the
+        gap does not close, rag_complex starts from the original passages.
+        """
         state, passages = _crossref_state()
         added = [_p("Ничего похожего на искомые нормы.", score=0.4)]
         set_crossref_expander(lambda ps, query: list(ps) + added)
@@ -207,7 +213,7 @@ class TestGapClosing:
         result = _legacy_triage(state)
 
         assert result["sufficient"] is False
-        assert result["fallback_passages"] == passages + added
+        assert result["fallback_passages"] == passages
         assert "clause:3" in result["triage_gap"]["open"]
 
     @pytest.mark.unit
@@ -258,6 +264,38 @@ class TestGapClosing:
         assert result["sufficient"] is True
         assert result["fallback_passages"] == passages + added
         assert result["final_passages"] == passages + added
+
+
+class TestNoGapNoEscalation:
+    @pytest.mark.unit
+    def test_crossref_escalation_dropped_when_nothing_is_missing(self):
+        """Crossref hits without a gap are not a reason to pay for rag_complex.
+
+        Every clause named in the top-5 is already in the retrieved list, so
+        the escalation the counter asked for has nothing left to find.
+        """
+        passages = [
+            _p(
+                "согласно пункту 3, за исключением лиц указанных в пункте 4, "
+                "в соответствии с приложением 1 ограждение лестница",
+                score=0.85,
+            ),
+            _p("3. Ограждение лестница устанавливается по краю.", score=0.80),
+            _p("4. За исключением ограждение временных лестница.", score=0.75),
+        ]
+        state = {
+            "query": "ограждение лестница",
+            "active_query": "ограждение лестница",
+            "retrieval_attempts": [_make_attempt(passages)],
+            "plan": {},
+        }
+
+        result = _legacy_triage(state)
+
+        assert result["sufficient"] is True
+        assert result["final_passages"] == passages
+        assert result["triage_gap"]["open"] == []
+        assert set(result["triage_gap"]["closed"]) == {"clause:3", "clause:4"}
 
 
 class TestV8Untouched:
