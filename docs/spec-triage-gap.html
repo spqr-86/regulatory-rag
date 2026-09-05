@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Спек — issue #13: структурированный пробел в триаже</title>
+<style>
+  :root{
+    --bg:#fbfaf8; --fg:#1c1b19; --muted:#6b6864; --line:#e2ded8;
+    --card:#fff; --accent:#8a4b2a; --good:#2f6b3f; --bad:#9a3436; --code:#f2efe9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{--bg:#171614;--fg:#eae7e1;--muted:#a29d95;--line:#312e2a;
+          --card:#1f1e1b;--accent:#d98b5f;--good:#7fbf8f;--bad:#e08a8a;--code:#232120;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:900px;margin:0 auto;padding:40px 20px 80px}
+  h1{font-size:28px;line-height:1.25;margin:0 0 6px}
+  h2{font-size:20px;margin:44px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  h3{font-size:17px;margin:26px 0 8px}
+  .sub{color:var(--muted);margin:0 0 28px;font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+        padding:18px 20px;margin:14px 0}
+  .card.pick{border-color:var(--accent);border-width:2px}
+  .tag{display:inline-block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+       color:var(--accent);border:1px solid var(--accent);border-radius:99px;
+       padding:2px 9px;margin-left:8px;vertical-align:2px}
+  ul{margin:8px 0;padding-left:22px}
+  li{margin:4px 0}
+  .pros li::marker{color:var(--good)}
+  .cons li::marker{color:var(--bad)}
+  code,pre{background:var(--code);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+  code{padding:1px 5px;border-radius:4px}
+  pre{padding:14px;border-radius:8px;overflow-x:auto;line-height:1.45}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;display:block;overflow-x:auto}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--code);font-weight:600}
+  .fixed td:first-child{white-space:nowrap;color:var(--muted)}
+  .ac{list-style:none;padding-left:0}
+  .ac li{padding-left:30px;position:relative;margin:9px 0}
+  .ac li::before{content:"☐";position:absolute;left:6px;color:var(--accent);font-size:17px}
+  .ac .out::before{content:"—";color:var(--muted)}
+  .ac .out{color:var(--muted)}
+  .note{color:var(--muted);font-size:14px}
+  footer{margin-top:50px;padding-top:14px;border-top:1px solid var(--line);
+         color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Issue #13 — структурированный пробел вместо булева решения о достаточности</h1>
+<p class="sub">Спек · 05.09.2026 · проект <code>~/projects/ai/regulatory-rag</code> · ветка от <code>main</code></p>
+
+<h2>Задача</h2>
+<p>
+Узел <code>evaluate_triage</code> решает «достаточно / эскалировать», но не называет,
+<b>чего именно</b> не хватает. Из-за этого эскалация <code>simple → complex</code> уходит
+с тем же самым запросом: дорогая ветка повторяет поиск, ничего не зная о причине,
+по которой её позвали.
+</p>
+<p>
+Самый частый повод эскалации в регуляторике виден прямо в тексте найденных чанков:
+норма ссылается на соседний пункт («в соответствии с пунктом 12», «за исключением
+случаев, указанных в статье 5»), а самого пункта в выдаче нет. Сейчас такие ссылки
+только считаются — <code>_count_crossref_hits</code>, порог 3 — и превращаются в
+эскалацию без единой попытки закрыть пробел на месте.
+</p>
+
+<h2>Что уже есть в коде</h2>
+<table class="fixed">
+<tr><td><code>src/v7/cross_ref.py</code></td><td><code>expand_cross_references</code>: вытаскивает ссылки («пункт N», «статья N», подпункты), находит эти куски в тех же источниках и подтягивает их. Капы на добор уже есть.</td></tr>
+<tr><td>вызывается</td><td>поздно — в <code>src/v7/bridge.py</code>, при сборке промпта генератора. На решение триажа не влияет.</td></tr>
+<tr><td><code>evaluate_triage</code></td><td>crossref-эскалация: <code>crossref_hits &gt;= 3</code> → <code>sufficient: False</code> + <code>fallback_passages</code>.</td></tr>
+<tr><td>инъекция зависимостей</td><td>паттерн проекта — <code>set_vector_search(fn)</code> и подобные из <code>init_v7_pipeline</code>; узел не знает про бэкенд напрямую.</td></tr>
+</table>
+
+<h2>Что решено (интервью 05.09)</h2>
+<table class="fixed">
+<tr><td>Чем определяем пробел</td><td><b>B — детерминированная эвристика</b> по тексту чанков. LLM-детектор (вариант A, Sufficient Context Agent у Google) отложен: лишний вызов на каждую эскалацию, а проверить его качество нечем до issue #8.</td></tr>
+<tr><td>Где применяем</td><td><b>B3 этапами</b>: сначала попытка закрыть пробел на месте (B2), затем — если не закрылся — эскалация с уточнённым запросом (B1).</td></tr>
+<tr><td>Критерий успеха B2</td><td><b>Доля эскалаций <code>simple → complex</code> падает, Hit Rate@12 на held-out не падает.</b> Первая величина детерминированная и считается точно; вторая — страховка «не сломали».</td></tr>
+<tr><td>Чего не меряем</td><td>Роста качества ответа. Судья не валидирован (#8), а 43 held-out дают разницу на уровне шума — цифра была бы неинтерпретируемой.</td></tr>
+</table>
+
+<h2>Структура пробела</h2>
+<p>Пробел — данные, а не строка для человека: он должен переживать передачу между узлами и попадать в телеметрию.</p>
+<pre>gap = {
+  "kind": "unresolved_ref",        # единственный вид на этапе B2
+  "refs": [                        # что названо в тексте и не найдено в выдаче
+    {"kind": "clause",  "num": "12", "doc_id": "SP486"},
+    {"kind": "article", "num": "5",  "doc_id": "SP486"},
+  ],
+  "closed": ["clause:12"],         # что удалось добрать
+  "open":   ["article:5"],         # что осталось незакрытым
+}</pre>
+<p class="note">
+Поле кладётся в состояние графа рядом с <code>sufficiency_details</code>. Пустой
+<code>open</code> при непустом <code>closed</code> — это и есть случай, ради которого
+затевается B2: эскалация не нужна.
+</p>
+
+<h2>Этап B2 — закрыть пробел до эскалации</h2>
+<ol>
+<li>В <code>evaluate_triage</code>, в ветке crossref-эскалации, извлечь ссылки из топ-чанков (тот же разбор, что в <code>cross_ref</code>) и вычесть те, что уже присутствуют в выдаче — остаток и есть пробел.</li>
+<li>Если пробел непустой и добор-функция внедрена — добрать недостающие куски и перепроверить триаж на расширенной выдаче.</li>
+<li>Пробел закрыт и триаж проходит → <code>sufficient: True</code> с расширенной выдачей, complex не зовём. Не закрыт → эскалация как раньше, но с заполненным <code>gap</code>.</li>
+<li>Функция добора внедряется по паттерну проекта (<code>set_crossref_expander</code> из <code>init_v7_pipeline</code>). Не внедрена → узел ведёт себя ровно как сегодня.</li>
+</ol>
+
+<h3>Бюджет</h3>
+<p>
+Один раунд добора на запрос, не цикл. Капы на число добранных чанков берутся из
+<code>cross_ref</code> и не расширяются. LLM в этапе не участвует, поэтому дополнительная
+цена запроса — только выборки из индекса.
+</p>
+
+<h2>Этап B1 — эскалация с уточнённым запросом</h2>
+<p>
+Если <code>open</code> непустой, к активному запросу для complex-ветки дописываются
+названные маркеры («пункт 12», «статья 5» + идентификатор документа). BM25 в гибриде
+ловит номера пунктов лучше эмбеддингов — это и есть расчёт. Исходный
+<code>query</code> остаётся неизменным: правится только <code>active_query</code>.
+</p>
+<p class="note">
+B1 начинается после того, как измерен B2. Если B2 закрывает большинство случаев,
+B1 может оказаться ненужным — это допустимый исход, а не провал.
+</p>
+
+<h2>Критерии приёмки</h2>
+<ul class="ac">
+<li>Тесты писались до кода: схема <code>gap</code>, вычитание уже присутствующих ссылок, поведение без внедрённой функции добора.</li>
+<li>Пробел заполняется структурой, а не строкой, и доезжает до состояния графа.</li>
+<li>Случай «пробел закрылся» не эскалирует в complex; случай «не закрылся» эскалирует и несёт <code>gap</code>.</li>
+<li>Прогон на held-out: доля эскалаций <code>simple → complex</code> зафиксирована до и после, Hit Rate@12 не упал.</li>
+<li>Числа прогона и вывод записаны в <code>docs/roadmap.md</code> — включая отрицательный результат, если он такой.</li>
+<li class="out">Вне объёма: LLM-детектор пробела (вариант A) — отдельная работа после issue #8.</li>
+<li class="out">Вне объёма: рост correctness. Судья не валидирован, мерить нечем.</li>
+</ul>
+
+<footer>
+Спек по итогам брейншторма 05.09.2026 (Telegram). Развилки, закрытые в интервью:
+детектор пробела — эвристика, а не LLM; применение — этапами B2 → B1; критерий —
+доля эскалаций при неухудшении Hit Rate@12.
+</footer>
+
+</div>
+</body>
+</html>
