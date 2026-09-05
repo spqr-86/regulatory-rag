@@ -143,6 +143,31 @@ class EvidenceReport(TypedDict, total=False):
     passage_count: int
 
 
+class GapRef(TypedDict):
+    """One structured reference named in the retrieved text.
+
+    kind/num come from the same parser cross_ref uses; doc_id is the source
+    the reference was named in — resolution is checked per document.
+    """
+
+    kind: str
+    num: str
+    doc_id: str
+
+
+class TriageGap(TypedDict, total=False):
+    """What the triage found missing, as data rather than a message.
+
+    closed/open hold markers of the form "clause:12" — no doc_id, so one
+    number named in two documents yields two refs and a single marker.
+    """
+
+    kind: Literal["unresolved_ref"]
+    refs: List[GapRef]
+    closed: List[str]
+    open: List[str]
+
+
 class RAGState(TypedDict, total=False):
     """V7 graph state.
 
@@ -177,5 +202,6 @@ class RAGState(TypedDict, total=False):
     sufficiency_details: SufficiencyResult
     answer: str  # synthesised LLM answer (set by generate_answer node)
     evidence_report: EvidenceReport  # V8 evidence assessment; populated only when V8_ENABLE_EVIDENCE_ASSESS=True
+    triage_gap: TriageGap  # structured gap from legacy triage (#13); not filled by V8
     # UX
     status_message: str

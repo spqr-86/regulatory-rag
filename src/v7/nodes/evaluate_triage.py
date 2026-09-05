@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import logging
 import re
-from typing import Any, Dict, cast
+from typing import Any, Callable, Dict, List, Optional, cast
 
 from src.v7.config import v7_config
+from src.v7.cross_ref import _extract_refs
 from src.v7.hard_gates import check_full_triage
 from src.v7.state_types import (
     EvidenceReport,
+    GapRef,
     NextAfterTriage,
     RAGState,
     RetrievalPlan,
+    TriageGap,
 )
+
+logger = logging.getLogger(__name__)
 
 # Enumeration question patterns — require complete coverage of all categories/conditions.
 # For such queries rag_simple may return an incomplete answer even at high top_score.
@@ -68,6 +74,96 @@ def _has_enumeration_intent(query: str) -> bool:
     return any(re.search(p, q) for p in _ENUMERATION_PATTERNS)
 
 
+# ─── Structured gap (issue #13) ───────────────────────────────────────────────
+
+# Expander injected at graph build time (see init_v7_pipeline). Signature:
+# fn(passages: list[dict], query: str) -> list[dict]. Not injected → the node
+# behaves exactly as before, but still reports the gap.
+_crossref_expander: Optional[Callable[[List[dict], str], List[dict]]] = None
+
+
+def set_crossref_expander(fn: Optional[Callable[[List[dict], str], List[dict]]]) -> None:
+    """Inject the cross-reference expander. Call once at startup."""
+    global _crossref_expander
+    _crossref_expander = fn
+
+
+def _passage_source(passage: dict) -> str:
+    return passage.get("metadata", {}).get("source") or passage.get("doc_id", "")
+
+
+def _ref_present(kind: str, num: str, content: str) -> bool:
+    """True if the chunk text structurally *contains* the referenced unit.
+
+    Deliberately narrower than cross_ref._ref_matches_doc: a chunk merely
+    naming "пункт 12" is what creates the gap, so a phrase match must not
+    count as its resolution. Only a structural heading does.
+    """
+    v = re.escape(num)
+    if kind == "clause":
+        return bool(re.search(rf"(?m)^\s*{v}\.(?=\s)", content))
+    if kind == "article":
+        return bool(
+            re.search(rf"(?mi)^\s*(?:стать\w+\s+)?{v}[.\s]", content)
+            and re.search(rf"(?i)стать\w+\s+{v}\b", content)
+        )
+    if kind == "subpara":
+        return bool(re.search(rf"(?mi)^\s*{v}\)", content))
+    return False
+
+
+def build_gap(passages: List[dict], resolve_in: Optional[List[dict]] = None) -> TriageGap:
+    """Describe what the retrieved text names but does not contain.
+
+    Refs are extracted from the top-5 passages — the same slice that trips
+    the crossref escalation — and deduplicated by (doc_id, kind, num).
+    Resolution is checked across the whole of `resolve_in` (defaults to
+    `passages`) within the same source: a clause sitting at position 9 is
+    not a gap. Markers carry no doc_id, so one number named in two documents
+    gives two refs and a single marker; the marker stays open while any of
+    its refs is unresolved.
+    """
+    haystack = passages if resolve_in is None else resolve_in
+
+    refs: List[GapRef] = []
+    seen: set[tuple[str, str, str]] = set()
+    for passage in passages[:5]:
+        source = _passage_source(passage)
+        for kind, num in _extract_refs(passage.get("text", "")):
+            key = (source, kind, num)
+            if key in seen:
+                continue
+            seen.add(key)
+            refs.append({"kind": kind, "num": num, "doc_id": source})
+
+    by_source: Dict[str, List[str]] = {}
+    for passage in haystack:
+        by_source.setdefault(_passage_source(passage), []).append(
+            passage.get("text", "")
+        )
+
+    resolved: Dict[str, bool] = {}
+    for ref in refs:
+        marker = f"{ref['kind']}:{ref['num']}"
+        present = any(
+            _ref_present(ref["kind"], ref["num"], text)
+            for text in by_source.get(ref["doc_id"], [])
+        )
+        resolved[marker] = resolved.get(marker, True) and present
+
+    closed = [m for m, ok in resolved.items() if ok]
+    open_ = [m for m, ok in resolved.items() if not ok]
+
+    return {"kind": "unresolved_ref", "refs": refs, "closed": closed, "open": open_}
+
+
+def _with_gap(update: Dict[str, Any], gap: Optional[TriageGap]) -> RAGState:
+    """Attach the gap to a state update when one was computed."""
+    if gap is not None:
+        update["triage_gap"] = gap
+    return cast(RAGState, update)
+
+
 def _legacy_triage(state: RAGState) -> RAGState:
     """3-way gate: sufficient / borderline / clearly_bad.
 
@@ -89,28 +185,61 @@ def _legacy_triage(state: RAGState) -> RAGState:
         passages = last.get("passages", [])
 
         # Crossref escalation: many cross-references in retrieved chunks indicate
-        # the answer is distributed across multiple document sections.
-        # Save as fallback and escalate to rag_complex for fuller coverage.
+        # the answer is distributed across multiple document sections. Before
+        # paying for rag_complex, try to close the gap in place (issue #13, B2):
+        # name what is missing, pull it from the same sources, re-check.
+        gap: Optional[TriageGap] = None
         crossref_hits = _count_crossref_hits(passages)
         if crossref_hits >= _CROSSREF_ESCALATION_THRESHOLD:
-            return {
-                "sufficient": False,
-                "sufficiency_details": result,
-                "fallback_passages": passages,
-                "fallback_score": result["top_score"],
-            }
+            gap = build_gap(passages)
+
+            expanded: Optional[list] = None
+            if gap["open"] and _crossref_expander is not None:
+                try:
+                    expanded = list(_crossref_expander(passages, active_q))
+                except Exception as exc:  # noqa: BLE001 — a live query must not die here
+                    logger.warning("triage gap expansion failed: %s", exc)
+                    expanded = None
+
+            closed_in_place = False
+            if expanded:
+                gap = build_gap(passages, resolve_in=expanded)
+                if not gap["open"]:
+                    # Only check_full_triage is re-run. The crossref counter is
+                    # NOT recomputed — the expansion adds the very chunks that
+                    # raised it, so re-counting could never let the gap close.
+                    recheck = check_full_triage(original_q, active_q, expanded, plan)
+                    if recheck["triage"] == "sufficient":
+                        passages = expanded
+                        result = recheck
+                        closed_in_place = True
+
+            if not closed_in_place:
+                fallback = expanded if expanded else passages
+                return {
+                    "sufficient": False,
+                    "sufficiency_details": result,
+                    "fallback_passages": fallback,
+                    "fallback_score": result["top_score"],
+                    "triage_gap": gap,
+                }
+            # Gap closed: fall through to the remaining escalations, which stay
+            # in force and are evaluated on the expanded passages.
 
         # Zero-overlap escalation: none of the original query keywords appear in
         # any retrieved chunk. Topic was found (active_query overlap ok) but the
         # specific answer is missing — escalate to rag_complex for broader search.
         kw_original = result["keyword_overlap_original"]
         if kw_original == 0.0:
-            return {
-                "sufficient": False,
-                "sufficiency_details": result,
-                "fallback_passages": passages,
-                "fallback_score": result["top_score"],
-            }
+            return _with_gap(
+                {
+                    "sufficient": False,
+                    "sufficiency_details": result,
+                    "fallback_passages": passages,
+                    "fallback_score": result["top_score"],
+                },
+                gap,
+            )
 
         # Enumeration escalation: even though triage is sufficient, we force
         # rag_complex for queries that require complete enumeration coverage.
@@ -118,21 +247,27 @@ def _legacy_triage(state: RAGState) -> RAGState:
         # back to this simple-path result if the complex attempt fails its
         # (stricter) gates — preventing an unnecessary abstain.
         if _has_enumeration_intent(original_q):
-            return {
+            return _with_gap(
+                {
+                    "sufficient": True,
+                    "final_passages": passages,
+                    "final_score": result["top_score"],
+                    "sufficiency_details": result,
+                    "fallback_passages": passages,
+                    "fallback_score": result["top_score"],
+                },
+                gap,
+            )
+
+        return _with_gap(
+            {
                 "sufficient": True,
                 "final_passages": passages,
                 "final_score": result["top_score"],
                 "sufficiency_details": result,
-                "fallback_passages": passages,
-                "fallback_score": result["top_score"],
-            }
-
-        return {
-            "sufficient": True,
-            "final_passages": passages,
-            "final_score": result["top_score"],
-            "sufficiency_details": result,
-        }
+            },
+            gap,
+        )
 
     update: Dict[str, Any] = {
         "sufficient": False,
