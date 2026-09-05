@@ -25,6 +25,7 @@ from urllib.parse import quote
 import structlog
 from psycopg.types.json import Jsonb
 
+from src.v7.pg_conn import ReconnectingConnection
 from src.v7.telemetry import EVENT_FIELDS
 
 logger = structlog.get_logger()
@@ -91,7 +92,8 @@ class PostgresWriter:
 
     Connecting per event would add a handshake to every user-visible query, so
     the connection is kept and reopened once when it turns out to be dead — the
-    ordinary fate of a long-lived connection to a container that restarted.
+    ordinary fate of a long-lived connection to a container that restarted
+    (:class:`~src.v7.pg_conn.ReconnectingConnection`).
     """
 
     def __init__(
@@ -101,45 +103,12 @@ class PostgresWriter:
         connect: Optional[Callable[[str], Any]] = None,
     ) -> None:
         self.dsn = dsn
-        self._connect = connect or _psycopg_connect
-        self._conn: Any = None
+        self._conn = ReconnectingConnection(
+            dsn, connect=connect, log_event="telemetry.pg_reconnect"
+        )
 
     def write(self, event: Dict[str, Any]) -> None:
-        row = _row(event)
-        try:
-            self._insert(row)
-        except Exception as first:  # noqa: BLE001 — one retry on a fresh connection
-            logger.info(
-                "telemetry.pg_reconnect",
-                query_id=event.get("query_id"),
-                error=str(first),
-            )
-            self._discard()
-            self._insert(row)
+        self._conn.execute(INSERT_SQL, _row(event), query_id=event.get("query_id"))
 
     def close(self) -> None:
-        self._discard()
-
-    def _insert(self, row: tuple) -> None:
-        conn = self._conn
-        if conn is None:
-            conn = self._conn = self._connect(self.dsn)
-        with conn.cursor() as cur:
-            cur.execute(INSERT_SQL, row)
-        conn.commit()
-
-    def _discard(self) -> None:
-        conn, self._conn = self._conn, None
-        if conn is None:
-            return
-        try:
-            conn.close()
-        except Exception:  # noqa: BLE001 — closing a broken socket may throw
-            pass
-
-
-def _psycopg_connect(dsn: str) -> Any:
-    """The real connection; injected away in tests, so it is the only driver call."""
-    import psycopg
-
-    return psycopg.connect(dsn)
+        self._conn.close()

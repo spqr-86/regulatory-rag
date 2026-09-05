@@ -57,10 +57,31 @@ def test_every_panel_reads_the_provisioned_datasource(panels):
 
 
 def test_the_spec_panels_are_all_there(panels):
-    """The six panels the issue asks for, matched by what they measure."""
+    """The panels the issues ask for, matched by what they measure."""
     titles = " ".join(p["title"].lower() for p in panels)
-    for expected in ("запрос", "цена за запрос", "латентност", "маршрут", "👎", "итого"):
+    for expected in (
+        "запрос",
+        "цена за запрос",
+        "латентност",
+        "маршрут",
+        "👎",
+        "итого",
+        "последние 👎",
+    ):
         assert expected in titles, expected
+
+
+def test_the_last_thumbs_down_panel_shows_what_a_miss_needs(panels):
+    """A 👎 is only actionable with the question, the route and the comment (#20)."""
+    matches = [p for p in panels if "последние 👎" in p["title"].lower()]
+    assert len(matches) == 1
+    panel = matches[0]
+    assert panel["type"] == "table", panel["type"]
+    sql = " ".join(t["rawSql"] for t in panel["targets"]).lower()
+    for column in ("question", "path", "comment", "query_id"):
+        assert column in sql, column
+    assert "verdict = -1" in sql, sql
+    assert "feedback" in sql and "join queries" in sql, sql
 
 
 def test_period_switch_reaches_every_query(queries):
@@ -73,7 +94,10 @@ def test_period_switch_reaches_every_query(queries):
 def test_price_and_latency_are_percentiles_not_averages(panels):
     """The issue asks for p50/p95; an average hides the tail it exists to show."""
     for panel in panels:
-        if "цена за запрос" in panel["title"].lower() or "латентност" in panel["title"].lower():
+        if (
+            "цена за запрос" in panel["title"].lower()
+            or "латентност" in panel["title"].lower()
+        ):
             sql = " ".join(t["rawSql"] for t in panel["targets"])
             assert "percentile_cont" in sql, panel["title"]
             assert not re.search(r"\bavg\s*\(", sql, re.IGNORECASE), panel["title"]
@@ -86,15 +110,58 @@ def test_panels_only_read_columns_the_migration_creates(queries):
     assert "cost_usd" in known  # the scrape found real columns, not nothing
 
     reserved = {
-        "select", "from", "where", "group", "order", "by", "as", "and", "or", "not",
-        "count", "sum", "date_trunc", "percentile_cont", "within", "filter", "join",
-        "using", "null", "nullif", "desc", "asc", "day", "time", "metric", "value",
-        "queries", "feedback", "on", "case", "when", "then", "else", "end", "coalesce",
-        "q", "f", "p50", "p95", "interval", "distinct", "left", "is", "cast", "float8",
+        "select",
+        "from",
+        "where",
+        "group",
+        "order",
+        "by",
+        "as",
+        "and",
+        "or",
+        "not",
+        "count",
+        "sum",
+        "date_trunc",
+        "percentile_cont",
+        "within",
+        "filter",
+        "join",
+        "using",
+        "null",
+        "nullif",
+        "desc",
+        "asc",
+        "day",
+        "time",
+        "metric",
+        "value",
+        "queries",
+        "feedback",
+        "on",
+        "case",
+        "when",
+        "then",
+        "else",
+        "end",
+        "coalesce",
+        "q",
+        "f",
+        "p50",
+        "p95",
+        "interval",
+        "distinct",
+        "left",
+        "is",
+        "cast",
+        "float8",
+        "limit",
     }
     for sql in queries:
         body = re.sub(r"\$__\w+\([^)]*\)", " ", sql)
         body = re.sub(r"'[^']*'", " ", body)
-        words = {w.lower() for w in re.findall(r"[a-z_][a-z_0-9]*", body, re.IGNORECASE)}
+        words = {
+            w.lower() for w in re.findall(r"[a-z_][a-z_0-9]*", body, re.IGNORECASE)
+        }
         unknown = words - known - reserved
         assert not unknown, f"{sql}\nunknown identifiers: {sorted(unknown)}"

@@ -17,6 +17,7 @@ apply_ipv6_patch_for_googleapis()
 
 from config.settings import settings
 from src.ui_helpers import find_proof_images
+from src.v7.feedback import default_feedback_writer
 from src.v7.bridge import init_v7_pipeline
 from utils.logging import logger
 
@@ -107,6 +108,12 @@ def get_telemetry_writer():
 
 
 @st.cache_resource(show_spinner=False)
+def get_feedback_writer():
+    """One writer per Streamlit process; None when votes have nowhere to go (#20)."""
+    return default_feedback_writer()
+
+
+@st.cache_resource(show_spinner=False)
 def load_resources():
     if not os.path.exists(settings.CHROMA_DB_PATH) or not os.listdir(
         settings.CHROMA_DB_PATH
@@ -136,6 +143,58 @@ if v7_app is None:
     st.warning("Приложение не может быть запущено…")
     st.stop()
 
+
+# =========================
+#     FEEDBACK (issue #20)
+# =========================
+def _save_vote(query_id: str, verdict: int, comment: str | None = None) -> bool:
+    """Write the vote; a dead database must not take the answer down with it."""
+    writer = get_feedback_writer()
+    if writer is None:
+        return False
+    try:
+        writer.record(query_id, verdict, comment)
+        return True
+    except Exception as e:  # noqa: BLE001 — monitoring never breaks the answer
+        logger.warning(f"Feedback not saved for {query_id}: {e}")
+        st.caption("⚠️ Оценка не сохранилась — журнал недоступен.")
+        return False
+
+
+def render_feedback(query_id: str) -> None:
+    """👍/👎 under an answer, with an optional comment on 👎.
+
+    Streamlit reruns the script on a click, but the answer is already in
+    ``session_state`` — nothing is recomputed and the text does not move. The
+    vote itself is upserted by ``query_id``, so a changed mind replaces the row
+    instead of adding one.
+    """
+    if not query_id or get_feedback_writer() is None:
+        return
+
+    votes = st.session_state.setdefault("votes", {})
+    up, down, _ = st.columns([1, 1, 10])
+    if up.button("👍", key=f"vote_up_{query_id}", help="Ответ помог"):
+        if _save_vote(query_id, 1):
+            votes[query_id] = 1
+    if down.button("👎", key=f"vote_down_{query_id}", help="Ответ не помог"):
+        if _save_vote(query_id, -1):
+            votes[query_id] = -1
+
+    vote = votes.get(query_id)
+    if vote == 1:
+        st.caption("Спасибо — засчитано как 👍.")
+    elif vote == -1:
+        st.caption("Засчитано как 👎.")
+        with st.form(key=f"vote_note_{query_id}", clear_on_submit=False):
+            comment = st.text_input(
+                "Что не так с ответом? (необязательно)",
+                key=f"vote_text_{query_id}",
+            )
+            if st.form_submit_button("Отправить") and _save_vote(query_id, -1, comment):
+                st.caption("Комментарий сохранён.")
+
+
 # =========================
 #     CHAT HISTORY INIT
 # =========================
@@ -157,6 +216,7 @@ for m in st.session_state.messages:
         if m["role"] == "assistant":
             for img_path in find_proof_images(m["content"]):
                 st.image(img_path, caption="Визуальное доказательство", width=600)
+            render_feedback(m.get("query_id", ""))
 
 # =========================
 #       CHAT INPUT
@@ -208,5 +268,8 @@ if user_query:
             answer = "Не удалось получить ответ."
 
         st.markdown(answer)
+        render_feedback(query_id)
 
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+    st.session_state.messages.append(
+        {"role": "assistant", "content": answer, "query_id": query_id}
+    )

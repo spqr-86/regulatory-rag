@@ -111,7 +111,9 @@ docker compose up -d              # dashboard at http://localhost:3000/d/regrag-
 V7_TELEMETRY_WRITER=postgres      # in .env: write query events to the stack instead of JSONL
 ```
 
-Without the stack, events go to a JSONL journal and nothing has to be running.
+With the stack on, the Streamlit answer carries 👍/👎 buttons (with an optional comment on
+👎); the votes land next to the query they judge and feed the feedback panels. Without the
+stack, events go to a JSONL journal, the buttons are hidden and nothing has to be running.
 See [docs/how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md).
 
 ---

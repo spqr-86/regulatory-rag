@@ -222,6 +222,47 @@
           "rawSql": "SELECT\n  date_trunc('day', ts) AS time,\n  CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS float8) AS \"p50\",\n  CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS float8) AS \"p95\"\nFROM queries\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 1"
         }
       ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Последние 👎",
+      "description": "Промахи по одному: вопрос, маршрут, цена и комментарий. query_id — ключ, по которому строка запроса поднимается в базе целиком.",
+      "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 20 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "filterable": false }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "цена" },
+            "properties": [
+              { "id": "unit", "value": "currencyUSD" },
+              { "id": "decimals", "value": 4 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "вопрос" },
+            "properties": [{ "id": "custom.width", "value": 520 }]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": { "show": false, "reducer": ["sum"], "countRows": false, "fields": "" },
+        "sortBy": [{ "displayName": "когда", "desc": true }]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  f.ts AS \"когда\",\n  q.question AS \"вопрос\",\n  q.path AS \"маршрут\",\n  q.cost_usd AS \"цена\",\n  f.comment AS \"комментарий\",\n  q.query_id AS \"query_id\"\nFROM feedback f\nJOIN queries q USING (query_id)\nWHERE f.verdict = -1 AND $__timeFilter(q.ts)\nORDER BY f.ts DESC\nLIMIT 50"
+        }
+      ]
     }
   ]
 }
