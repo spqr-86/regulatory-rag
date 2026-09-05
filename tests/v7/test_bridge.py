@@ -93,7 +93,9 @@ class TestMakeGenerateFn:
             active_query="высота ограждений",
             passages=[{"text": "Ограждения высотой не менее 1.2 м.", "score": 0.8}],
         )
-        assert result == "Ответ: высота ограждений не менее 1.2 м."
+        answer, usage = result
+        assert answer == "Ответ: высота ограждений не менее 1.2 м."
+        assert usage["node"] == "generate"
         mock_llm.invoke.assert_called_once()
 
     @pytest.mark.unit
@@ -101,7 +103,7 @@ class TestMakeGenerateFn:
         mock_llm = MagicMock()
         fn = make_generate_fn(mock_llm)
         result = fn(query="вопрос", active_query="вопрос", passages=[])
-        assert result == ""
+        assert result[0] == ""
         mock_llm.invoke.assert_not_called()
 
     @pytest.mark.unit
@@ -124,7 +126,7 @@ class TestMakeGenerateFn:
             active_query="вопрос",
             passages=[{"text": "фрагмент", "score": 0.75}],
         )
-        assert result == "Синтезированный ответ."
+        assert result[0] == "Синтезированный ответ."
 
     @pytest.mark.unit
     def test_includes_low_ranked_passages_in_prompt(self):

@@ -7,6 +7,8 @@ Env vars use V7_ prefix (e.g. V7_HARD_GATE_THRESHOLD=0.80).
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -79,6 +81,16 @@ class V7Config(BaseSettings):
 
     # ── Domain Gate ───────────────────────────────────────────────────────
     DOMAIN_GATE_THRESHOLD: float = 0.0  # cosine similarity floor; 0.0 = disabled
+
+    # ── Monitoring (module 05) ────────────────────────────────────────────
+    # Off → the runner calls the graph and writes nothing at all (issue #17).
+    TELEMETRY_ENABLED: bool = True
+    # Where events land: the always-available journal, or the Postgres of #15.
+    # JSONL stays the default — it needs no stack running (issue #23).
+    TELEMETRY_WRITER: Literal["jsonl", "postgres"] = "jsonl"
+    TELEMETRY_JSONL_PATH: str = "logs/events.jsonl"
+    # Empty → built from the POSTGRES_* variables docker-compose.yml reads.
+    TELEMETRY_PG_DSN: str = ""
 
 
 v7_config = V7Config()

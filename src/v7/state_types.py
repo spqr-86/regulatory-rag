@@ -163,6 +163,9 @@ class RAGState(TypedDict, total=False):
     retrieval_id: str
     active_query: str
     retrieval_attempts: Annotated[List[RetrievalAttempt], operator.add]
+    llm_usage: Annotated[
+        List[dict], operator.add
+    ]  # token usage per LLM call (roadmap 4a)
     sufficient: bool
     # OUTPUT
     final_passages: List[dict]

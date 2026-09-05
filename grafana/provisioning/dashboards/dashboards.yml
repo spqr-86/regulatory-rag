@@ -1,0 +1,17 @@
+# The dashboard exists because this file does — nothing is assembled by clicks.
+# The path is the mount point from docker-compose.yml; changing one without the
+# other provisions an empty folder and Grafana says nothing about it.
+apiVersion: 1
+
+providers:
+  - name: regulatory-rag
+    orgId: 1
+    folder: ''
+    type: file
+    # Editing in the UI is allowed, but the file wins on every restart.
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

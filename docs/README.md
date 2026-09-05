@@ -27,6 +27,8 @@ Reference.
 - [how-to/add-eval-questions.md](./how-to/add-eval-questions.md) — extend the eval dataset
 - [how-to/run-evaluation.md](./how-to/run-evaluation.md) — run a evaluation
 - [how-to/run-tests.md](./how-to/run-tests.md) — tests, lint, docs freshness check
+- [how-to/read-telemetry.md](./how-to/read-telemetry.md) — query event journal: where it is and how to query it
+- [how-to/run-monitoring-stack.md](./how-to/run-monitoring-stack.md) — Postgres + Grafana in docker compose: bring the stack up, where the dashboard is
 
 ## Reference — facts and contracts
 

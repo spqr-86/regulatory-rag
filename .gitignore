@@ -129,6 +129,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env.bak-*
+.env.*.bak
 .venv
 env/
 venv/
@@ -244,3 +246,6 @@ address_index_pb.json
 *.jsonl.review.tsv
 # Сырьё GT на 13k вопросов — рабочий эталон это retrieval_gt_reviewed.jsonl
 eval/data/retrieval_gt.jsonl
+
+# Журнал событий мониторинга (модуль 05)
+logs/

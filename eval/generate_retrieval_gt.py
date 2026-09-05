@@ -57,28 +57,9 @@ PREVIEW_CHARS = 200
 # would silently retag it at 17x the price if JUDGE_MODEL_NAME changes.
 GEN_MODEL = "gpt-4o-mini"
 
-# OpenAI list prices, USD per 1M tokens (checked 2026-09-02).
-PRICE_PER_1M = {
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    # Промо-цена, действует минимум до конца ноября 2026 (базовая — $5/$30).
-    # Длинный контекст (>272K) идёт вдвое дороже; наши промпты в него не входят.
-    "gpt-5.6-sol": {"input": 4.00, "output": 20.00},
-    "gpt-5.6-terra": {"input": 2.00, "output": 12.00},
-}
-
-
-def price_for(model: str) -> dict:
-    """Rate card for ``model``. Unknown model is an error, not a default: pricing
-    it at some other model's rate is exactly how the cost guard gets fooled."""
-    try:
-        return PRICE_PER_1M[model]
-    except KeyError:
-        known = ", ".join(sorted(PRICE_PER_1M))
-        raise ValueError(
-            f"No price for model {model!r}. Known: {known}. "
-            "Add its rate to PRICE_PER_1M before running."
-        ) from None
+# Rate card and cost maths live in eval/pricing.py — shared with run_v7_eval.
+from eval.pricing import PRICE_PER_1M, price_for  # noqa: E402,F401
+from eval.pricing import calc_total_price as _calc_total_price  # noqa: E402
 
 
 class Questions(BaseModel):
@@ -460,12 +441,7 @@ def build_gt_record(question: str, passage: dict) -> dict:
 
 def calc_total_price(usages: Iterable[dict], model: str = GEN_MODEL) -> float:
     """Sum USD cost from a list of ``{"input": n, "output": n}`` token counts."""
-    rate = price_for(model)
-    total = 0.0
-    for u in usages:
-        total += u.get("input", 0) / 1_000_000 * rate["input"]
-        total += u.get("output", 0) / 1_000_000 * rate["output"]
-    return total
+    return _calc_total_price(usages, model=model)
 
 
 def estimate_cost(

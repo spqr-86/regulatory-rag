@@ -1,0 +1,20 @@
+# The data source exists because this file does — no clicking in the UI.
+# Credentials are read from the container's environment (see docker-compose.yml).
+apiVersion: 1
+
+datasources:
+  - name: regulatory-rag
+    type: postgres
+    uid: regrag-postgres
+    access: proxy
+    url: postgres:5432
+    user: $POSTGRES_USER
+    isDefault: true
+    editable: false
+    jsonData:
+      database: $POSTGRES_DB
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: false
+    secureJsonData:
+      password: $POSTGRES_PASSWORD

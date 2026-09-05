@@ -9,6 +9,7 @@ from src.v7.config import v7_config
 from src.v7.hard_gates import compute_attempt_metrics, validate_filters
 from src.v7.nlp_core import bm25_search, passage_identity, rrf_merge
 from src.v7.state_types import RAGState, RetrievalAttempt
+from src.v7.usage import LLM_USAGE_KEY, stamp_stage, unpack
 
 logger = logging.getLogger(__name__)
 
@@ -63,12 +64,17 @@ def rag_simple(state: RAGState) -> RAGState:
 
     # V8 Multi-Query Expand: generate alternative query reformulations
     extra_queries: List[str] = []
+    expand_usage: List[dict] = []
     if _expand_fn is not None and v7_config.V8_ENABLE_MULTI_QUERY:
         try:
-            extra_queries = _expand_fn(active_q, n=v7_config.V8_EXPAND_N) or []
+            expanded, expand_usage = unpack(
+                _expand_fn(active_q, n=v7_config.V8_EXPAND_N)
+            )
+            extra_queries = expanded or []
         except Exception as exc:
             logger.warning("expand_fn failed, falling back to single query: %s", exc)
             extra_queries = []
+            expand_usage = []
 
     all_queries = [active_q] + extra_queries
 
@@ -137,4 +143,5 @@ def rag_simple(state: RAGState) -> RAGState:
             )
         ],
         "status_message": f"Found {len(passages)} fragments (hybrid search).",
+        LLM_USAGE_KEY: stamp_stage(expand_usage, "simple"),
     }

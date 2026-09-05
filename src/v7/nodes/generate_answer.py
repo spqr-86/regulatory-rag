@@ -14,13 +14,16 @@ has ``stage == "complex"`` we treat the request as complex.
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional
 
 from src.v7.state_types import RAGState
+from src.v7.usage import LLM_USAGE_KEY, stamp_stage, unpack
 
 # ─── Generate interface (stub by default, inject production LLM) ──────────
 
-GenerateFn = Callable[[str, str, List[dict]], str]
+# The injected fn may return the answer text alone (stub / legacy) or
+# ``(text, usage)`` — see src.v7.usage.unpack.
+GenerateFn = Callable[[str, str, List[dict]], Any]
 
 
 def _stub_generate(
@@ -75,7 +78,8 @@ def generate_answer(state: RAGState) -> RAGState:
     """Synthesise final answer from retrieved passages.
 
     Reads:  query, active_query, final_passages, retrieval_attempts.
-    Writes: answer.
+    Writes: answer, llm_usage (token usage of the generation call, tagged with
+            the retrieval path — the runner needs cost split by path).
     """
     query = state.get("query", "")
     active_query = state.get("active_query", query)
@@ -87,6 +91,6 @@ def generate_answer(state: RAGState) -> RAGState:
     )
     if fn is None:
         fn = _stub_generate
-    answer = fn(query, active_query, passages)
+    answer, usages = unpack(fn(query, active_query, passages))
 
-    return {"answer": answer}
+    return {"answer": answer, LLM_USAGE_KEY: stamp_stage(usages, stage)}
