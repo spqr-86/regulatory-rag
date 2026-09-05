@@ -87,3 +87,28 @@ class TestExpandFnUsage:
         alts, usage = make_expand_fn(llm)("вопрос")
         assert alts == []
         assert usage["prompt_tokens"] == 0
+
+
+class TestGenerateReportsContextSize:
+    """Issue #22: the event must say how many passages reached the LLM.
+
+    ``final_passages`` is what retrieval found; cross-reference expansion inside
+    the generate fn adds more, so only the fn itself knows the real number.
+    """
+
+    def test_usage_carries_number_of_passages_sent_to_llm(self):
+        llm = _FakeLLM("ответ")
+        fn = make_generate_fn(llm)
+        passages = [{"text": f"фрагмент {i}", "metadata": {}} for i in range(3)]
+
+        _answer, usage = fn("вопрос", "вопрос", passages)
+
+        assert usage["n_passages"] == 3
+
+    def test_no_passages_means_zero(self):
+        llm = _FakeLLM("ответ")
+        fn = make_generate_fn(llm)
+
+        _answer, usage = fn("вопрос", "вопрос", [])
+
+        assert usage["n_passages"] == 0

@@ -202,3 +202,53 @@ class TestJsonlWriter:
 
         with pytest.raises(OSError):
             writer.write(event)
+
+
+class TestContextSize:
+    """Issue #22: n_passages is what reached the LLM, not what retrieval found."""
+
+    def test_prefers_the_count_reported_by_the_generate_call(self):
+        state = make_state(
+            final_passages=[{"id": str(i)} for i in range(14)],
+            llm_usage=[
+                {"model": "gpt-4o-mini", "node": "expand", "prompt_tokens": 50, "completion_tokens": 10},
+                {
+                    "model": "gpt-4o-mini",
+                    "node": "generate",
+                    "prompt_tokens": 7000,
+                    "completion_tokens": 120,
+                    "n_passages": 30,
+                },
+            ],
+        )
+
+        event = telemetry.build_event(state, source="ui", latency_ms=1)
+
+        assert event["n_passages"] == 30
+        assert event["n_passages_found"] == 14
+
+    def test_refusal_without_generation_is_zero_on_both(self):
+        state = make_state(
+            answer="",
+            abstain_reason="нет нормы в корпусе",
+            final_passages=[],
+            llm_usage=[],
+        )
+
+        event = telemetry.build_event(state, source="ui", latency_ms=1)
+
+        assert event["n_passages"] == 0
+        assert event["n_passages_found"] == 0
+
+    def test_generation_that_reported_nothing_falls_back_to_found(self):
+        """Stub generators and the pre-#22 contract report no context size.
+
+        Reporting zero next to a real answer would read as a bug, so the found
+        count stands in — and it is the same number the old field carried.
+        """
+        state = make_state(final_passages=[{"id": "a"}, {"id": "b"}])
+
+        event = telemetry.build_event(state, source="ui", latency_ms=1)
+
+        assert event["n_passages"] == 2
+        assert event["n_passages_found"] == 2

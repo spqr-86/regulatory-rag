@@ -400,7 +400,8 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
 
     def _generate(query: str, active_query: str, passages: List[dict]) -> tuple:
         if not passages:
-            return "", _zero_usage(model, "generate")
+            # Nothing to answer from: no call, no context (issue #22).
+            return "", {**_zero_usage(model, "generate"), "n_passages": 0}
         t0 = time.perf_counter()
         expanded = (
             expand_cross_references(passages, backend, query=query)
@@ -433,6 +434,10 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
         t1 = time.perf_counter()
         try:
             result, usage = _call_llm(prompt)
+            # Issue #22: only this fn knows how big the prompt context got —
+            # cross-reference expansion above adds passages the graph state
+            # never sees.
+            usage["n_passages"] = len(top_passages)
             logger.info(
                 "generate.timing.llm",
                 llm_s=round(time.perf_counter() - t1, 3),
@@ -445,7 +450,8 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
                 "LLM generate failed after retries: %s, falling back to stub", exc
             )
             fallback = "\n\n".join(p.get("text", "") for p in passages[:10])
-            return fallback, _zero_usage(model, "generate")
+            # The call never reached the model: no context went anywhere.
+            return fallback, {**_zero_usage(model, "generate"), "n_passages": 0}
 
     return _generate
 

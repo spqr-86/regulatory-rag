@@ -44,6 +44,7 @@ EVENT_FIELDS = (
     "path",
     "answer_len",
     "n_passages",
+    "n_passages_found",
     "latency_ms",
     "prompt_tokens",
     "completion_tokens",
@@ -92,6 +93,7 @@ def build_event(
     allowed to be ``None`` — that is what a successful query looks like.
     """
     usage: List[dict] = list(state.get("llm_usage") or [])
+    found = len(state.get("final_passages") or [])
     priced = cost_for_usages(usage)
 
     return {
@@ -101,8 +103,10 @@ def build_event(
         "question": state.get("query", ""),
         "path": resolve_path(state),
         "answer_len": len(state.get("answer") or ""),
-        # What actually went to the LLM — fallback passages were not used to answer.
-        "n_passages": len(state.get("final_passages") or []),
+        # What actually went into the prompt, per the spec. Retrieval's own count
+        # is kept beside it: the two differ whenever cross-refs expanded the set.
+        "n_passages": _passages_sent_to_llm(usage, found),
+        "n_passages_found": found,
         "latency_ms": int(latency_ms),
         "prompt_tokens": sum(int(u.get("prompt_tokens", 0)) for u in usage),
         "completion_tokens": sum(int(u.get("completion_tokens", 0)) for u in usage),
@@ -112,6 +116,20 @@ def build_event(
         "unpriced_models": priced["unpriced_models"],
         "error": error,
     }
+
+
+def _passages_sent_to_llm(usage: List[dict], found: int) -> int:
+    """How many passages reached the model's prompt.
+
+    Reported by the generate call itself (issue #22). A generator that reports
+    nothing — the stub, or the pre-#22 contract — falls back to the retrieved
+    count: a zero printed next to a real answer reads as a bug, and the fallback
+    is exactly what the field used to mean. No generation at all means zero.
+    """
+    reported = [u["n_passages"] for u in usage if "n_passages" in u]
+    if reported:
+        return sum(int(n) for n in reported)
+    return found
 
 
 class EventWriter(Protocol):

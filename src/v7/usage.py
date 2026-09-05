@@ -33,6 +33,10 @@ class LLMUsage(TypedDict, total=False):
     stage: str
     prompt_tokens: int
     completion_tokens: int
+    # How many passages the call put in its prompt. Only the generate call sets
+    # it, and only it can: cross-reference expansion happens inside the fn,
+    # after the graph state was written (issue #22).
+    n_passages: int
 
 
 def _as_int(value: Any) -> int:
