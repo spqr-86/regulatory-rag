@@ -51,9 +51,11 @@ class TestBuildEvent:
     def test_all_spec_fields_present_and_not_none(self):
         event = telemetry.build_event(make_state(), source="ui", latency_ms=5300)
 
+        # ``error`` and ``run_id`` are the two fields whose emptiness is a fact
+        # about the query, not a hole in the row (issue #18).
         for field in telemetry.EVENT_FIELDS:
             assert field in event, f"missing field {field}"
-            if field != "error":
+            if field not in ("error", "run_id"):
                 assert event[field] is not None, f"{field} must not be None"
 
     def test_carries_question_answer_len_and_passages(self):
@@ -252,3 +254,29 @@ class TestContextSize:
 
         assert event["n_passages"] == 2
         assert event["n_passages_found"] == 2
+
+
+class TestRunId:
+    """Which run a row belongs to (issue #18).
+
+    Live traffic has no run: the field exists on every row and stays ``None``
+    unless a batch run put its own id there.
+    """
+
+    def test_run_id_is_part_of_the_event_row(self):
+        assert "run_id" in telemetry.EVENT_FIELDS
+
+    def test_live_query_has_no_run(self):
+        event = telemetry.build_event(make_state(), source="ui", latency_ms=100)
+
+        assert event["run_id"] is None
+
+    def test_keeps_run_id_passed_from_outside(self):
+        event = telemetry.build_event(
+            make_state(),
+            source="eval",
+            latency_ms=100,
+            run_id="eval-20260905T091500Z-a3f1",
+        )
+
+        assert event["run_id"] == "eval-20260905T091500Z-a3f1"

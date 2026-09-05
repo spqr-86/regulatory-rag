@@ -22,7 +22,8 @@ import csv
 import json
 import sys
 import time
-from datetime import datetime, date
+import uuid
+from datetime import datetime, date, timezone
 from pathlib import Path
 from typing import Any
 
@@ -92,15 +93,26 @@ def load_dataset(path: Path) -> list[dict[str, str]]:
 # ── Graph runner ──────────────────────────────────────────────────────────────
 
 
-def run_query(graph, question: str, writer=None) -> dict[str, Any]:
+def new_run_id() -> str:
+    """The id every row of one eval run shares (issue #18).
+
+    Sortable by time so runs line up in the journal by themselves, with a short
+    random tail because two runs can start inside the same second.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"eval-{stamp}-{uuid.uuid4().hex[:4]}"
+
+
+def run_query(graph, question: str, writer=None, run_id: str | None = None) -> dict[str, Any]:
     """Run one question through V7 graph, return structured result.
 
     Goes through the telemetry runner so an eval run lands in the same table as
-    live traffic, separated only by ``source`` (monitoring module 05).
+    live traffic, separated only by ``source`` (monitoring module 05) — and, among
+    eval rows, by ``run_id`` (issue #18).
     """
     start = time.time()
     state, _query_id = run_with_telemetry(
-        graph, question, source="eval", writer=writer
+        graph, question, source="eval", writer=writer, run_id=run_id
     )
     elapsed = round(time.time() - start, 2)
 
@@ -257,6 +269,8 @@ def run(
     init_v7_pipeline(vector_store)
     graph = build_graph().compile()
     telemetry_writer = default_writer()
+    # One id for the whole run: it ties the rows in the journal to this file.
+    run_id = new_run_id()
     print("  Graph ready.")
 
     judge_llm = None
@@ -277,7 +291,9 @@ def run(
 
         # Run graph
         try:
-            run_result = run_query(graph, question, writer=telemetry_writer)
+            run_result = run_query(
+                graph, question, writer=telemetry_writer, run_id=run_id
+            )
         except Exception as e:
             print(f"  ERROR running graph: {e}")
             results.append({"question": question, "error": str(e)})
@@ -437,6 +453,7 @@ def run(
 
     summary = {
         "timestamp": datetime.now().isoformat(),
+        "run_id": run_id,
         "skip_judge": skip_judge,
         "dataset": str(DATASET_PATH),
         "dataset_size": len(dataset),

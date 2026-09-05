@@ -40,6 +40,7 @@ def run_query(
     source: telemetry.Source,
     writer: Optional[telemetry.EventWriter] = None,
     query_id: Optional[str] = None,
+    run_id: Optional[str] = None,
     filters: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], str]:
     """Run one query through the compiled graph and record what happened.
@@ -47,6 +48,9 @@ def run_query(
     ``source`` is keyword-only and has no default on purpose: a row that says
     "ui" because nobody passed anything is worse than a missing row — it makes
     eval traffic look like users.
+
+    ``run_id`` groups the rows of one batch run (the eval runner passes its own,
+    issue #18). Live traffic leaves it ``None``: there is no run behind it.
 
     Returns the graph result and the ``query_id`` of the row, which the caller
     shows to the user so feedback (#20) can point back at it.
@@ -65,6 +69,7 @@ def run_query(
             source=source,
             latency_ms=_elapsed_ms(started),
             query_id=event_id,
+            run_id=run_id,
             error=f"{type(exc).__name__}: {exc}",
         )
         raise
@@ -75,6 +80,7 @@ def run_query(
         source=source,
         latency_ms=_elapsed_ms(started),
         query_id=event_id,
+        run_id=run_id,
     )
     return result, event_id
 

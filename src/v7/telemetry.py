@@ -38,6 +38,8 @@ Path_ = Literal["simple", "complex", "clarify", "abstain"]
 # The spec's event row, in the order the table declares it.
 EVENT_FIELDS = (
     "query_id",
+    # Which batch run wrote the row; ``None`` for live traffic (issue #18).
+    "run_id",
     "ts",
     "source",
     "question",
@@ -83,14 +85,16 @@ def build_event(
     source: Source,
     latency_ms: int,
     query_id: str | None = None,
+    run_id: str | None = None,
     error: str | None = None,
     ts: datetime | None = None,
 ) -> Dict[str, Any]:
     """Collect the event row from a finished graph state.
 
     Missing counts are zeros, never ``None``: a row with holes in it is worse
-    than a row that honestly says nothing happened. ``error`` is the one field
-    allowed to be ``None`` — that is what a successful query looks like.
+    than a row that honestly says nothing happened. Two fields are allowed to be
+    ``None`` and mean it: ``error`` (that is what a successful query looks like)
+    and ``run_id`` (a live query belongs to no batch run).
     """
     usage: List[dict] = list(state.get("llm_usage") or [])
     found = len(state.get("final_passages") or [])
@@ -98,6 +102,7 @@ def build_event(
 
     return {
         "query_id": query_id or new_query_id(),
+        "run_id": run_id,
         "ts": ts or datetime.now(timezone.utc),
         "source": source,
         "question": state.get("query", ""),

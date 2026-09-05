@@ -198,3 +198,43 @@ class TestWiring:
         runner.run_query(FakeGraph(result=simple_state()), "вопрос", source="ui", writer=writer)
 
         assert not journal.exists()
+
+
+class TestRunId:
+    """The runner carries the caller's run id into the row (issue #18)."""
+
+    def test_run_id_reaches_the_written_event(self):
+        writer = FakeWriter()
+
+        runner.run_query(
+            FakeGraph(result=simple_state()),
+            "вопрос",
+            source="eval",
+            writer=writer,
+            run_id="eval-20260905T091500Z-a3f1",
+        )
+
+        assert writer.events[0]["run_id"] == "eval-20260905T091500Z-a3f1"
+
+    def test_without_run_id_the_row_says_none(self):
+        writer = FakeWriter()
+
+        runner.run_query(
+            FakeGraph(result=simple_state()), "вопрос", source="ui", writer=writer
+        )
+
+        assert writer.events[0]["run_id"] is None
+
+    def test_failed_query_keeps_the_run_id(self):
+        writer = FakeWriter()
+
+        with pytest.raises(RuntimeError):
+            runner.run_query(
+                FakeGraph(raises=RuntimeError("boom")),
+                "вопрос",
+                source="eval",
+                writer=writer,
+                run_id="eval-20260905T091500Z-a3f1",
+            )
+
+        assert writer.events[0]["run_id"] == "eval-20260905T091500Z-a3f1"
