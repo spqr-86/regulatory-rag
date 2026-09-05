@@ -29,7 +29,17 @@ docker compose ps             # оба сервиса должны быть heal
   Data source `regulatory-rag` (Postgres) создан provisioning-файлом
   `grafana/provisioning/datasources/postgres.yml`, руками его заводить не нужно;
   Connections → Data sources → Save & test отвечает «Database Connection OK».
-  Дашборды и панели — issue #19, пока источник просто подключён.
+- Дашборд **Regulatory RAG — запросы** (<http://localhost:3000/d/regrag-queries>) приезжает
+  тем же способом: файл `grafana/dashboards/regulatory-rag.json`, провайдер —
+  `grafana/provisioning/dashboards/dashboards.yml`. Панели: итоговая цена за период,
+  доля 👎, запросы по дням с разбивкой по `source`, маршруты, цена и латентность в
+  перцентилях p50/p95 (не в среднем — один сложный маршрут дороже десяти простых).
+  Период задаётся стандартным пикером Grafana, все запросы фильтруются по нему.
+  Панель «Доля 👎» пуста, пока фидбек не собирается (issue #20).
+
+  Правки в UI не сохраняются в файл: `allowUiUpdates: false`, при рестарте побеждает
+  репозиторий. Менять панель — значит менять JSON; после правки `docker compose up -d
+  grafana` (провайдер перечитывает файл и сам, раз в 30 секунд).
 - База — `psql` изнутри контейнера:
 
   ```bash

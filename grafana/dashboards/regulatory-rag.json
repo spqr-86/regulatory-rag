@@ -1,0 +1,227 @@
+{
+  "uid": "regrag-queries",
+  "title": "Regulatory RAG — запросы",
+  "description": "Что стоит один запрос, сколько он идёт и куда его увёл маршрутизатор. Источник — таблица queries, её пишет телеметрия v7.",
+  "tags": ["regulatory-rag", "monitoring"],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "",
+  "time": { "from": "now-30d", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["30s", "1m", "5m", "15m", "1h"]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Итого цена за период",
+      "description": "Сумма cost_usd по всем строкам в выбранном периоде, включая eval-прогоны.",
+      "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "currencyUSD", "decimals": 4, "color": { "mode": "fixed", "fixedColor": "text" } },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT sum(cost_usd) AS \"итого\"\nFROM queries\nWHERE $__timeFilter(ts)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Доля 👎",
+      "description": "Отрицательные оценки к числу оценённых ответов. Пусто, пока фидбек не собирается (issue #20).",
+      "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 10 },
+              { "color": "red", "value": 25 }
+            ]
+          },
+          "noValue": "нет оценок"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT CAST(100.0 * count(*) FILTER (WHERE f.verdict = -1) / NULLIF(count(*), 0) AS float8) AS \"доля\"\nFROM feedback f\nJOIN queries q USING (query_id)\nWHERE $__timeFilter(q.ts)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Запросы по дням",
+      "description": "Сколько запросов пришло за день, отдельно по источнику: ui, api, eval, mcp.",
+      "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 1,
+            "stacking": { "mode": "normal", "group": "A" },
+            "showPoints": "never",
+            "barAlignment": 0,
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  date_trunc('day', ts) AS time,\n  source AS metric,\n  count(*) AS value\nFROM queries\nWHERE $__timeFilter(ts)\nGROUP BY 1, 2\nORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "piechart",
+      "title": "Маршруты",
+      "description": "Куда маршрутизатор увёл запрос: simple, complex, clarify, abstain.",
+      "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "palette-classic" } },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true },
+        "pieType": "donut",
+        "displayLabels": ["name", "value"],
+        "legend": { "displayMode": "list", "placement": "right", "showLegend": true, "values": ["percent"] },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  path AS metric,\n  count(*) AS value\nFROM queries\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 2 DESC"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Цена за запрос: p50 и p95",
+      "description": "Перцентили cost_usd по дням. Среднее тут врёт: один сложный маршрут дороже десяти простых.",
+      "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 4,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true,
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  date_trunc('day', ts) AS time,\n  CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY cost_usd) AS float8) AS \"p50\",\n  CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY cost_usd) AS float8) AS \"p95\"\nFROM queries\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Латентность: p50 и p95",
+      "description": "Перцентили latency_ms по дням. Хвост p95 — то, что видит недовольный пользователь.",
+      "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "always",
+            "pointSize": 6,
+            "spanNulls": true,
+            "axisSoftMin": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": [] },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "postgres", "uid": "regrag-postgres" },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  date_trunc('day', ts) AS time,\n  CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS float8) AS \"p50\",\n  CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS float8) AS \"p95\"\nFROM queries\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 1"
+        }
+      ]
+    }
+  ]
+}
