@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Спек — модуль 05: онлайн-мониторинг regulatory-rag</title>
+<style>
+  :root{
+    --bg:#fbfaf8; --fg:#1c1b19; --muted:#6b6864; --line:#e2ded8;
+    --card:#fff; --accent:#8a4b2a; --good:#2f6b3f; --bad:#9a3436; --code:#f2efe9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{--bg:#171614;--fg:#eae7e1;--muted:#a29d95;--line:#312e2a;
+          --card:#1f1e1b;--accent:#d98b5f;--good:#7fbf8f;--bad:#e08a8a;--code:#232120;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:900px;margin:0 auto;padding:40px 20px 80px}
+  h1{font-size:28px;line-height:1.25;margin:0 0 6px}
+  h2{font-size:20px;margin:44px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  h3{font-size:17px;margin:26px 0 8px}
+  .sub{color:var(--muted);margin:0 0 28px;font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+        padding:18px 20px;margin:14px 0}
+  .card.pick{border-color:var(--accent);border-width:2px}
+  .tag{display:inline-block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+       color:var(--accent);border:1px solid var(--accent);border-radius:99px;
+       padding:2px 9px;margin-left:8px;vertical-align:2px}
+  ul{margin:8px 0;padding-left:22px}
+  li{margin:4px 0}
+  .pros li::marker{color:var(--good)}
+  .cons li::marker{color:var(--bad)}
+  code,pre{background:var(--code);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+  code{padding:1px 5px;border-radius:4px}
+  pre{padding:14px;border-radius:8px;overflow-x:auto;line-height:1.45}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;display:block;overflow-x:auto}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--code);font-weight:600}
+  .fixed td:first-child{white-space:nowrap;color:var(--muted)}
+  .ac{list-style:none;padding-left:0}
+  .ac li{padding-left:30px;position:relative;margin:9px 0}
+  .ac li::before{content:"☐";position:absolute;left:6px;color:var(--accent);font-size:17px}
+  .ac .out::before{content:"—";color:var(--muted)}
+  .ac .out{color:var(--muted)}
+  .note{color:var(--muted);font-size:14px}
+  footer{margin-top:50px;padding-top:14px;border-top:1px solid var(--line);
+         color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Модуль 05 — онлайн-мониторинг для regulatory-rag</h1>
+<p class="sub">Спек · 05.09.2026 · LLM Zoomcamp, модуль 05 · проект <code>~/projects/ai/regulatory-rag</code></p>
+
+<h2>Задача</h2>
+<p>
+Пайплайн v7 отвечает на вопросы по НПА, и с шага 4a умеет считать, во что обошёлся
+каждый запрос: <code>src/v7/usage.py</code> собирает токены по вызовам, граф копит их
+в состоянии под ключом <code>llm_usage</code>, <code>eval/pricing.py</code> переводит
+в деньги. Но живёт это ровно до конца процесса: eval-прогон печатает сводку в файл,
+а запрос живого человека из Streamlit не оставляет следа вообще. Ни истории, ни
+динамики, ни ответа на вопрос «стало лучше или хуже, чем месяц назад».
+</p>
+<p>
+Модуль 05 закрывает именно это: каждый запрос — строка в базе, поверх базы —
+дашборд, рядом с ответом — кнопки 👍/👎, чтобы у качества появился источник,
+не зависящий от синтетического эталона. Аудит покрытия 01.09.2026: из модуля 05
+не сделано ничего, это самый большой незакрытый пробел под вывеску «Production RAG».
+</p>
+
+<h2>Что уже решено (интервью 05.09)</h2>
+<table class="fixed">
+<tr><td>Аудитория</td><td><b>Портфолио и курс — главное</b>; собственный рабочий инструмент — вторым. Значит стек должен читаться на собесе, а не только работать.</td></tr>
+<tr><td>Хранилище и дашборд</td><td><b>PostgreSQL + Grafana в docker-compose.</b> Ни Postgres, ни ORM в зависимостях сейчас нет — слой заводится с нуля. Compose всё равно нужен под AI Dev Tools, модуль 3.</td></tr>
+<tr><td>Точка врезки</td><td><b>Внутри пайплайна v7</b>, с полем <code>source</code> (<code>ui</code> / <code>api</code> / <code>eval</code> / <code>mcp</code>). Причина: <code>app.py</code> вызывает граф напрямую, минуя <code>api.py</code> — middleware на FastAPI не увидел бы собственный Streamlit.</td></tr>
+<tr><td>Граница «готово»</td><td>Телеметрия <b>+ 👍/👎 и панель по фидбеку</b>. LLM-судья на живом трафике — <b>вне объёма</b>, отдельным issue: он удваивает цену запроса и сам ещё не валидирован (issue #8).</td></tr>
+<tr><td>Развёртывание</td><td><b>Локально</b>, docker-compose. Деплой на netcup — отдельным issue: машина боевая с 01.09, но на 2 CPU / 3.8 ГБ RAM там уже живут assistant-web, туннели и xray, и стек Postgres + Grafana + Streamlit + индекс Chroma туда влезает тяжело. Это вопрос ресурсов, а не готовности сервера.</td></tr>
+</table>
+
+<h2>Что пишем на каждый запрос</h2>
+<p class="note">Единая строка события — общая для всех вариантов ниже; отличаются они только тем, <i>как</i> она доезжает до базы.</p>
+<pre>query_id        uuid        сквозной id запроса
+ts              timestamptz время начала
+source          text        ui | api | eval | mcp
+question        text        текст вопроса
+path            text        simple | complex | clarify | abstain  (маршрут графа)
+answer_len      int
+n_passages      int         сколько пассажей ушло в LLM
+latency_ms      int         полное время ответа
+prompt_tokens   int         сумма по вызовам
+completion_tokens int
+cost_usd        numeric     посчитан по eval/pricing.py
+models          jsonb       разбивка по вызовам: модель, узел, токены (llm_usage как есть)
+unpriced_models text[]      модели без прайса — чтобы дешёвый отчёт не соврал
+error           text        null, если всё прошло
+
+feedback:  query_id (FK), ts, verdict (+1 / -1), comment text null</pre>
+
+<h2>Варианты реализации</h2>
+
+<div class="card pick">
+<h3>A. Синхронная запись из графа<span class="tag">рекомендуется</span></h3>
+<p>
+Отдельный модуль <code>src/v7/telemetry.py</code>: после терминального узла графа
+собирает событие из состояния и пишет строку в Postgres через
+<code>psycopg</code> (пул на приложение). Запись обёрнута так, что любое
+исключение БД логируется и глотается — мониторинг не имеет права уронить ответ
+пользователю.
+</p>
+<ul class="pros"><b>Плюсы</b>
+<li>Один шов, ровно там, где уже собирается <code>llm_usage</code>. Цена считается один раз.</li>
+<li>Ловит все входы разом — Streamlit, FastAPI, MCP, eval-прогоны, — потому что все они идут через граф.</li>
+<li>Нет ни очередей, ни воркеров, ни отдельного процесса: меньше всего того, что может молча сломаться.</li>
+</ul>
+<ul class="cons"><b>Минусы</b>
+<li>+10–30 мс к каждому запросу (на фоне 5–14 секунд ответа — шум).</li>
+<li>Пайплайн получает знание о базе; ослабляется тем, что писатель инжектится, а в тестах подменяется на фейк.</li>
+<li>Пока БД лежит, события теряются безвозвратно.</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>B. JSONL-журнал + ingest в Postgres</h3>
+<p>
+Граф пишет событие строкой в <code>logs/events.jsonl</code> (append-only, без сети).
+Отдельный скрипт <code>scripts/ingest_events.py</code> заливает журнал в Postgres —
+по крону или руками перед просмотром дашборда.
+</p>
+<ul class="pros"><b>Плюсы</b>
+<li>Запись не может упасть и ничего не ждёт: файл всегда доступен.</li>
+<li>История переигрывается с нуля — схему БД можно поменять и залить журнал заново.</li>
+<li>Работает и без поднятого compose: писать можно всегда, смотреть — когда захотел.</li>
+</ul>
+<ul class="cons"><b>Минусы</b>
+<li>Дашборд не живой: между запросом и графиком стоит ingest, который надо не забыть запустить.</li>
+<li>Второй движущийся кусок (крон/скрипт), молча отваливающийся ровно так, как описано в core.md.</li>
+<li>На собесе «пишем в файл, потом импортируем» звучит слабее, чем «пишем в Postgres».</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>C. Callback-слой поверх графа</h3>
+<p>
+Пайплайн ничего не знает о телеметрии: он эмитит событие в шину подписчиков
+(<code>on_query_finished</code>), а подписчиков регистрирует приложение — один пишет
+в Postgres, другой в лог, третий в тестах копит в списке. Инверсия зависимости
+в чистом виде.
+</p>
+<ul class="pros"><b>Плюсы</b>
+<li>Граф не зависит от БД совсем; тестируется без единого мока Postgres.</li>
+<li>Новый потребитель (метрики Prometheus, вебхук) добавляется, не трогая пайплайн.</li>
+<li>Красиво читается в коде и на ревью.</li>
+</ul>
+<ul class="cons"><b>Минусы</b>
+<li>Абстракция ради одного подписчика: у нас он ровно один и второго не планируется.</li>
+<li>Регистрация подписчиков — новый источник ошибок «а почему ничего не пишется» (в Streamlit с его перезапусками скрипта особенно).</li>
+<li>Больше кода на тот же результат — против принципа «правлю только затронутое».</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>D. Сначала прод-трафик, eval потом</h3>
+<p>
+Не архитектура записи, а урезание объёма: пишем только запросы живого человека
+из Streamlit (<code>source = ui</code>), eval-прогоны остаются в файлах, как сейчас.
+Дашборд показывает реальное использование, история экспериментов не смешивается
+с историей продукта.
+</p>
+<ul class="pros"><b>Плюсы</b>
+<li>Самый быстрый путь к первому графику.</li>
+<li>Дашборд не искажён: 56 вопросов eval-прогона не выглядят как всплеск использования.</li>
+</ul>
+<ul class="cons"><b>Минусы</b>
+<li>Живого трафика почти нет — дашборд будет пустым, а на скриншоте для портфолио пусто выглядит плохо.</li>
+<li>Теряется главное: сравнение «до / после» по цене и качеству берётся именно из eval-прогонов.</li>
+<li>Поле <code>source</code> решает ту же задачу разделения одним <code>WHERE</code>.</li>
+</ul>
+</div>
+
+<h2>Решение</h2>
+<p><b>Принято 05.09.2026 (Пётр): вариант A с файловым фолбэком из B.</b> Пишем событие сразу в Postgres изнутри пайплайна; если база не поднята — в файловый журнал, чтобы не терять. Eval-прогоны пишутся тоже, отделяются полем <code>source</code>.</p>
+<h2>Почему именно он</h2>
+<p>
+<b>Вариант A</b>, с одной оговоркой из B: писатель инжектится в граф, а не импортируется
+им, и рядом с Postgres-писателем живёт файловый — на случай, когда compose не поднят.
+Так пайплайн остаётся тестируемым (фейковый писатель в тестах), дашборд остаётся живым,
+и ни одного крона в схеме.
+</p>
+<p>
+Вариант C стоит взять, только если появится второй потребитель событий;
+вариант D отвергнут потому, что пустой дашборд бьёт ровно по главной цели — портфолио.
+</p>
+
+<h2>Критерии приёмки</h2>
+<ul class="ac">
+<li><code>docker compose up</code> поднимает Postgres и Grafana; схема применяется миграцией, а не руками в psql.</li>
+<li>Вопрос, заданный в Streamlit, за секунды появляется строкой в таблице <code>queries</code> — с ценой, латентностью, маршрутом и <code>source = ui</code>.</li>
+<li><code>eval/run_v7_eval.py</code> пишет свои запросы в ту же таблицу с <code>source = eval</code>; сводка прогона в файле не изменилась ни на цент (та же арифметика, что и до модуля 05).</li>
+<li>Остановленный Postgres не ломает ответ: пользователь получает ответ, в логе — предупреждение, событие уходит в файловый журнал.</li>
+<li>В Grafana есть дашборд: запросы по дням, цена за запрос p50/p95, латентность p50/p95, разбивка simple/complex, доля 👎.</li>
+<li>Под ответом в Streamlit — 👍/👎; нажатие пишет строку в <code>feedback</code> со ссылкой на <code>query_id</code> и не перезагружает ответ.</li>
+<li>Панель по фидбеку показывает последние 👎 вместе с вопросом и маршрутом — чтобы промах можно было сразу разобрать.</li>
+<li>Секреты БД — только из <code>.env</code>; в compose-файле и в репозитории паролей нет.</li>
+<li>Тесты: событие собирается из состояния графа верно (включая <code>unpriced_models</code>), падение писателя не роняет запрос, фидбек привязывается к существующему <code>query_id</code>. Полный прогон — не хуже нынешних 733 passed / 5 failed.</li>
+<li>README: как поднять стек, где смотреть дашборд, куда нажимать 👍/👎.</li>
+<li class="out">Вне объёма: LLM-судья на живом трафике (отдельный issue, после валидации судьи — issue #8).</li>
+<li class="out">Вне объёма: деплой на netcup и публичный URL (отдельный issue — упирается в память машины, не в переезд).</li>
+<li class="out">Вне объёма: OpenTelemetry и алертинг — это AI Dev Tools, модуль 4; не дублируем.</li>
+</ul>
+
+<footer>
+Спек создан по протоколу skill <code>spec</code>. Следующий шаг после выбора варианта —
+нарезка бэклога с acceptance criteria (порядок AI-native workflow, модуль 1:
+спека → контекст → бэклог → роли PM / инженер / QA).
+</footer>
+
+</div>
+</body>
+</html>
