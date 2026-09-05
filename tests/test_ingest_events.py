@@ -96,3 +96,47 @@ class TestIngest:
     def test_missing_journal_is_a_clear_error(self, tmp_path):
         with pytest.raises(FileNotFoundError):
             ingest_events.ingest(str(tmp_path / "nope.jsonl"), RecordingWriter())
+
+
+class TestEventsFromBeforeTheFieldSplit:
+    """Rows written before #22, when ``n_passages`` meant "found".
+
+    The column is NOT NULL, so such a row is rejected by Postgres and the whole
+    event is lost. What the old field held is exactly what the new one wants.
+    """
+
+    def test_the_missing_found_count_is_taken_from_n_passages(self, tmp_path):
+        path = journal(tmp_path, event("a", n_passages=14))
+        writer = RecordingWriter()
+
+        ingest_events.ingest(path, writer)
+
+        assert writer.events[0]["n_passages_found"] == 14
+        assert writer.events[0]["n_passages"] == 14
+
+    def test_a_row_that_has_both_counts_is_left_alone(self, tmp_path):
+        path = journal(tmp_path, event("a", n_passages=8, n_passages_found=30))
+        writer = RecordingWriter()
+
+        ingest_events.ingest(path, writer)
+
+        assert writer.events[0]["n_passages_found"] == 30
+        assert writer.events[0]["n_passages"] == 8
+
+    def test_an_explicit_null_is_filled_in_too(self, tmp_path):
+        """The writer serialised the key with no value; the column still says NOT NULL."""
+        path = journal(tmp_path, event("a", n_passages=5, n_passages_found=None))
+        writer = RecordingWriter()
+
+        ingest_events.ingest(path, writer)
+
+        assert writer.events[0]["n_passages_found"] == 5
+
+    def test_a_row_with_neither_count_is_passed_through_untouched(self, tmp_path):
+        """Nothing to derive from; let Postgres reject it rather than invent a number."""
+        path = journal(tmp_path, event("a"))
+        writer = RecordingWriter()
+
+        ingest_events.ingest(path, writer)
+
+        assert "n_passages_found" not in writer.events[0]

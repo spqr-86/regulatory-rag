@@ -51,6 +51,20 @@ def _rows(path: Path) -> Iterator[tuple[int, str]]:
                 yield number, line
 
 
+def _fill_found_count(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Give a pre-#22 event the field the table requires.
+
+    Before the split, ``n_passages`` counted the passages retrieval found; the
+    column that now holds that number did not exist. Copying it over is not a
+    guess — it is the same measurement under its later name. An event with
+    neither count is left as it is: Postgres rejecting it is better than a
+    number invented here.
+    """
+    if event.get("n_passages_found") is None and event.get("n_passages") is not None:
+        event["n_passages_found"] = event["n_passages"]
+    return event
+
+
 def ingest(journal: str | Path, writer: Writer) -> Report:
     """Offer every readable event to the writer; never stop on one bad row."""
     path = Path(journal)
@@ -74,7 +88,7 @@ def ingest(journal: str | Path, writer: Writer) -> Report:
             continue
 
         try:
-            writer.write(event)
+            writer.write(_fill_found_count(event))
         except Exception as exc:  # noqa: BLE001 — one bad row is not the run
             print(f"line {number}: insert failed ({exc})", file=sys.stderr)
             report.failed += 1
