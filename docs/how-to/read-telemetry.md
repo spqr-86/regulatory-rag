@@ -59,6 +59,10 @@ jq -r 'select(.error != null) | [.ts, .error] | @tsv' logs/events.jsonl
 
 ## Что дальше
 
-Postgres и Grafana — issue #15, дашборд — #19, 👍/👎 — #20. Код телеметрии:
-`src/v7/telemetry.py` (событие и писатели), `src/v7/runner.py` (единственная точка вызова
-графа, через которую идут все входы).
+Те же события пишутся в Postgres — `V7_TELEMETRY_WRITER=postgres` (issue #23), тогда
+запросы к ним пишутся на SQL, а не на jq; как включить и как залить накопленный журнал —
+[run-monitoring-stack.md](./run-monitoring-stack.md). Дашборд — #19, 👍/👎 — #20.
+
+Код телеметрии: `src/v7/telemetry.py` (событие и JSONL-писатель), `src/v7/pg_writer.py`
+(писатель в Postgres), `src/v7/runner.py` (единственная точка вызова графа, через которую
+идут все входы).

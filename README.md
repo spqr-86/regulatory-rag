@@ -107,9 +107,11 @@ Defaults to Gemini + Chroma + OpenAI embeddings. See [Backend abstraction](#back
 Optional monitoring stack (Postgres for query events, Grafana on top):
 
 ```bash
-docker compose up -d   # Grafana at http://localhost:3000, schema applied on first start
+docker compose up -d              # Grafana at http://localhost:3000, schema applied on first start
+V7_TELEMETRY_WRITER=postgres      # in .env: write query events to the stack instead of JSONL
 ```
 
+Without the stack, events go to a JSONL journal and nothing has to be running.
 See [docs/how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md).
 
 ---

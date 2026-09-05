@@ -16,20 +16,34 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Optional, Tuple
 
-from src.v7 import telemetry
+import structlog
+
+from src.v7 import pg_writer, telemetry
 from src.v7.config import V7Config, v7_config
+
+logger = structlog.get_logger()
 
 
 def default_writer(config: Optional[V7Config] = None) -> Optional[telemetry.EventWriter]:
-    """The writer the app runs with: a JSONL journal, or nothing when disabled.
+    """The writer the app runs with: Postgres, a JSONL journal, or nothing.
 
     Config is read at call time (not import time) so a test or a deployment can
-    flip the switch without reimporting the module. Postgres arrives in #15 and
-    replaces the return value here, not the call sites.
+    flip the switch without reimporting the module. Which journal is a config
+    value and nothing else — no call site knows the difference (issue #23).
+
+    A Postgres selected without usable credentials falls back to the journal:
+    events are worth losing to a misconfiguration only after the answers are
+    safe, and a JSONL row can still be ingested later.
     """
     cfg = config or V7Config()
     if not cfg.TELEMETRY_ENABLED:
         return None
+    if cfg.TELEMETRY_WRITER == "postgres":
+        try:
+            dsn = cfg.TELEMETRY_PG_DSN.strip() or pg_writer.dsn_from_env()
+            return pg_writer.PostgresWriter(dsn)
+        except ValueError as exc:
+            logger.warning("telemetry.pg_config_unusable", error=str(exc))
     return telemetry.JsonlWriter(cfg.TELEMETRY_JSONL_PATH)
 
 

@@ -10,7 +10,7 @@ import json
 import pytest
 import structlog
 
-from src.v7 import runner
+from src.v7 import pg_writer, runner, telemetry
 
 
 class FakeGraph:
@@ -198,6 +198,38 @@ class TestWiring:
         runner.run_query(FakeGraph(result=simple_state()), "вопрос", source="ui", writer=writer)
 
         assert not journal.exists()
+
+    def test_postgres_writer_is_chosen_by_config(self, monkeypatch):
+        """Switching journals is a config value, not a change at the call sites (#23)."""
+        monkeypatch.setenv("V7_TELEMETRY_ENABLED", "true")
+        monkeypatch.setenv("V7_TELEMETRY_WRITER", "postgres")
+        monkeypatch.setenv("V7_TELEMETRY_PG_DSN", "postgresql://regrag:pw@127.0.0.1:5432/regrag")
+
+        writer = runner.default_writer()
+
+        assert isinstance(writer, pg_writer.PostgresWriter)
+        assert writer.dsn == "postgresql://regrag:pw@127.0.0.1:5432/regrag"
+
+    def test_jsonl_stays_the_default_writer(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("V7_TELEMETRY_ENABLED", "true")
+        monkeypatch.delenv("V7_TELEMETRY_WRITER", raising=False)
+        monkeypatch.setenv("V7_TELEMETRY_JSONL_PATH", str(tmp_path / "events.jsonl"))
+
+        assert isinstance(runner.default_writer(), telemetry.JsonlWriter)
+
+    def test_unusable_postgres_config_falls_back_to_the_journal(self, tmp_path, monkeypatch):
+        """A missing DSN must not cost the whole answer path (#23)."""
+        monkeypatch.setenv("V7_TELEMETRY_ENABLED", "true")
+        monkeypatch.setenv("V7_TELEMETRY_WRITER", "postgres")
+        monkeypatch.delenv("V7_TELEMETRY_PG_DSN", raising=False)
+        for var in ("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"):
+            monkeypatch.delenv(var, raising=False)
+        journal = tmp_path / "events.jsonl"
+        monkeypatch.setenv("V7_TELEMETRY_JSONL_PATH", str(journal))
+
+        writer = runner.default_writer()
+
+        assert isinstance(writer, telemetry.JsonlWriter)
 
 
 class TestRunId:

@@ -49,5 +49,8 @@ structlog>=24.0
 slowapi>=0.1.9
 langfuse>=2.0.0
 
+# Мониторинг: писатель событий в Postgres (issue #23)
+psycopg[binary]>=3.2
+
 # MCP server (mcp_server.py)
 mcp<2  # 2.x переименовал FastMCP в MCPServer; код написан под 1.x
