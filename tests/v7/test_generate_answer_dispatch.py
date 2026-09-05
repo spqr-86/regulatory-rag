@@ -38,7 +38,7 @@ def test_simple_stage_calls_simple_fn():
         "retrieval_attempts": [{"stage": "simple", "retrieval_id": "r1"}],
     }
     out = mod.generate_answer(state)
-    assert out == {"answer": "SIMPLE"}
+    assert out["answer"] == "SIMPLE"
     assert calls == {"simple": 1, "complex": 0}
 
 
@@ -65,7 +65,7 @@ def test_complex_stage_calls_complex_fn():
         ],
     }
     out = mod.generate_answer(state)
-    assert out == {"answer": "COMPLEX"}
+    assert out["answer"] == "COMPLEX"
     assert calls == {"simple": 0, "complex": 1}
 
 
@@ -84,7 +84,7 @@ def test_set_generate_fn_backcompat_applies_to_both():
             "final_passages": [{"text": "p"}],
             "retrieval_attempts": [{"stage": stage, "retrieval_id": "r"}],
         }
-        assert mod.generate_answer(state) == {"answer": "SHARED"}
+        assert mod.generate_answer(state)["answer"] == "SHARED"
 
 
 @pytest.mark.unit
@@ -98,4 +98,4 @@ def test_no_attempts_defaults_to_simple_path():
         "active_query": "q",
         "final_passages": [{"text": "p"}],
     }
-    assert mod.generate_answer(state) == {"answer": "SIMPLE"}
+    assert mod.generate_answer(state)["answer"] == "SIMPLE"

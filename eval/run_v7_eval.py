@@ -40,6 +40,7 @@ from src.infra.llm_factory import (
 
 apply_ipv6_patch_for_googleapis()
 
+from eval.pricing import cost_for_usages, percentile  # noqa: E402
 from eval.advanced_generation_metrics import (
     evaluate_answer_relevance,
     evaluate_faithfulness,
@@ -106,13 +107,66 @@ def run_query(graph, question: str) -> dict[str, Any]:
     # Build context string from retrieved passages
     context = "\n\n".join(p.get("text", "") for p in final_passages if p.get("text"))
 
+    # Token usage carried up from the pipeline (src/v7/usage.py). Priced here:
+    # the pipeline counts tokens, the runner counts dollars.
+    usages = state.get("llm_usage") or []
+    priced = cost_for_usages(usages)
+
     return {
         "answer": answer,
         "context": context,
         "path": path,
         "elapsed_sec": elapsed,
         "retrieval_attempts": len(retrieval_attempts),
+        "llm_calls": len(usages),
+        # Per-call breakdown: the cost figure has to be checkable — which model,
+        # which node, how many tokens — not taken on the summary's word.
+        "usage": usages,
+        "prompt_tokens": sum(u.get("prompt_tokens", 0) for u in usages),
+        "completion_tokens": sum(u.get("completion_tokens", 0) for u in usages),
+        "cost_usd": priced["cost_usd"],
+        "unpriced_models": priced["unpriced_models"],
     }
+
+
+def summarize_cost(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Cost and latency summary for a run, split by retrieval path.
+
+    Split is mandatory: complex costs an order of magnitude more than simple
+    and runs ~24% of queries, so one mean hides what we actually pay for.
+    Latency goes out as p50/p95 — the CrossEncoder adds seconds to a minority
+    of queries and a mean smears that.
+    """
+
+    def _block(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        n = len(rows)
+        costs = [r.get("cost_usd", 0.0) for r in rows]
+        latencies = [r.get("elapsed_sec", 0.0) for r in rows]
+        return {
+            "queries": n,
+            "total_cost_usd": sum(costs),
+            "mean_cost_usd": (sum(costs) / n) if n else 0.0,
+            "prompt_tokens": sum(r.get("prompt_tokens", 0) for r in rows),
+            "completion_tokens": sum(r.get("completion_tokens", 0) for r in rows),
+            "latency_p50_sec": percentile(latencies, 50),
+            "latency_p95_sec": percentile(latencies, 95),
+        }
+
+    summary = _block(results)
+
+    by_path: dict[str, Any] = {}
+    for path in sorted({r.get("path", "unknown") for r in results}):
+        by_path[path] = _block([r for r in results if r.get("path") == path])
+    summary["by_path"] = by_path
+
+    unpriced: list[str] = []
+    for r in results:
+        for model in r.get("unpriced_models", []) or []:
+            if model not in unpriced:
+                unpriced.append(model)
+    summary["unpriced_models"] = unpriced
+
+    return summary
 
 
 # ── Correctness judge ─────────────────────────────────────────────────────────
@@ -245,9 +299,18 @@ def run(
                 "path": path,
                 "elapsed_sec": run_result["elapsed_sec"],
                 "retrieval_attempts": run_result["retrieval_attempts"],
+                "llm_calls": run_result["llm_calls"],
+                "usage": run_result["usage"],
+                "prompt_tokens": run_result["prompt_tokens"],
+                "completion_tokens": run_result["completion_tokens"],
+                "cost_usd": run_result["cost_usd"],
+                "unpriced_models": run_result["unpriced_models"],
             }
             results.append(record)
-            print(f"  path={path} | elapsed={run_result['elapsed_sec']:.1f}s")
+            print(
+                f"  path={path} | elapsed={run_result['elapsed_sec']:.1f}s | "
+                f"${run_result['cost_usd']:.5f}"
+            )
             continue
 
         # Evaluate with LLM judge
@@ -276,6 +339,12 @@ def run(
             "path": path,
             "elapsed_sec": run_result["elapsed_sec"],
             "retrieval_attempts": run_result["retrieval_attempts"],
+            "llm_calls": run_result["llm_calls"],
+            "usage": run_result["usage"],
+            "prompt_tokens": run_result["prompt_tokens"],
+            "completion_tokens": run_result["completion_tokens"],
+            "cost_usd": run_result["cost_usd"],
+            "unpriced_models": run_result["unpriced_models"],
             "oos_type": oos_type,
             **faithfulness,
             **relevance,
@@ -306,11 +375,14 @@ def run(
         if not r.get("answer") or r.get("answer", "").startswith("Не могу")
     )
 
+    cost_summary = summarize_cost(valid)
+
     aggregate: dict[str, Any] = {
         "complex_path_rate": round(complex_rate, 3),
         "mean_elapsed_sec": round(avg_elapsed, 2),
         "answered": n,
         "abstained": abstain_count,
+        "cost": cost_summary,
     }
 
     if not skip_judge:
@@ -397,7 +469,26 @@ def run(
     else:
         print("  [skip-judge mode] Quality metrics not computed.")
     print(f"  Complex path rate:     {complex_rate:.1%}")
-    print(f"  Mean latency:          {avg_elapsed:.1f}s")
+    print(
+        f"  Latency p50 / p95:     {cost_summary['latency_p50_sec']:.1f}s / "
+        f"{cost_summary['latency_p95_sec']:.1f}s  (mean {avg_elapsed:.1f}s)"
+    )
+    print(
+        f"  Cost per query:        ${cost_summary['mean_cost_usd']:.5f}  "
+        f"(run total ${cost_summary['total_cost_usd']:.4f})"
+    )
+    for path_name, block in cost_summary["by_path"].items():
+        print(
+            f"    {path_name:<8} n={block['queries']:<4} "
+            f"${block['mean_cost_usd']:.5f}/query | "
+            f"p50 {block['latency_p50_sec']:.1f}s / p95 {block['latency_p95_sec']:.1f}s"
+        )
+    if cost_summary["unpriced_models"]:
+        print(
+            "  WARNING: no rate card for "
+            + ", ".join(cost_summary["unpriced_models"])
+            + " — their tokens are priced at $0. Add them to eval/pricing.py."
+        )
     print(f"\nSaved → {output}")
 
 

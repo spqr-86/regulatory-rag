@@ -17,6 +17,12 @@ All notable changes are documented here. Format: [Keep a Changelog](https://keep
   `COST_ABORT_USD` guard could be off by the ratio between two models' prices.
 
 ### Added
+- Per-query cost and latency accounting (roadmap step 4a): token usage from the provider
+  now reaches graph state (`src/v7/usage.py`, key `llm_usage`) instead of only the log,
+  and `eval/run_v7_eval.py` prices every run from the tokens actually spent — split by
+  retrieval path, with p50/p95 latency instead of a mean. The rate card moved to the
+  shared `eval/pricing.py`; a model with no rate is priced at $0 **and named** in
+  `unpriced_models`, so a run cannot quietly report a cheap pipeline.
 - Per-model price table with `price_for()` (unknown model raises instead of silently
   pricing at another model's rate); `model` threaded through `calc_total_price`,
   `estimate_cost` and `run`; `--model` CLI flag.

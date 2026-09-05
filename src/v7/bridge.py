@@ -28,6 +28,7 @@ from src.infra.prompt_manager import PromptManager
 from src.v7.cross_ref import expand_cross_references
 from src.v7.hard_gates import sanitize_for_llm
 from src.v7.nlp_core import init_bm25_index
+from src.v7.usage import LLMUsage, usage_from_response
 from src.v7.nodes import generate_answer as generate_answer_mod
 from src.v7.nodes import rag_complex as rag_complex_mod
 from src.v7.nodes import rag_simple as rag_simple_mod
@@ -294,46 +295,72 @@ def make_section_fetch_fn(
     return _fetch_section
 
 
-def make_expand_fn(llm, n: int = 3) -> Callable[[str, int], List[str]]:
+def model_name_of(llm) -> str:
+    """Model id of a chat model, whatever the provider calls the attribute.
+
+    OpenAI/DeepSeek expose ``model_name``, Gemini exposes ``model``. Unknown is
+    a label, not an exception: usage accounting must never break a query.
+    """
+    for attr in ("model_name", "model"):
+        value = getattr(llm, attr, None)
+        if isinstance(value, str) and value:
+            return value
+    return "unknown"
+
+
+def _zero_usage(model: str, node: str) -> LLMUsage:
+    """Usage record for a call that never reached the provider (or failed)."""
+    return {
+        "model": model,
+        "node": node,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+    }
+
+
+def make_expand_fn(llm, n: int = 3) -> Callable[..., tuple]:
     """Create an LLM-backed query expansion function for V8 multi-query expand.
 
-    Signature: fn(query: str, n: int) -> list[str] — list of alternative queries.
-    On failure returns empty list (caller falls back to single-query mode).
+    Signature: fn(query: str, n: int) -> (list[str], LLMUsage) — alternatives
+    plus the token usage of the call (roadmap 4a). On failure returns an empty
+    list with zero usage (caller falls back to single-query mode).
     """
 
-    def _expand(query: str, n: int = n) -> List[str]:
+    model = model_name_of(llm)
+
+    def _expand(query: str, n: int = n) -> tuple:
         prompt = _pm.render("query_expand", query=query, n=n)
         try:
             response = llm.invoke([HumanMessage(content=prompt)])
             raw = extract_text(response.content).strip()
             alternatives = [line.strip() for line in raw.splitlines() if line.strip()]
-            return alternatives[:n]
+            return alternatives[:n], usage_from_response(response, model, "expand")
         except Exception as exc:
             logger.warning("LLM expand failed: %s", exc)
-            return []
+            return [], _zero_usage(model, "expand")
 
     return _expand
 
 
-def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]:
+def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
     """Create an LLM-backed answer generation function for v7 generate_answer node.
 
-    Signature: fn(query, active_query, passages) -> answer_text.
+    Signature: fn(query, active_query, passages) -> (answer_text, LLMUsage) —
+    the answer plus the token usage of the call (roadmap 4a).
     Relies on ChatGoogleGenerativeAI's built-in retry (max_retries=3 in
     ``get_gemini_llm``) for transient 5xx / 429 errors. On final failure
     falls back to a stub (concatenated top passages).
     If backend is provided, cross-reference expansion is applied before generation.
     """
 
-    def _call_llm(prompt: str) -> tuple[str, int | None]:
+    model = model_name_of(llm)
+
+    def _call_llm(prompt: str) -> tuple[str, LLMUsage]:
         response = llm.invoke([HumanMessage(content=prompt)])
         answer = extract_text(response.content).strip()
         if not answer:
             raise ValueError("Empty generation response")
-        # Extract completion tokens from provider metadata (LangChain standard).
-        meta = getattr(response, "usage_metadata", None) or {}
-        completion_tokens = meta.get("output_tokens") or meta.get("completion_tokens")
-        return answer, completion_tokens
+        return answer, usage_from_response(response, model, "generate")
 
     def _score_label(score: float) -> str:
         if score >= 0.6:
@@ -371,9 +398,9 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
             return f"[{i + 1}] ({score}) [Источник: {src}; Раздел: {section}]"
         return f"[{i + 1}] ({score}) [Источник: {src}]"
 
-    def _generate(query: str, active_query: str, passages: List[dict]) -> str:
+    def _generate(query: str, active_query: str, passages: List[dict]) -> tuple:
         if not passages:
-            return ""
+            return "", _zero_usage(model, "generate")
         t0 = time.perf_counter()
         expanded = (
             expand_cross_references(passages, backend, query=query)
@@ -405,19 +432,20 @@ def make_generate_fn(llm, backend=None) -> Callable[[str, str, List[dict]], str]
         )
         t1 = time.perf_counter()
         try:
-            result, completion_tokens = _call_llm(prompt)
+            result, usage = _call_llm(prompt)
             logger.info(
                 "generate.timing.llm",
                 llm_s=round(time.perf_counter() - t1, 3),
-                completion_tokens=completion_tokens,
+                completion_tokens=usage["completion_tokens"],
                 answer_chars=len(result),
             )
-            return result
+            return result, usage
         except Exception as exc:
             logger.warning(
                 "LLM generate failed after retries: %s, falling back to stub", exc
             )
-            return "\n\n".join(p.get("text", "") for p in passages[:10])
+            fallback = "\n\n".join(p.get("text", "") for p in passages[:10])
+            return fallback, _zero_usage(model, "generate")
 
     return _generate
 
