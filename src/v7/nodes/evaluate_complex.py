@@ -6,6 +6,7 @@ from typing import cast
 
 import structlog
 
+from src.v7.config import v7_config
 from src.v7.hard_gates import check_hard_gates, make_sufficiency
 from src.v7.nlp_core import merge_all_passages
 from src.v7.state_types import NextAfterEvalComplex, RAGState, RetrievalPlan
@@ -33,7 +34,11 @@ def evaluate_complex(state: RAGState) -> RAGState:
     )
 
     # 1. Merge passages from all attempts
-    merged = merge_all_passages(attempts, top_k=24, mmr_lambda=plan.get("mmr_lambda"))
+    merged = merge_all_passages(
+        attempts,
+        top_k=v7_config.FINAL_MERGE_TOP_K,
+        mmr_lambda=plan.get("mmr_lambda"),
+    )
     logger.info("evaluate_complex.merged", merged=len(merged))
     if merged:
         hard_m = check_hard_gates(original_q, active_q, merged, plan)

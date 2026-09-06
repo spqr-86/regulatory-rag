@@ -281,3 +281,37 @@ class TestEnumerationEscalationNoAbstain:
         # With C3 fix: simple plan used → min_passages=5 → 5 passages is enough.
         assert result["sufficient"] is True
         assert result["final_passages"] == fallback_passages
+
+
+class TestFinalMergeTopK:
+    """Потолок итоговой выдачи — конфиг, а не число в коде (issue #10)."""
+
+    @pytest.mark.unit
+    def test_default_keeps_current_behaviour(self):
+        from src.v7.config import v7_config
+
+        assert v7_config.FINAL_MERGE_TOP_K == 24
+
+    @pytest.mark.unit
+    def test_merge_uses_configured_top_k(self, monkeypatch):
+        from src.v7 import config as config_module
+        from src.v7.nodes import evaluate_complex as node_module
+
+        captured: dict = {}
+
+        def fake_merge(attempts, top_k, mmr_lambda=None):
+            captured["top_k"] = top_k
+            return []
+
+        monkeypatch.setattr(node_module, "merge_all_passages", fake_merge)
+        monkeypatch.setattr(config_module.v7_config, "FINAL_MERGE_TOP_K", 7)
+
+        evaluate_complex(
+            {
+                "query": "ограждение лестница",
+                "active_query": "ограждение лестница",
+                "retrieval_attempts": [{"passages": [], "attempt_plan": PLAN}],
+            }
+        )
+
+        assert captured["top_k"] == 7

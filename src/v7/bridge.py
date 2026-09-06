@@ -409,7 +409,8 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
             else passages
         )
         t_crossref = time.perf_counter() - t0
-        # final_passages is already capped at 24 upstream (merge_all_passages);
+        # final_passages is already capped upstream by V7_FINAL_MERGE_TOP_K
+        # (merge_all_passages, 24 by default);
         # cross-reference expansion appends extra passages — allow up to 30 so
         # low-ranked but answer-bearing cross-refs (e.g. п.60 для программа В) are included.
         top_passages = expanded[:30]
