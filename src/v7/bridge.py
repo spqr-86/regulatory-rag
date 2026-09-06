@@ -29,6 +29,7 @@ from src.v7.cross_ref import expand_cross_references
 from src.v7.hard_gates import sanitize_for_llm
 from src.v7.nlp_core import init_bm25_index
 from src.v7.usage import LLMUsage, usage_from_response
+from src.v7.nodes import evaluate_triage as evaluate_triage_mod
 from src.v7.nodes import generate_answer as generate_answer_mod
 from src.v7.nodes import rag_complex as rag_complex_mod
 from src.v7.nodes import rag_simple as rag_simple_mod
@@ -494,6 +495,21 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
             logger.info("v7 section-aware expander injected successfully")
         except Exception as exc:
             logger.warning("Failed to initialize section fetch for v7: %s.", exc)
+
+        # Inject the cross-reference expander used by the triage gap (issue #13).
+        # The node stays backend-agnostic: it receives a closure, not the store.
+        if isinstance(vector_store, VectorStoreBackend):
+            evaluate_triage_mod.set_crossref_expander(
+                lambda passages, query: expand_cross_references(
+                    passages, vector_store, query=query
+                )
+            )
+            logger.info("v7 triage crossref expander injected successfully")
+        else:
+            evaluate_triage_mod.set_crossref_expander(None)
+            logger.info(
+                "v7 triage crossref expander skipped: raw store has no filter API"
+            )
 
         # Inject reranker (FlashRank or CrossEncoder+sigmoid)
         try:
