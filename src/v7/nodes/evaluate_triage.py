@@ -110,7 +110,9 @@ def _ref_present(kind: str, num: str, content: str) -> bool:
             and re.search(rf"(?i)стать\w+\s+{v}\b", content)
         )
     if kind == "subpara":
-        return bool(re.search(rf"(?mi)^\s*{v}\)", content))
+        # The chunker flattens ordered lists and prepends a running item number,
+        # so "46. а)" is stored as "6. а)". Tolerate an optional leading number.
+        return bool(re.search(rf"(?mi)^\s*(?:\d+\.\s+)?{v}\)", content))
     return False
 
 

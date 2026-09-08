@@ -129,6 +129,26 @@ class TestBuildGap:
         assert gap["open"] == []
 
     @pytest.mark.unit
+    def test_subpara_closed_despite_mangled_list_number(self):
+        """The chunker flattens ordered lists and renumbers items, so the
+        subparagraphs of clause 46 in 2464.pdf are stored as '6. а) ...',
+        '7. б) ...' rather than '46. а) ...'. The subparagraph text is still
+        present and must close the ref, not stay open as a phantom gap.
+        """
+        passages = [
+            _p('обучение по программе из подпункта "а" и подпункта "б" пункта 46'),
+            _p(
+                "46. Обучение требованиям охраны труда проводится:\n"
+                "6. а) по программе обучения по общим вопросам охраны труда;\n"
+                "7. б) по программе обучения безопасным методам и приемам работ;",
+                score=0.4,
+            ),
+        ]
+        gap = build_gap(passages)
+        assert set(gap["closed"]) == {"clause:46", "subpara:а", "subpara:б"}
+        assert gap["open"] == []
+
+    @pytest.mark.unit
     def test_no_refs_gives_empty_gap(self):
         gap = build_gap([_p("высота ограждения не менее одного метра")])
         assert gap["refs"] == []
