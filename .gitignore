@@ -249,3 +249,8 @@ eval/data/retrieval_gt.jsonl
 
 # Журнал событий мониторинга (модуль 05)
 logs/
+
+# Промежуточное сырьё расширенного held-out (пулы и задания арбитру воспроизводятся
+# из dataset_heldout_ext + verdicts_ext; эталон — golden_retrieval_labeled_ext.jsonl)
+eval/data/pools_ext/
+eval/data/arbitration_ext/
