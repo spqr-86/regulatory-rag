@@ -66,13 +66,14 @@ the legacy hard-gate path stays available behind a flag. See
 | Complex-path rate | 20.8% |
 | Latency p50 / p95 / mean | 5.2 / 19.1 / 7.2 s |
 | Cost / query | $0.0045 ($0.24 / run) |
-| Retrieval HR@5 / HR@12 / MRR (hybrid, held-out 133) | 0.69 / 0.83 / 0.54 |
+| Retrieval HR@5 / HR@12 / MRR (hybrid, 90 practitioner questions) | 0.63 / 0.81 / 0.50 |
 
 Eval: 56-question golden dataset (`tests/dataset.csv`), `eval/run_v7_eval.py`, LLM judge
 `gpt-4o`. Numbers are judge-dependent — compare runs only under the same judge. Retrieval
-Hit Rate / MRR are measured separately on a 133-question held-out set
-(`eval/run_retrieval_eval.py`); see [docs/roadmap.md](./docs/roadmap.md). Canonical
-values: [docs/reference/FACTS.md](./docs/reference/FACTS.md).
+Hit Rate / MRR are measured separately on a 90-question test set of real questions taken
+verbatim from OT/PB practitioner forums, kept only where a corpus answer exists and not
+used for any tuning (`eval/run_retrieval_eval.py`); see [docs/roadmap.md](./docs/roadmap.md).
+Canonical values: [docs/reference/FACTS.md](./docs/reference/FACTS.md).
 
 ---
 
@@ -261,7 +262,7 @@ No code changes needed — edit the YAML and restart.
 - ✅ Cross-reference expansion — auto-fetches referenced clauses (e.g. "пункт 46") from the same source
 - ✅ Multi-query expansion — LLM generates query variants, RRF merge
 - ✅ Versioned prompts — Jinja2 templates, registry trimmed to 3 live families; `generate_answer` v8 (anti-sycophancy + value↔condition binding)
-- ✅ Offline eval — golden dataset + 133-question held-out retrieval set, per-query cost and latency
+- ✅ Offline eval — golden dataset + 90-question practitioner retrieval test set, per-query cost and latency
 - ✅ Online monitoring — every query is a row in Postgres (cost, latency, route, tokens, `source`), Grafana dashboard, 👍/👎 under the answer; the whole stack is one `docker compose up`
 - ✅ Deployed on a VPS (port 8502, Streamlit)
 - 🔄 Value↔condition robustness on multi-value queries (e.g. program-type periodicity)

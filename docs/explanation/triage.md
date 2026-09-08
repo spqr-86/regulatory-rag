@@ -66,7 +66,7 @@ deciding to escalate:
 
 The `_merge_new_at_tail` "append, never reorder" rule exists because an earlier version
 let the expanded list reorder the output and pushed a gold chunk past the top-12
-(measured regression, held-out 133). The B2 gap logic currently lives only in
+(measured regression on the 133-question synthetic set). The B2 gap logic currently lives only in
 `_legacy_triage`; porting it into `_evidence_assess` is not yet ticketed.
 
 ---

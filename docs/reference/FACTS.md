@@ -107,17 +107,26 @@ judge note below. Pipeline: OpenAI `gpt-4o-mini` (simple) / `gpt-4o` (complex),
 > sit slightly below the historical mini-judge numbers while being better calibrated.
 > Judge run-to-run variance is ~±0.25 on the correctness scale (design-decisions §8).
 
-### Retrieval (held-out 133, `eval/run_retrieval_eval.py`, 2026-09-08)
+### Retrieval (final test: 90 practitioner questions, `eval/run_retrieval_eval.py`, 2026-09-08)
 
 | path | HR@5 | HR@12 | MRR | p50 latency |
 |---|---|---|---|---|
-| hybrid (production) | 0.692 | 0.827 | 0.542 | 502 ms |
-| vector-only | — | 0.842 | 0.539 | 141 ms |
-| bm25-only | — | 0.677 | 0.387 | 19 ms |
+| hybrid (production) | 0.633 | 0.811 | 0.503 | 550 ms |
+| vector-only | 0.589 | 0.822 | 0.486 | 148 ms |
+| bm25-only | 0.500 | 0.667 | 0.352 | 24 ms |
 
-Held-out set is a **development set, not an untouched final test** — labels were pooled
-from the systems under evaluation, so absolute Hit Rate is biased upward. See
-`docs/roadmap.md` (step 4) for the derivation.
+Test set (`eval/data/golden_retrieval_labeled_ext.jsonl`, built 2026-09-06): 90 questions
+taken verbatim from OT/PB practitioner forums (`docs/research/prompt-heldout-questions.md`),
+kept only where a corpus answer was confirmed in a 3-pass model review + manual check;
+the ~40 questions with no corpus answer were dropped. Built **after** the retrieval config
+was frozen — not used for any tuning. Relevance labels are model-assisted then hand-checked;
+candidate pooling and the full derivation are in `docs/roadmap.md` (step 4).
+~19% of questions are not retrieved at all in top-12 (weakest: 29н medical exams, HR@5 0.56).
+
+The combined set `golden_retrieval_labeled.jsonl` (133 = these 90 + 43 earlier
+chunk-derived questions used during tuning) scores higher because the 43 synthetic ones
+are easier: hybrid 0.692 / 0.827 / 0.542. The 90-question practitioner subset above is the
+honest headline number.
 
 ### Стоимость и латентность запроса (roadmap 4a)
 

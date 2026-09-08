@@ -66,13 +66,15 @@ evaluate_triage      — детерминированный гейт доста�
 | Доля complex-пути | 20.8% |
 | Латентность p50 / p95 / mean | 5.2 / 19.1 / 7.2 с |
 | Стоимость запроса | $0.0045 ($0.24 / прогон) |
-| Retrieval HR@5 / HR@12 / MRR (hybrid, held-out 133) | 0.69 / 0.83 / 0.54 |
+| Retrieval HR@5 / HR@12 / MRR (hybrid, 90 вопросов практиков) | 0.63 / 0.81 / 0.50 |
 
 Eval: 56-вопросный golden dataset (`tests/dataset.csv`), `eval/run_v7_eval.py`, LLM-судья
 `gpt-4o`. Числа зависят от судьи — сравнивать прогоны только под одним судьёй. Retrieval
-Hit Rate / MRR меряются отдельно на 133-вопросном held-out
-(`eval/run_retrieval_eval.py`), см. [docs/roadmap.md](./docs/roadmap.md).
-Канонические значения: [docs/reference/FACTS.md](./docs/reference/FACTS.md).
+Hit Rate / MRR меряются отдельно на наборе из 90 реальных вопросов, взятых дословно
+с форумов специалистов по ОТ/ПБ, оставлены только те, на которые в корпусе есть ответ;
+для тюнинга набор не использовался (`eval/run_retrieval_eval.py`), см.
+[docs/roadmap.md](./docs/roadmap.md). Канонические значения:
+[docs/reference/FACTS.md](./docs/reference/FACTS.md).
 
 ---
 
@@ -247,7 +249,7 @@ terms:
 - ✅ Раскрытие перекрёстных ссылок — автоматически подтягивает упомянутые пункты (напр., «пункт 46») из того же источника
 - ✅ Multi-query расширение — LLM генерирует варианты запроса, слияние через RRF
 - ✅ Версионированные промпты — Jinja2-шаблоны, реестр сокращён до 3 активных семейств; `generate_answer` v8 (anti-sycophancy + value↔condition)
-- ✅ Offline eval — golden dataset + 133-вопросный held-out для retrieval, цена и латентность на запрос
+- ✅ Offline eval — golden dataset + тест-набор для retrieval из 90 вопросов практиков, цена и латентность на запрос
 - ✅ Онлайн-мониторинг — каждый запрос строкой в Postgres (цена, латентность, маршрут, токены, `source`), дашборд Grafana, 👍/👎 под ответом; весь стек — один `docker compose up`
 - ✅ Задеплоен на VPS (порт 8502, Streamlit)
 - 🔄 Устойчивость value↔condition на запросах с несколькими значениями
