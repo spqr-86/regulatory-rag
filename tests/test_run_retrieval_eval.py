@@ -16,6 +16,7 @@ import pytest
 
 from eval.run_retrieval_eval import (
     DEFAULT_KS,
+    _latency_summary,
     evaluate,
     extract_chunk_ids,
     format_report,
@@ -209,6 +210,50 @@ class TestEvaluate:
         assert DEFAULT_KS == (5, 10, 12)
 
 
+class TestLatencySummary:
+    def test_empty_returns_zero_n(self):
+        assert _latency_summary([])["n"] == 0
+
+    def test_percentiles_nearest_rank(self):
+        s = _latency_summary([float(x) for x in range(1, 101)])  # 1..100 ms
+        assert s["n"] == 100
+        assert s["p50_ms"] == 50.0
+        assert s["p95_ms"] == 95.0
+        assert s["p99_ms"] == 99.0
+        assert s["max_ms"] == 100.0
+        assert s["mean_ms"] == 50.5
+
+    def test_single_value(self):
+        s = _latency_summary([12.0])
+        assert s["p50_ms"] == s["p95_ms"] == s["max_ms"] == 12.0
+
+
+class TestEvaluateLatency:
+    _GT = [{"question": "q1", "chunk_id": "a#1", "source": "a.pdf"}]
+
+    def test_result_carries_latency_summary(self):
+        res = evaluate(self._GT, lambda q: ["a#1"], ks=(5,))
+        assert set(res["latency"]) >= {"n", "p50_ms", "p95_ms", "mean_ms", "max_ms"}
+        assert res["latency"]["n"] == 1
+
+    def test_per_question_record_has_latency_ms(self):
+        res = evaluate(self._GT, lambda q: ["a#1"], ks=(5,))
+        assert isinstance(res["records"][0]["latency_ms"], float)
+        assert res["records"][0]["latency_ms"] >= 0.0
+
+    def test_failed_query_still_timed(self):
+        def fn(q):
+            raise RuntimeError("boom")
+
+        res = evaluate(self._GT, fn, ks=(5,))
+        assert res["latency"]["n"] == 1
+        assert "latency_ms" in res["records"][0]
+
+    def test_empty_gt_latency_zero_n(self):
+        res = evaluate([], lambda q: [], ks=(5,))
+        assert res["latency"]["n"] == 0
+
+
 class TestFormatReport:
     def test_contains_metrics_and_counts(self):
         res = evaluate(
@@ -222,6 +267,17 @@ class TestFormatReport:
         assert "hit_rate@5" in text
         assert "mrr" in text
         assert "a.pdf" in text
+
+    def test_shows_latency_percentiles(self):
+        res = evaluate(
+            [{"question": "q1", "chunk_id": "a#1", "source": "a.pdf"}],
+            lambda q: ["a#1"],
+            ks=(5,),
+        )
+        res["path"] = "simple"
+        text = format_report(res)
+        assert "p50" in text
+        assert "p95" in text
 
 
 class TestRetrievalFnParity:

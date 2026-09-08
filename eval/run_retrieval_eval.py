@@ -4,7 +4,8 @@ Thin layer over eval/retrieval_metrics.evaluate_retrieval_batch: builds a
 retrieval function on the engine of the requested path (simple = hybrid
 vector+BM25 → RRF; complex = wide fetch + section expand + rerank;
 vector = dense only; bm25 = lexical only), runs it over the reviewed ground
-truth and prints Hit Rate@{5,10,12} and MRR.
+truth and prints Hit Rate@{5,10,12}, MRR and per-query retrieval latency
+(p50/p95/p99, mean, max).
 
 For the vector/bm25 backbones the router still builds the plan (top_k,
 glossary expansion) exactly as in prod, then the single retriever is called
@@ -25,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 import time
 from datetime import date
@@ -248,6 +250,30 @@ def _first_rank(retrieved: Sequence[str], relevant: Sequence[str] | str) -> int 
     return None
 
 
+def _latency_summary(latencies_ms: Sequence[float]) -> dict:
+    """Aggregate per-query latencies into mean and nearest-rank percentiles.
+
+    Retrieval latency is a portfolio-facing prod metric; the summary run only
+    times search, no generation. Nearest-rank keeps small-N percentiles honest.
+    """
+    s = sorted(latencies_ms)
+    if not s:
+        return {"n": 0}
+
+    def pct(p: float) -> float:
+        rank = max(1, math.ceil(p / 100 * len(s)))
+        return s[rank - 1]
+
+    return {
+        "n": len(s),
+        "mean_ms": round(sum(s) / len(s), 1),
+        "p50_ms": round(pct(50), 1),
+        "p95_ms": round(pct(95), 1),
+        "p99_ms": round(pct(99), 1),
+        "max_ms": round(s[-1], 1),
+    }
+
+
 def evaluate(
     gt_records: Sequence[dict],
     retrieval_fn: Callable[[str], List[str]],
@@ -260,13 +286,17 @@ def evaluate(
     errors = 0
     t0 = time.perf_counter()
 
+    latencies_ms: List[float] = []
     for rec in gt_records:
+        q0 = time.perf_counter()
         try:
             retrieved = retrieval_fn(rec["question"])
         except Exception as exc:  # a dead query must not kill the run
             retrieved = []
             errors += 1
             print(f"  ! retrieval failed: {rec['question'][:60]}… — {exc}")
+        latency_ms = (time.perf_counter() - q0) * 1000
+        latencies_ms.append(latency_ms)
         relevant = rec.get("relevant_chunk_ids") or [rec["chunk_id"]]
         rank = _first_rank(retrieved, relevant)
         retrieved_list.append(retrieved)
@@ -279,6 +309,7 @@ def evaluate(
                 "retrieved": retrieved,
                 "rank": rank,
                 "hit": rank is not None,
+                "latency_ms": round(latency_ms, 1),
             }
         )
 
@@ -313,6 +344,7 @@ def evaluate(
         "ks": list(ks),
         "metrics": metrics,
         "per_source": per_source,
+        "latency": _latency_summary(latencies_ms),
         "records": records,
         "errors": errors,
         "elapsed_s": round(time.perf_counter() - t0, 1),
@@ -327,6 +359,13 @@ def format_report(result: dict) -> str:
     ]
     for name, value in result["metrics"].items():
         lines.append(f"  {name:<14} {value:.3f}")
+    lat = result.get("latency") or {}
+    if lat.get("n"):
+        lines.append("")
+        lines.append(
+            f"  латентность, мс: p50 {lat['p50_ms']}  p95 {lat['p95_ms']}  "
+            f"p99 {lat['p99_ms']}  max {lat['max_ms']}  (mean {lat['mean_ms']})"
+        )
     lines.append("")
     lines.append("  по документам:")
     ks = result["ks"]
