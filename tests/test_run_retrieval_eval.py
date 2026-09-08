@@ -366,3 +366,77 @@ class TestMultipleGoldChunks:
         result = evaluate(gt, lambda q: ["z.pdf#9", "b.pdf#5"], ks=(5,))
         assert result["metrics"]["hit_rate@5"] == 1.0
         assert result["records"][0]["rank"] == 2
+
+
+class TestBackboneShortcut:
+    """#12: vector-only and bm25-only backbones next to simple/complex.
+
+    The router builds the plan (top_k, glossary) exactly as in prod, then the
+    single retriever is called directly — no RRF, no rerank, no LLM.
+    """
+
+    QUERY = "Требования к ограждениям лестничных клеток в здании"
+
+    @pytest.fixture
+    def split_engine(self):
+        from src.v7 import nlp_core
+        from src.v7.nodes import rag_simple as rag_simple_mod
+
+        bm25_corpus = [
+            {
+                "text": (
+                    "Лексический фрагмент про ограждения лестничных клеток "
+                    f"в здании, пункт {i}."
+                ),
+                "metadata": {"chunk_id": i, "source": "lex.pdf"},
+            }
+            for i in range(20)
+        ]
+
+        def fake_vector_search(query, filters=None, top_k=12, **kwargs):
+            return [
+                {
+                    "text": f"Плотный фрагмент про ограждения {i}.",
+                    "chunk_id": i,
+                    "metadata": {"chunk_id": i, "source": "vec.pdf"},
+                    "score": round(0.9 - i * 0.01, 4),
+                }
+                for i in range(top_k)
+            ]
+
+        prev_bm25 = nlp_core._bm25_index
+        nlp_core.init_bm25_index(bm25_corpus)
+        rag_simple_mod.set_vector_search(fake_vector_search)
+        yield
+        nlp_core._bm25_index = prev_bm25
+        rag_simple_mod.set_vector_search(rag_simple_mod._default_vector_search)
+
+    def test_vector_backbone_returns_only_dense_results(self, split_engine):
+        ids = make_retrieval_fn("vector")(self.QUERY)
+        assert ids
+        assert all(i.startswith("vec.pdf#") for i in ids)
+
+    def test_bm25_backbone_returns_only_lexical_results(self, split_engine):
+        ids = make_retrieval_fn("bm25")(self.QUERY)
+        assert ids
+        assert all(i.startswith("lex.pdf#") for i in ids)
+
+    def test_vector_backbone_respects_router_top_k(self, split_engine):
+        from src.v7.config import v7_config
+
+        ids = make_retrieval_fn("vector")(self.QUERY)
+        assert 0 < len(ids) <= v7_config.SIMPLE_TOP_K
+
+    def test_backbone_short_query_returns_empty(self, split_engine):
+        assert make_retrieval_fn("vector")("что?") == []
+        assert make_retrieval_fn("bm25")("что?") == []
+
+    def test_backbone_return_passages_matches_id_form(self, split_engine):
+        ids = make_retrieval_fn("vector", return_passages=True)(self.QUERY)
+        bare = make_retrieval_fn("vector")(self.QUERY)
+        assert [p["chunk_id"] for p in ids] == bare
+        assert all(p["text"] for p in ids)
+
+    def test_vector_and_bm25_are_accepted_paths(self):
+        make_retrieval_fn("vector")
+        make_retrieval_fn("bm25")

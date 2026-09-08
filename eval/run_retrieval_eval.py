@@ -2,8 +2,13 @@
 
 Thin layer over eval/retrieval_metrics.evaluate_retrieval_batch: builds a
 retrieval function on the engine of the requested path (simple = hybrid
-vector+BM25 → RRF; complex = wide fetch + section expand + rerank), runs it
-over the reviewed ground truth and prints Hit Rate@{5,10,12} and MRR.
+vector+BM25 → RRF; complex = wide fetch + section expand + rerank;
+vector = dense only; bm25 = lexical only), runs it over the reviewed ground
+truth and prints Hit Rate@{5,10,12} and MRR.
+
+For the vector/bm25 backbones the router still builds the plan (top_k,
+glossary expansion) exactly as in prod, then the single retriever is called
+directly — no RRF, no rerank, no LLM. simple already is the hybrid.
 
 The retrieval nodes are called directly rather than through the graph — no
 router LLM, no triage, no generation, so a full run costs nothing beyond
@@ -33,7 +38,9 @@ from eval.retrieval_metrics import evaluate_retrieval_batch  # noqa: E402
 PROJECT_ROOT = Path(__file__).parent.parent
 DEFAULT_GT = PROJECT_ROOT / "eval" / "data" / "retrieval_gt_reviewed.jsonl"
 DEFAULT_KS: tuple[int, ...] = (5, 10, 12)
-PATHS = ("simple", "complex")
+NODE_PATHS = ("simple", "complex")
+BACKBONE_PATHS = ("vector", "bm25")
+PATHS = NODE_PATHS + BACKBONE_PATHS
 
 
 # ── Ground truth ──────────────────────────────────────────────────────────
@@ -127,6 +134,42 @@ def to_candidates(passages: Iterable[dict]) -> List[dict]:
     return out
 
 
+def _make_backbone_fn(
+    path: str, return_passages: bool
+) -> Callable[[str], List[str]] | Callable[[str], List[dict]]:
+    """query → [chunk_id] on a single retriever (dense or lexical).
+
+    The router builds the plan so top_k and the glossary expansion match
+    production; then vector or BM25 is called on its own — no RRF, no rerank.
+    """
+    from src.v7.hard_gates import validate_filters
+    from src.v7.nlp_core import bm25_search
+    from src.v7.nodes import rag_simple as rag_simple_mod
+    from src.v7.nodes.router import router
+
+    def _retrieve(query: str) -> List[str] | List[dict]:
+        state: dict = {"query": query, "filters": None}
+        state.update(router(state))
+        if state.get("clarify_message"):  # too short for the router to plan
+            return []
+        plan = state["plan"]
+        active_q = state.get("active_query", query)
+        safe_filters = validate_filters(state.get("filters"))
+        if path == "vector":
+            passages = rag_simple_mod._vector_search(
+                query=active_q, filters=safe_filters, top_k=plan["top_k"]
+            )
+        else:
+            passages = bm25_search(
+                query=active_q, filters=safe_filters, top_k=plan["top_k"]
+            )
+        return (
+            to_candidates(passages) if return_passages else extract_chunk_ids(passages)
+        )
+
+    return _retrieve
+
+
 def make_retrieval_fn(
     path: str, return_passages: bool = False
 ) -> Callable[[str], List[str]] | Callable[[str], List[dict]]:
@@ -139,6 +182,9 @@ def make_retrieval_fn(
     """
     if path not in PATHS:
         raise ValueError(f"unknown path {path!r}, expected one of {PATHS}")
+
+    if path in BACKBONE_PATHS:
+        return _make_backbone_fn(path, return_passages)
 
     from src.v7.nodes.rag_complex import rag_complex
     from src.v7.nodes.rag_simple import rag_simple
