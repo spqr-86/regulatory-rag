@@ -90,8 +90,6 @@ class TestBm25GuaranteeIdentity:
                 {
                     "V8_ENABLE_MULTI_QUERY": False,
                     "V8_EXPAND_N": 0,
-                    "V8_ENABLE_EVIDENCE_ASSESS": False,
-                    "V8_SIMPLE_RERANK_TOP_K": 5,
                     "RRF_K": 60,
                 },
             )(),

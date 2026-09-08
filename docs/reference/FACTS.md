@@ -39,14 +39,8 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 
 | name | runtime | env | note |
 |---|---|---|---|
-| V8_ENABLE_EVIDENCE_ASSESS | **true** | `V7_V8_ENABLE_EVIDENCE_ASSESS` | **`.env` override**; config default false. When on, triage runs through `_evidence_assess` (reranker-score + coverage), not the legacy hard-gate. This is the production path. |
 | V8_ENABLE_MULTI_QUERY | **true** | `V7_V8_ENABLE_MULTI_QUERY` | **`.env` override**; config default false |
 | V8_EXPAND_N | 3 | `V7_V8_EXPAND_N` | query reformulations generated when multi-query is on |
-| V8_EVIDENCE_ANSWER_RERANKER_TOP1 | 0.6 | `V7_V8_EVIDENCE_ANSWER_RERANKER_TOP1` | evidence-assess "answer" gate |
-| V8_EVIDENCE_ANSWER_COVERAGE | 0.6 | `V7_V8_EVIDENCE_ANSWER_COVERAGE` | |
-| V8_EVIDENCE_ABSTAIN_RERANKER_TOP1 | 0.2 | `V7_V8_EVIDENCE_ABSTAIN_RERANKER_TOP1` | below → abstain |
-| V8_EVIDENCE_ABSTAIN_COVERAGE | 0.2 | `V7_V8_EVIDENCE_ABSTAIN_COVERAGE` | |
-| V8_SIMPLE_RERANK_TOP_K | 5 | `V7_V8_SIMPLE_RERANK_TOP_K` | |
 
 ## prompts
 - generate_answer: v8
@@ -78,25 +72,31 @@ visual_enrichment → generate_answer → END
 - `clarify_respond` returns a clarification request for short/ambiguous queries.
 - `visual_enrichment` is a no-op on VPS (`visual_proof_fn` not injected).
 - No `llm_verifier` / `rewriter` (removed session 61): `evaluate_triage` routes sufficient→generate, otherwise→`rag_complex`. <!--freshness:ignore-->
-- **`evaluate_triage` has two implementations.** Production (`V7_V8_ENABLE_EVIDENCE_ASSESS=true`) runs `_evidence_assess`: reranker-top1 + coverage scores against the V8 thresholds above, three-way answer / escalate / abstain. `_legacy_triage` is the fallback hard-gate path. Both emit a structured `triage_gap` (`TriageGap`/`GapRef`, issue #13) describing which referenced п./ст. are missing from the top-5; the gap is closed in place by appending cross-referenced passages to the tail (no reorder), and escalation happens only if the gap stays open. The B2 gap logic currently lives in `_legacy_triage` — porting it into the V8 branch is not yet ticketed.
+- **`evaluate_triage` is a single hard-gate path** (`check_full_triage`: `top_score` / `passage_count` / `keyword_overlap`). On a sufficient verdict it emits a structured `triage_gap` (`TriageGap`/`GapRef`, issue #13) describing which referenced п./ст. are missing from the top-5; the gap is closed in place by appending cross-referenced passages to the tail (no reorder), and escalation to `rag_complex` happens only if the gap stays open. The V8 `_evidence_assess` variant and its `V7_V8_ENABLE_EVIDENCE_ASSESS` flag were removed 2026-09-08 (variant B).
 
 ## metrics
-Source: `benchmarks/eval_v7_2026-09-08.jsonl` (dataset 56, valid 53).
+Source: `benchmarks/eval_v7_2026-09-08_variantB.jsonl` (dataset 56, valid 53) — single
+hard-gate triage path (variant B).
 **First full run judged by `gpt-4o`** after the 2026-09-02 `llm_factory` fix — see the
 judge note below. Pipeline: OpenAI `gpt-4o-mini` (simple) / `gpt-4o` (complex),
-`V7_V8_ENABLE_EVIDENCE_ASSESS=true`, CrossEncoder reranker, cap 100.
+CrossEncoder reranker, cap 100.
 
-| metric | value | earlier (mini judge, 2026-05-30) |
+| metric | value | removed evidence-assess path (2026-09-08) |
 |---|---|---|
-| in-scope correctness | 7.56 / 10 | 7.44 |
-| correctness mean | 7.30 / 10 | 7.39 |
-| faithfulness | 0.840 | 0.859 |
-| answer relevance | 0.847 | 0.872 |
+| in-scope correctness | 7.4 / 10 | 7.56 |
+| correctness mean | 7.1 / 10 | 7.30 |
+| faithfulness | 0.808 | 0.840 |
+| answer relevance | 0.881 | 0.847 |
 | OOS rejection rate | 1.00 | 1.00 |
-| false-sufficiency rate | 0.048 | 0.098 |
-| complex-path rate | 0.208 | 0.241 |
-| latency p50 / p95 / mean | 5.2 / 19.1 / 7.2 s | — / — / 9.71 |
-| cost / query | $0.0045 ($0.24 run total) | — |
+| false-sufficiency rate | 0.130 | 0.048 |
+| complex-path rate | 0.132 | 0.208 |
+| latency p50 / p95 / mean | 4.8 / 14.7 / 5.9 s | 5.2 / 19.1 / 7.2 s |
+| cost / query | $0.0033 ($0.17 run total) | $0.0045 |
+
+The hard-gate path escalates less (13.2% vs 20.8% to complex), which trims cost and
+latency but raises false-sufficiency (0.130 vs 0.048) on this 53-question set — small N,
+and 2 of the 6 flagged cases are the OOS/injection probes. Correctness and faithfulness
+move within judge run-to-run variance (~±0.25).
 
 > **Judge note (fix 2026-09-02).** Every run before this date was judged by
 > **`gpt-4o-mini`, not `gpt-4o`** — `llm_factory` carried the resolved settings model into

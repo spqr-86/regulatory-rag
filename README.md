@@ -6,7 +6,7 @@
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Answer quality** (56-question golden set, `gpt-4o` judge): in-scope correctness **7.56 / 10** · faithfulness **0.840** · answer relevance **0.847** · OOS rejection **1.00** · false-sufficiency **4.8%** · complex-path **20.8%** · **~$0.0045/query**, p50 **5.2 s**.
+**Answer quality** (56-question golden set, `gpt-4o` judge): in-scope correctness **7.4 / 10** · faithfulness **0.808** · answer relevance **0.881** · OOS rejection **1.00** · false-sufficiency **13%** · complex-path **13%** · **~$0.0033/query**, p50 **4.8 s**.
 
 > Metrics are judge-dependent — canonical values live in [docs/reference/FACTS.md](./docs/reference/FACTS.md). The reasoning behind the architecture is in [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
 
@@ -45,8 +45,8 @@ Key design decisions:
 - **Abstain > hallucinate** — the system refuses to answer when retrieval confidence is low
 - **Two-stage retrieval** — a fast path handles most queries; the slow path activates only when needed
 
-The deployed triage runs the V8 evidence-assess variant (reranker score + coverage);
-the legacy hard-gate path stays available behind a flag. See
+Triage is a single deterministic path: a three-metric hard gate plus a structured
+sufficiency gap that pulls in cross-referenced clauses before escalating. See
 [docs/explanation/triage.md](./docs/explanation/triage.md).
 
 📖 **Docs:** [architecture](./docs/explanation/architecture.md) · [design decisions](./docs/explanation/design-decisions.md) · [FACTS](./docs/reference/FACTS.md) · [full documentation](./docs/README.md)
@@ -57,15 +57,15 @@ the legacy hard-gate path stays available behind a flag. See
 
 | Metric | Value |
 |---|---|
-| In-scope correctness | 7.56 / 10 |
-| Correctness (all questions) | 7.30 / 10 |
-| Faithfulness | 0.840 |
-| Answer relevance | 0.847 |
+| In-scope correctness | 7.4 / 10 |
+| Correctness (all questions) | 7.1 / 10 |
+| Faithfulness | 0.808 |
+| Answer relevance | 0.881 |
 | OOS rejection rate | 1.00 |
-| False-sufficiency rate | 4.8% |
-| Complex-path rate | 20.8% |
-| Latency p50 / p95 / mean | 5.2 / 19.1 / 7.2 s |
-| Cost / query | $0.0045 ($0.24 / run) |
+| False-sufficiency rate | 13% |
+| Complex-path rate | 13% |
+| Latency p50 / p95 / mean | 4.8 / 14.7 / 5.9 s |
+| Cost / query | $0.0033 ($0.17 / run) |
 | Retrieval HR@5 / HR@12 / MRR (hybrid, 90 practitioner questions) | 0.63 / 0.81 / 0.50 |
 
 Eval: 56-question golden dataset (`tests/dataset.csv`), `eval/run_v7_eval.py`, LLM judge
@@ -140,7 +140,7 @@ flowchart TD
         Gate -->|noise / out-of-scope| End[END / abstain]
         Gate -->|in-domain| Router[router + glossary + multi-query]
         Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
-        Simple --> Triage{evaluate_triage evidence-assess}
+        Simple --> Triage{evaluate_triage hard gate + gap}
         Triage -->|sufficient| Gen[generate_answer]
         Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
         Complex --> Eval[evaluate_complex]
@@ -254,7 +254,7 @@ No code changes needed — edit the YAML and restart.
 
 - ✅ V7 LangGraph pipeline — all nodes, deterministic routing (verifier/rewriter retired — insufficient triage routes straight to rag_complex)
 - ✅ Hybrid retrieval — BM25 + semantic, two-stage (simple/complex path)
-- ✅ Deterministic sufficiency gate — score-based, no LLM decisions in routing; V8 evidence-assess in production
+- ✅ Deterministic sufficiency gate — three-metric hard gate, no LLM decisions in routing
 - ✅ Structured triage gap — triage emits a typed gap and closes it by tail-append before escalating (issue #13)
 - ✅ Domain gate — optional pre-retrieval OOS filter via cosine similarity to corpus centroid
 - ✅ HybridChunker — structure-aware chunking aligned to document sections/articles

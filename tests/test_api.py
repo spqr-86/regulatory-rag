@@ -261,7 +261,6 @@ class TestRetrieveEndpoint:
                 ]
             ),
         )
-        monkeypatch.setattr(rag_simple_mod, "_reranker_fn", None)
 
         client, _ = _make_retrieve_client(vector_store=MagicMock())
         response = client.post(
@@ -299,7 +298,6 @@ class TestRetrieveEndpoint:
                 ]
             ),
         )
-        monkeypatch.setattr(rag_simple_mod, "_reranker_fn", None)
 
         store = MagicMock()
         store.get_by_filter.return_value = [
@@ -342,7 +340,6 @@ class TestRetrieveEndpoint:
         monkeypatch.setattr(
             rag_simple_mod, "_vector_search", lambda query, top_k=12, **kw: []
         )
-        monkeypatch.setattr(rag_simple_mod, "_reranker_fn", None)
 
         nfd_source = unicodedata.normalize(
             "NFD", "ГОСТ 32601-2022 (ISO 13709_2009). Межгосударственный стандар.docx"
@@ -382,7 +379,6 @@ class TestRetrieveEndpoint:
             rag_simple_mod, "_vector_search", lambda query, top_k=12, **kw: []
         )
         monkeypatch.setattr(nlp_core, "_bm25_index", None)
-        monkeypatch.setattr(rag_simple_mod, "_reranker_fn", None)
 
         client, _ = _make_retrieve_client(vector_store=MagicMock())
         response = client.post("/retrieve", json={"question": "нет такого"})

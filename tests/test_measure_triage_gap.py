@@ -11,7 +11,6 @@ import pytest
 
 from eval.measure_triage_gap import (
     compare_runs,
-    format_report,
     passages_after_triage,
     summarize,
 )
@@ -110,26 +109,3 @@ class TestCompareRuns:
         verdict = compare_runs(base, new)
         assert verdict["missing"] == ["q1", "q2"]
         assert verdict["passed"] is False
-
-
-class TestReport:
-    @pytest.mark.unit
-    def test_warns_when_v8_flag_makes_the_measurement_meaningless(self):
-        """With V8 on, _legacy_triage never runs and stage B2 cannot show up."""
-        result = {
-            "n": 1, "errors": 0, "elapsed_s": 1.0, "k": 12,
-            "escalation_rate": 0.0, "hit_rate@12": 1.0,
-            "gaps_seen": 0, "gaps_closed": 0,
-            "v8_evidence_assess": True,
-        }
-        assert "V8" in format_report(result)
-
-    @pytest.mark.unit
-    def test_no_warning_on_the_legacy_path(self):
-        result = {
-            "n": 1, "errors": 0, "elapsed_s": 1.0, "k": 12,
-            "escalation_rate": 0.0, "hit_rate@12": 1.0,
-            "gaps_seen": 0, "gaps_closed": 0,
-            "v8_evidence_assess": False,
-        }
-        assert "V8" not in format_report(result)

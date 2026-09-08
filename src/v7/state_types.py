@@ -35,7 +35,6 @@ class ScoredDoc(Doc):
 
 Intent = Literal["noise", "domain"]
 TriageCategory = Literal["sufficient", "borderline", "clearly_bad"]
-EvidenceVerdict = Literal["answer", "improve", "abstain"]
 
 NextAfterIntent = Literal["end", "router"]
 NextAfterRouter = Literal["rag_simple", "clarify_respond"]
@@ -132,17 +131,6 @@ class SufficiencyResult(TypedDict):
     max_doc_ratio: float
 
 
-class EvidenceReport(TypedDict, total=False):
-    """V8 evidence assessment report from _evidence_assess."""
-
-    verdict: EvidenceVerdict
-    reranker_top1: float
-    reranker_top3_mean: float
-    coverage_estimate: float
-    kw_overlap: float
-    passage_count: int
-
-
 class GapRef(TypedDict):
     """One structured reference named in the retrieved text.
 
@@ -201,7 +189,6 @@ class RAGState(TypedDict, total=False):
     abstain_reason: str
     sufficiency_details: SufficiencyResult
     answer: str  # synthesised LLM answer (set by generate_answer node)
-    evidence_report: EvidenceReport  # V8 evidence assessment; populated only when V8_ENABLE_EVIDENCE_ASSESS=True
     triage_gap: TriageGap  # structured gap from legacy triage (#13); not filled by V8
     # UX
     status_message: str

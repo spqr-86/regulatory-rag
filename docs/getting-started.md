@@ -38,7 +38,6 @@ Optional overrides (defaults are in `config/settings.py` and `src/v7/config.py`)
 # CHROMA_DB_PATH=./chroma_db
 
 # V7/V8 pipeline flags (prefix V7_)
-# V7_V8_ENABLE_EVIDENCE_ASSESS=true
 # V7_V8_ENABLE_MULTI_QUERY=true
 
 # LangSmith tracing (optional)

@@ -22,7 +22,6 @@ def _default_vector_search(**kwargs) -> List[dict]:
 
 
 _vector_search: Callable[..., List[dict]] = _default_vector_search
-_reranker_fn: Optional[Callable] = None
 _expand_fn: Optional[Callable] = None
 
 
@@ -30,12 +29,6 @@ def set_vector_search(fn: Callable[..., List[dict]]) -> None:
     """Inject vector search implementation. Call once at startup."""
     global _vector_search
     _vector_search = fn
-
-
-def set_reranker(fn: Callable) -> None:
-    """Inject reranker for V8 evidence assess light rerank. Signature: fn(query, passages, top_k) -> passages."""
-    global _reranker_fn
-    _reranker_fn = fn
 
 
 def set_expand_fn(fn: Optional[Callable]) -> None:
@@ -116,20 +109,6 @@ def rag_simple(state: RAGState) -> RAGState:
 
     _, metrics = compute_attempt_metrics(original_q, active_q, passages, plan)
     metrics["retrieval_type"] = "hybrid_rrf"
-
-    # V8 Evidence Assess: light rerank to populate reranker scores in metrics
-    if _reranker_fn is not None and v7_config.V8_ENABLE_EVIDENCE_ASSESS and passages:
-        top_k = v7_config.V8_SIMPLE_RERANK_TOP_K
-        try:
-            reranked = _reranker_fn(active_q, passages[:top_k], top_k)
-            if reranked:
-                reranker_scores = [p.get("score", 0.0) for p in reranked]
-                metrics["reranker_top1"] = reranked[0].get("score", 0.0)
-                metrics["reranker_top3_mean"] = sum(reranker_scores[:3]) / max(
-                    len(reranker_scores[:3]), 1
-                )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("reranker failed, skipping V8 rerank scores: %s", exc)
 
     return {
         "retrieval_attempts": [

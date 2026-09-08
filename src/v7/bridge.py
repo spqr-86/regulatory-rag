@@ -530,7 +530,6 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
                 )
                 logger.info("v7 FlashRank reranker injected successfully")
             rag_complex_mod.set_rerank_fn(rerank_fn)
-            rag_simple_mod.set_reranker(rerank_fn)
         except Exception as exc:
             logger.warning(
                 "Failed to initialize reranker for v7: %s. Complex path will skip reranking.",

@@ -21,7 +21,6 @@ def test_init_v7_from_chroma_with_real_backend(tmp_path, monkeypatch):
     # init_v7_pipeline injects into rag_simple AND populates nlp_core._bm25_index —
     # both must be restored to avoid contaminating subsequent unit tests.
     monkeypatch.setattr(rag_simple_mod, "_vector_search", rag_simple_mod._vector_search)
-    monkeypatch.setattr(rag_simple_mod, "_reranker_fn", rag_simple_mod._reranker_fn)
     monkeypatch.setattr(rag_simple_mod, "_expand_fn", rag_simple_mod._expand_fn)
     monkeypatch.setattr(nlp_core_mod, "_bm25_index", nlp_core_mod._bm25_index)
 

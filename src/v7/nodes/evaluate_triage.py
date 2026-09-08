@@ -1,4 +1,4 @@
-"""V7 node: evaluate_triage — 3-way sufficiency gate (V8: evidence-aware)."""
+"""V7 node: evaluate_triage — 3-way sufficiency gate (hard gate + structured gap)."""
 
 from __future__ import annotations
 
@@ -6,11 +6,9 @@ import logging
 import re
 from typing import Any, Callable, Dict, List, Optional, cast
 
-from src.v7.config import v7_config
 from src.v7.cross_ref import _extract_refs
 from src.v7.hard_gates import check_full_triage
 from src.v7.state_types import (
-    EvidenceReport,
     GapRef,
     NextAfterTriage,
     RAGState,
@@ -182,7 +180,7 @@ def _with_gap(update: Dict[str, Any], gap: Optional[TriageGap]) -> RAGState:
     return cast(RAGState, update)
 
 
-def _legacy_triage(state: RAGState) -> RAGState:
+def evaluate_triage(state: RAGState) -> RAGState:
     """3-way gate: sufficient / borderline / clearly_bad.
 
     Uses check_full_triage() with plan from attempt_plan snapshot.
@@ -306,99 +304,6 @@ def _legacy_triage(state: RAGState) -> RAGState:
     return cast(RAGState, update)
 
 
-def _evidence_assess(state: RAGState) -> RAGState:
-    """V8 evidence-aware triage using FlashRank reranker scores + coverage estimation.
-
-    Verdict logic:
-    - "answer":  reranker_top1 >= ANSWER_RERANKER_TOP1 AND coverage >= ANSWER_COVERAGE
-    - "abstain": reranker_top1 < ABSTAIN_RERANKER_TOP1 AND coverage < ABSTAIN_COVERAGE
-    - "improve": everything else
-    """
-    attempts = state.get("retrieval_attempts") or []
-    if not attempts:
-        report = EvidenceReport(
-            verdict="abstain",
-            reranker_top1=0.0,
-            reranker_top3_mean=0.0,
-            coverage_estimate=0.0,
-            kw_overlap=0.0,
-            passage_count=0,
-        )
-        return {"sufficient": False, "evidence_report": report}
-
-    last = attempts[-1]
-    metrics = last.get("metrics") or {}
-    passages = last.get("passages") or []
-    top_score = last.get("top_score", 0.0)
-
-    reranker_top1: float = float(metrics.get("reranker_top1", 0.0))
-    reranker_top3_mean: float = float(metrics.get("reranker_top3_mean", 0.0))
-    kw_overlap: float = float(metrics.get("keyword_overlap_active", 0.0))
-    passage_count: int = len(passages)
-
-    coverage_estimate: float = kw_overlap * min(passage_count / 10.0, 1.0)
-
-    if (
-        reranker_top1 >= v7_config.V8_EVIDENCE_ANSWER_RERANKER_TOP1
-        and coverage_estimate >= v7_config.V8_EVIDENCE_ANSWER_COVERAGE
-    ):
-        verdict = "answer"
-    elif (
-        reranker_top1 < v7_config.V8_EVIDENCE_ABSTAIN_RERANKER_TOP1
-        and coverage_estimate < v7_config.V8_EVIDENCE_ABSTAIN_COVERAGE
-    ):
-        verdict = "abstain"
-    else:
-        verdict = "improve"
-
-    report = EvidenceReport(
-        verdict=verdict,
-        reranker_top1=reranker_top1,
-        reranker_top3_mean=reranker_top3_mean,
-        coverage_estimate=coverage_estimate,
-        kw_overlap=kw_overlap,
-        passage_count=passage_count,
-    )
-
-    if verdict == "answer":
-        original_q = state.get("query", "")
-        base: Dict[str, Any] = {
-            "sufficient": True,
-            "final_passages": passages,
-            "final_score": top_score,
-            "evidence_report": report,
-        }
-        # Save fallback so evaluate_complex can recover this result if the
-        # subsequent complex attempt (triggered by enumeration routing) fails.
-        if _has_enumeration_intent(original_q):
-            base["fallback_passages"] = passages
-            base["fallback_score"] = top_score
-        return cast(RAGState, base)
-
-    if verdict == "improve":
-        # Save passages as fallback so rag_complex has a starting point if needed.
-        return cast(
-            RAGState,
-            {
-                "sufficient": False,
-                "evidence_report": report,
-                "fallback_passages": passages,
-                "fallback_score": top_score,
-            },
-        )
-
-    # verdict == "abstain": route_after_triage → rag_complex → evaluate_complex → abstain node.
-    # rag_complex with poor passages causes evaluate_complex to emit abstain verdict.
-    return cast(RAGState, {"sufficient": False, "evidence_report": report})
-
-
-def evaluate_triage(state: RAGState) -> RAGState:
-    """Dispatch to evidence-aware (V8) or legacy triage based on feature flag."""
-    if v7_config.V8_ENABLE_EVIDENCE_ASSESS:
-        return _evidence_assess(state)
-    return _legacy_triage(state)
-
-
 def route_after_triage(state: RAGState) -> NextAfterTriage:
     if state.get("sufficient"):
         # Enumeration queries require complete coverage across multiple document sections.
@@ -407,7 +312,7 @@ def route_after_triage(state: RAGState) -> NextAfterTriage:
             return "rag_complex"
         return "end"
 
-    # Both V8 (evidence_report) and legacy (sufficiency_details) insufficient
-    # verdicts route to rag_complex for a broader search attempt. rag_complex →
-    # evaluate_complex emits abstain via the abstain node if passages stay poor.
+    # Insufficient verdicts route to rag_complex for a broader search attempt.
+    # rag_complex → evaluate_complex emits abstain via the abstain node if
+    # passages stay poor.
     return "rag_complex"

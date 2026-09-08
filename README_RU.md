@@ -6,7 +6,7 @@
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Качество ответов** (56-вопросный golden set, судья `gpt-4o`): in-scope correctness **7.56 / 10** · faithfulness **0.840** · answer relevance **0.847** · отказ на OOS **1.00** · false-sufficiency **4.8%** · complex-путь **20.8%** · **~$0.0045/запрос**, p50 **5.2 с**.
+**Качество ответов** (56-вопросный golden set, судья `gpt-4o`): in-scope correctness **7.4 / 10** · faithfulness **0.808** · answer relevance **0.881** · отказ на OOS **1.00** · false-sufficiency **13%** · complex-путь **13%** · **~$0.0033/запрос**, p50 **4.8 с**.
 
 > Метрики зависят от судьи — канонические значения в [docs/reference/FACTS.md](./docs/reference/FACTS.md). Архитектурные решения описаны в [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
 
@@ -45,8 +45,8 @@ evaluate_triage      — детерминированный гейт доста�
 - **Abstain лучше галлюцинации** — система отказывается отвечать при низкой уверенности retrieval
 - **Двухэтапный retrieval** — быстрый путь обрабатывает большинство запросов; медленный активируется только при необходимости
 
-В проде триаж работает по варианту V8 (evidence-assess: score реранкера + покрытие);
-легаси hard-gate остаётся доступен за флагом. См.
+Триаж — единый детерминированный путь: hard-gate по трём метрикам плюс структурированный
+пробел достаточности, который добирает перекрёстно упомянутые пункты до эскалации. См.
 [docs/explanation/triage.md](./docs/explanation/triage.md).
 
 📖 **Документация:** [архитектура](./docs/explanation/architecture.md) · [проектные решения](./docs/explanation/design-decisions.md) · [FACTS](./docs/reference/FACTS.md) · [полная документация](./docs/README.md)
@@ -57,15 +57,15 @@ evaluate_triage      — детерминированный гейт доста�
 
 | Метрика | Значение |
 |---|---|
-| In-scope correctness | 7.56 / 10 |
-| Correctness (все вопросы) | 7.30 / 10 |
-| Faithfulness | 0.840 |
-| Answer relevance | 0.847 |
+| In-scope correctness | 7.4 / 10 |
+| Correctness (все вопросы) | 7.1 / 10 |
+| Faithfulness | 0.808 |
+| Answer relevance | 0.881 |
 | Отказ на OOS-запросах | 1.00 |
-| False-sufficiency rate | 4.8% |
-| Доля complex-пути | 20.8% |
-| Латентность p50 / p95 / mean | 5.2 / 19.1 / 7.2 с |
-| Стоимость запроса | $0.0045 ($0.24 / прогон) |
+| False-sufficiency rate | 13% |
+| Доля complex-пути | 13% |
+| Латентность p50 / p95 / mean | 4.8 / 14.7 / 5.9 с |
+| Стоимость запроса | $0.0033 ($0.17 / прогон) |
 | Retrieval HR@5 / HR@12 / MRR (hybrid, 90 вопросов практиков) | 0.63 / 0.81 / 0.50 |
 
 Eval: 56-вопросный golden dataset (`tests/dataset.csv`), `eval/run_v7_eval.py`, LLM-судья
@@ -127,7 +127,7 @@ flowchart TD
         Gate -->|шум / out-of-scope| End[END / abstain]
         Gate -->|in-domain| Router[router + глоссарий + multi-query]
         Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
-        Simple --> Triage{evaluate_triage evidence-assess}
+        Simple --> Triage{evaluate_triage hard gate + gap}
         Triage -->|sufficient| Gen[generate_answer]
         Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
         Complex --> Eval[evaluate_complex]
@@ -241,7 +241,7 @@ terms:
 
 - ✅ V7 LangGraph-пайплайн — все ноды, детерминированный роутинг (verifier/rewriter убраны — insufficient triage ведёт сразу в rag_complex)
 - ✅ Гибридный retrieval — BM25 + семантический, двухэтапный (simple/complex path)
-- ✅ Детерминированный гейт достаточности — по score, без LLM в роутинге; в проде V8 evidence-assess
+- ✅ Детерминированный гейт достаточности — hard-gate по трём метрикам, без LLM в роутинге
 - ✅ Структурированный triage gap — триаж отдаёт типизированный пробел и закрывает его дозапросом в хвост до эскалации (issue #13)
 - ✅ Domain gate — опциональный pre-retrieval OOS-фильтр через cosine similarity к центроиду корпуса
 - ✅ HybridChunker — структурно-ориентированный чанкинг по разделам/статьям документов

@@ -8,7 +8,6 @@ from __future__ import annotations
 import pytest
 
 from src.v7.nodes.evaluate_triage import (
-    _legacy_triage,
     build_gap,
     evaluate_triage,
     set_crossref_expander,
@@ -180,7 +179,7 @@ class TestGapWithoutExpander:
     def test_escalates_as_before_but_carries_gap(self):
         """No expander injected → today's behaviour, plus the gap in state."""
         state, passages = _crossref_state()
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
         assert result["sufficient"] is False
         assert result["fallback_passages"] == passages
         gap = result["triage_gap"]
@@ -200,7 +199,7 @@ class TestGapClosing:
         ]
         set_crossref_expander(lambda ps, query: list(ps) + added)
 
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
 
         assert result["sufficient"] is True
         assert result["final_passages"] == passages + added
@@ -229,7 +228,7 @@ class TestGapClosing:
 
         set_crossref_expander(_reordering_expander)
 
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
 
         assert result["sufficient"] is True
         assert result["final_passages"][: len(passages)] == passages
@@ -241,7 +240,7 @@ class TestGapClosing:
         added = [_p(f"{n}. Ограждение лестница текст.", score=0.4) for n in (3, 4, 5)]
         set_crossref_expander(lambda ps, query: list(ps) + added)
 
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
 
         assert result["final_passages"][: len(passages)] == passages
 
@@ -258,7 +257,7 @@ class TestGapClosing:
         added = [_p("Ничего похожего на искомые нормы.", score=0.4)]
         set_crossref_expander(lambda ps, query: list(ps) + added)
 
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
 
         assert result["sufficient"] is False
         assert result["fallback_passages"] == passages
@@ -272,7 +271,7 @@ class TestGapClosing:
         set_crossref_expander(_boom)
         state, passages = _crossref_state()
 
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
 
         assert result["sufficient"] is False
         assert result["fallback_passages"] == passages
@@ -291,7 +290,7 @@ class TestGapClosing:
         ]
         set_crossref_expander(lambda ps, query: list(ps) + added)
 
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
 
         assert result["sufficient"] is False
         assert result["sufficiency_details"]["keyword_overlap_original"] == 0.0
@@ -309,7 +308,7 @@ class TestGapClosing:
         ]
         set_crossref_expander(lambda ps, query: list(ps) + added)
 
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
 
         assert result["sufficient"] is True
         assert result["fallback_passages"] == passages + added
@@ -340,22 +339,9 @@ class TestNoGapNoEscalation:
             "plan": {},
         }
 
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
 
         assert result["sufficient"] is True
         assert result["final_passages"] == passages
         assert result["triage_gap"]["open"] == []
         assert set(result["triage_gap"]["closed"]) == {"clause:3", "clause:4"}
-
-
-class TestV8Untouched:
-    @pytest.mark.unit
-    def test_evidence_assess_does_not_fill_gap(self, monkeypatch):
-        from src.v7.config import v7_config
-
-        monkeypatch.setattr(v7_config, "V8_ENABLE_EVIDENCE_ASSESS", True)
-        state, _ = _crossref_state()
-
-        result = evaluate_triage(state)
-
-        assert "triage_gap" not in result

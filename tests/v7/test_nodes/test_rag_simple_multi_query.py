@@ -65,8 +65,6 @@ class TestMultiQueryExpand:
                 {
                     "V8_ENABLE_MULTI_QUERY": False,
                     "V8_EXPAND_N": 3,
-                    "V8_ENABLE_EVIDENCE_ASSESS": False,
-                    "V8_SIMPLE_RERANK_TOP_K": 5,
                 },
             )(),
         )
@@ -92,8 +90,6 @@ class TestMultiQueryExpand:
                 {
                     "V8_ENABLE_MULTI_QUERY": True,
                     "V8_EXPAND_N": 3,
-                    "V8_ENABLE_EVIDENCE_ASSESS": False,
-                    "V8_SIMPLE_RERANK_TOP_K": 5,
                 },
             )(),
         )
@@ -120,8 +116,6 @@ class TestMultiQueryExpand:
                 {
                     "V8_ENABLE_MULTI_QUERY": True,
                     "V8_EXPAND_N": 2,
-                    "V8_ENABLE_EVIDENCE_ASSESS": False,
-                    "V8_SIMPLE_RERANK_TOP_K": 5,
                     "RRF_K": 60,
                 },
             )(),
@@ -173,8 +167,6 @@ class TestMultiQueryExpand:
                 {
                     "V8_ENABLE_MULTI_QUERY": True,
                     "V8_EXPAND_N": 2,
-                    "V8_ENABLE_EVIDENCE_ASSESS": False,
-                    "V8_SIMPLE_RERANK_TOP_K": 5,
                     "RRF_K": 60,
                 },
             )(),
@@ -213,8 +205,6 @@ class TestMultiQueryExpand:
                 {
                     "V8_ENABLE_MULTI_QUERY": True,
                     "V8_EXPAND_N": 3,
-                    "V8_ENABLE_EVIDENCE_ASSESS": False,
-                    "V8_SIMPLE_RERANK_TOP_K": 5,
                     "RRF_K": 60,
                 },
             )(),
@@ -253,8 +243,6 @@ class TestMultiQueryExpand:
                 {
                     "V8_ENABLE_MULTI_QUERY": True,
                     "V8_EXPAND_N": 2,
-                    "V8_ENABLE_EVIDENCE_ASSESS": False,
-                    "V8_SIMPLE_RERANK_TOP_K": 5,
                     "RRF_K": 60,
                 },
             )(),
@@ -300,8 +288,6 @@ class TestMultiQueryExpand:
                 {
                     "V8_ENABLE_MULTI_QUERY": True,
                     "V8_EXPAND_N": 3,
-                    "V8_ENABLE_EVIDENCE_ASSESS": False,
-                    "V8_SIMPLE_RERANK_TOP_K": 5,
                     "RRF_K": 60,
                 },
             )(),

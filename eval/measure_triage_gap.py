@@ -192,13 +192,10 @@ def run(gt_records: Sequence[dict], k: int = DEFAULT_K) -> dict:
                 }
             )
 
-    from src.v7.config import v7_config
-
     result = summarize(records, k=k)
     result.update(
         {
             "k": k,
-            "v8_evidence_assess": bool(v7_config.V8_ENABLE_EVIDENCE_ASSESS),
             "records": records,
             "errors": errors,
             "elapsed_s": round(time.perf_counter() - t0, 1),
@@ -217,25 +214,23 @@ def format_report(result: dict, verdict: dict | None = None) -> str:
         f"  hit_rate@{k}      {result[f'hit_rate@{k}']:.3f}",
         f"  пробелов найдено {result['gaps_seen']}, закрыто {result['gaps_closed']}",
     ]
-    if result.get("v8_evidence_assess"):
-        lines += [
-            "",
-            "  ВНИМАНИЕ: V8_ENABLE_EVIDENCE_ASSESS=true — триаж идёт через "
-            "_evidence_assess,",
-            "  а этап B2 живёт в _legacy_triage. Замер к B2 отношения не имеет: "
-            "запускать с V7_V8_ENABLE_EVIDENCE_ASSESS=false.",
-        ]
     if verdict is not None:
         lines += [
             "",
             f"  Δ доли эскалаций {verdict['escalation_delta']:+.3f}",
             f"  потеряли хит:    {len(verdict['regressed'])} "
-            + (f"({', '.join(q[:40] for q in verdict['regressed'])})" if verdict["regressed"] else ""),
+            + (
+                f"({', '.join(q[:40] for q in verdict['regressed'])})"
+                if verdict["regressed"]
+                else ""
+            ),
             f"  приобрели хит:   {len(verdict['recovered'])}",
         ]
         if verdict["missing"]:
             lines.append(f"  вопросы не совпали: {len(verdict['missing'])}")
-        lines.append(f"  критерий B2: {'ПРОЙДЕН' if verdict['passed'] else 'НЕ ПРОЙДЕН'}")
+        lines.append(
+            f"  критерий B2: {'ПРОЙДЕН' if verdict['passed'] else 'НЕ ПРОЙДЕН'}"
+        )
     return "\n".join(lines)
 
 

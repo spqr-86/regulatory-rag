@@ -6,7 +6,15 @@ All notable changes are documented here. Format: [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
-_Nothing yet._
+### Removed
+- V8 evidence-assess triage variant and the `V7_V8_ENABLE_EVIDENCE_ASSESS` flag
+  (with `V8_EVIDENCE_*` thresholds and `V8_SIMPLE_RERANK_TOP_K`). `evaluate_triage` is
+  now a single deterministic hard-gate path — the reranker score is uncalibrated for
+  this domain and had already caused a ranking bug (design decisions §3). The
+  correctness numbers in the `[2.0.0]` entry were measured on the removed path; FACTS
+  and README now carry the hard-gate re-run (56-q golden, `gpt-4o` judge): in-scope
+  correctness 7.4, faithfulness 0.808, relevance 0.881, false-sufficiency 13%
+  (vs 4.8%), complex-path 13% (vs 20.8%), $0.0033/query.
 
 ---
 

@@ -7,7 +7,6 @@ import pytest
 from src.v7.nodes.evaluate_triage import (
     _count_crossref_hits,
     _has_enumeration_intent,
-    _legacy_triage,
     evaluate_triage,
     route_after_triage,
 )
@@ -60,9 +59,7 @@ class TestEvaluateTriage:
             "retrieval_attempts": [_make_attempt(passages)],
             "plan": {},
         }
-        # Tests the legacy 3-way gate directly (V8 evidence_assess is the default
-        # path when the flag is on; this asserts the legacy sufficient branch).
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
         assert result["sufficient"] is True
         assert result["final_passages"] == passages
 
@@ -304,7 +301,7 @@ class TestCrossrefSignal:
             "retrieval_attempts": [_make_attempt(passages)],
             "plan": {},
         }
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
         # If crossref_hits >= threshold → not sufficient, fallback saved
         from src.v7.nodes.evaluate_triage import (
             _count_crossref_hits,
@@ -346,6 +343,31 @@ class TestCrossrefSignal:
             "retrieval_attempts": [_make_attempt(passages)],
             "plan": {},
         }
-        result = _legacy_triage(state)
+        result = evaluate_triage(state)
         # No crossrefs → sufficient should remain True
         assert result["sufficient"] is True
+
+
+class TestSingleTriagePath:
+    """Variant B: evaluate_triage has one implementation; the V8 evidence-assess
+    branch and its feature flag are gone."""
+
+    @pytest.mark.unit
+    def test_no_evidence_assess_function(self):
+        import src.v7.nodes.evaluate_triage as m
+
+        assert not hasattr(m, "_evidence_assess")
+        assert not hasattr(m, "_legacy_triage")
+
+    @pytest.mark.unit
+    def test_evidence_flag_removed_from_config(self):
+        from src.v7.config import v7_config
+
+        assert not hasattr(v7_config, "V8_ENABLE_EVIDENCE_ASSESS")
+        assert not hasattr(v7_config, "V8_SIMPLE_RERANK_TOP_K")
+
+    @pytest.mark.unit
+    def test_no_evidence_report_type(self):
+        import src.v7.state_types as st
+
+        assert not hasattr(st, "EvidenceReport")
