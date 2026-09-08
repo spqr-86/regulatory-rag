@@ -2,7 +2,7 @@
 
 НЕ трогает api.py и v7-граф. Отдаёт сырые чанки с составным chunk_id — генерации
 ответа нет: цитирование и программная верификация цитат — забота вызывающего агента
-(prombez-agent). Паттерн — FastMCP lifespan: Chroma-бэкенд (с правильной embedding
+(prombez-agent). Паттерн — MCPServer lifespan: Chroma-бэкенд (с правильной embedding
 function из настроек) и CrossEncoder-реранкер грузятся один раз на процесс, до
 первого вызова тула.
 
@@ -27,7 +27,8 @@ from utils.logging import configure_logging
 
 configure_logging()
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context
 
 OVERFETCH = 4  # кандидатов на реранк на каждый итоговый результат
 ID_SEP = "::"
@@ -52,7 +53,7 @@ class AppContext:
 
 
 @asynccontextmanager
-async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
+async def app_lifespan(server: MCPServer) -> AsyncIterator[AppContext]:
     # Тяжёлая инициализация — ровно один раз на процесс, до первого вызова тула.
     # Гибрид vector+BM25 (как в проде v7): BM25 добирает попадания по номерам
     # пунктов и точным терминам, где эмбеддинг табличных строк проваливается
@@ -82,11 +83,11 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     )
 
 
-mcp = FastMCP("regulatory-mcp", lifespan=app_lifespan)
+mcp = MCPServer("regulatory-mcp", lifespan=app_lifespan)
 
 
 @mcp.tool()
-def retrieve_chunks(ctx: Context, query: str, top_k: int = 5) -> dict:
+def retrieve_chunks(ctx: Context[AppContext], query: str, top_k: int = 5) -> dict:
     """Поиск по текстам нормативных документов. Возвращает сырые чанки с chunk_id —
     БЕЗ генерации ответа. Цитировать можно только дословный текст поля text,
     привязывая цитату к chunk_id."""
@@ -133,7 +134,7 @@ def _get_address_chunk(app, source: str, local_id: str) -> dict:
 
 
 @mcp.tool()
-def get_chunk(ctx: Context, chunk_id: str) -> dict:
+def get_chunk(ctx: Context[AppContext], chunk_id: str) -> dict:
     """Чанк по его chunk_id ("source::N" из retrieve_chunks или "source::addr:…" из
     get_norm) — для контекста и верификации цитат."""
     app = ctx.request_context.lifespan_context
@@ -258,7 +259,7 @@ def _address_hits(address_index, doc_id: str, kind, num, row) -> list[dict]:
 
 
 @mcp.tool()
-def get_norm(ctx: Context, doc_id: str, point: str) -> dict:
+def get_norm(ctx: Context[AppContext], doc_id: str, point: str) -> dict:
     """Точная адресная выборка текста пункта по (doc_id, point) — БЕЗ векторного поиска.
 
     doc_id — имя документа как в корпусе (source, напр. 'СП 486.1311500.2020.docx').
@@ -290,7 +291,7 @@ def get_norm(ctx: Context, doc_id: str, point: str) -> dict:
 
 
 @mcp.tool()
-def collection_info(ctx: Context) -> dict:
+def collection_info(ctx: Context[AppContext]) -> dict:
     """Какой корпус обслуживает этот сервер и сколько в нём чанков."""
     app = ctx.request_context.lifespan_context
     return {"collection": app.collection_name, "chunks": app.backend.count()}

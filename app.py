@@ -48,6 +48,47 @@ st.set_page_config(page_title="Regulatory RAG", page_icon="📚", layout="wide")
 st.title("📚 Regulatory RAG")
 st.caption("Поиск по нормативной базе: ГОСТ, СНиП, СП, ТК РФ и другие документы.")
 
+
+# =========================
+#     RESOURCE LOADING
+# =========================
+@st.cache_resource(show_spinner=False)
+def get_telemetry_writer():
+    """One writer per Streamlit process — monitoring module 05, issue #17."""
+    return default_writer()
+
+
+@st.cache_resource(show_spinner=False)
+def get_feedback_writer():
+    """One writer per Streamlit process; None when votes have nowhere to go (#20)."""
+    return default_feedback_writer()
+
+
+@st.cache_resource(show_spinner=False)
+def load_resources():
+    if not os.path.exists(settings.CHROMA_DB_PATH) or not os.listdir(
+        settings.CHROMA_DB_PATH
+    ):
+        st.error("База данных не найдена. Запустите 'python index.py' для её создания.")
+        return None
+
+    if not V7_AVAILABLE:
+        st.error("V7 Graph недоступен. Проверьте конфигурацию.")
+        return None
+
+    try:
+        from src.backends.vector_store import get_vector_store_backend
+
+        vector_store = get_vector_store_backend(load_existing=True)
+        init_v7_pipeline(vector_store)
+        v7_app = build_v7_graph().compile()
+        return v7_app
+    except Exception as e:
+        st.error(f"Ошибка инициализации V7 Graph: {e}")
+        logger.warning(f"Failed to init V7 Graph: {e}")
+        return None
+
+
 # =========================
 #        SIDEBAR
 # =========================
@@ -96,46 +137,6 @@ with st.sidebar:
     if st.button("🧹 Очистить чат", use_container_width=True):
         st.session_state.pop("messages", None)
         st.rerun()
-
-
-# =========================
-#     RESOURCE LOADING
-# =========================
-@st.cache_resource(show_spinner=False)
-def get_telemetry_writer():
-    """One writer per Streamlit process — monitoring module 05, issue #17."""
-    return default_writer()
-
-
-@st.cache_resource(show_spinner=False)
-def get_feedback_writer():
-    """One writer per Streamlit process; None when votes have nowhere to go (#20)."""
-    return default_feedback_writer()
-
-
-@st.cache_resource(show_spinner=False)
-def load_resources():
-    if not os.path.exists(settings.CHROMA_DB_PATH) or not os.listdir(
-        settings.CHROMA_DB_PATH
-    ):
-        st.error("База данных не найдена. Запустите 'python index.py' для её создания.")
-        return None
-
-    if not V7_AVAILABLE:
-        st.error("V7 Graph недоступен. Проверьте конфигурацию.")
-        return None
-
-    try:
-        from src.backends.vector_store import get_vector_store_backend
-
-        vector_store = get_vector_store_backend(load_existing=True)
-        init_v7_pipeline(vector_store)
-        v7_app = build_v7_graph().compile()
-        return v7_app
-    except Exception as e:
-        st.error(f"Ошибка инициализации V7 Graph: {e}")
-        logger.warning(f"Failed to init V7 Graph: {e}")
-        return None
 
 
 v7_app = load_resources()
