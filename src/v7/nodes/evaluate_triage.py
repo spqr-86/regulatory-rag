@@ -82,7 +82,9 @@ def _has_enumeration_intent(query: str) -> bool:
 _crossref_expander: Optional[Callable[[List[dict], str], List[dict]]] = None
 
 
-def set_crossref_expander(fn: Optional[Callable[[List[dict], str], List[dict]]]) -> None:
+def set_crossref_expander(
+    fn: Optional[Callable[[List[dict], str], List[dict]]],
+) -> None:
     """Inject the cross-reference expander. Call once at startup."""
     global _crossref_expander
     _crossref_expander = fn
@@ -112,7 +114,9 @@ def _ref_present(kind: str, num: str, content: str) -> bool:
     return False
 
 
-def build_gap(passages: List[dict], resolve_in: Optional[List[dict]] = None) -> TriageGap:
+def build_gap(
+    passages: List[dict], resolve_in: Optional[List[dict]] = None
+) -> TriageGap:
     """Describe what the retrieved text names but does not contain.
 
     Refs are extracted from the top-5 passages — the same slice that trips
@@ -157,6 +161,18 @@ def build_gap(passages: List[dict], resolve_in: Optional[List[dict]] = None) -> 
     return {"kind": "unresolved_ref", "refs": refs, "closed": closed, "open": open_}
 
 
+def _merge_new_at_tail(base: List[dict], expanded: List[dict]) -> List[dict]:
+    """`base` in its original order, then the passages `expanded` added, in
+    theirs. The real cross-ref expander inserts bbox siblings next to their
+    parent; handing that order downstream pushes an original chunk out of the
+    top-12 the next node reads (issue #30). Merging here makes the triage
+    output independent of how the expander arranges its result.
+    """
+    seen = {(_passage_source(p), p.get("text", "")) for p in base}
+    tail = [p for p in expanded if (_passage_source(p), p.get("text", "")) not in seen]
+    return list(base) + tail
+
+
 def _with_gap(update: Dict[str, Any], gap: Optional[TriageGap]) -> RAGState:
     """Attach the gap to a state update when one was computed."""
     if gap is not None:
@@ -197,7 +213,7 @@ def _legacy_triage(state: RAGState) -> RAGState:
             if gap["open"] and _crossref_expander is not None:
                 try:
                     expanded = list(_crossref_expander(passages, active_q))
-                except Exception as exc:  # noqa: BLE001 — a live query must not die here
+                except Exception as exc:  # noqa: BLE001 — live query must not die
                     logger.warning("triage gap expansion failed: %s", exc)
                     expanded = None
 
@@ -210,9 +226,10 @@ def _legacy_triage(state: RAGState) -> RAGState:
                     # Only check_full_triage is re-run. The crossref counter is
                     # NOT recomputed — the expansion adds the very chunks that
                     # raised it, so re-counting could never let the gap close.
-                    recheck = check_full_triage(original_q, active_q, expanded, plan)
+                    merged = _merge_new_at_tail(passages, expanded)
+                    recheck = check_full_triage(original_q, active_q, merged, plan)
                     if recheck["triage"] == "sufficient":
-                        passages = expanded
+                        passages = merged
                         result = recheck
                         closed_in_place = True
 

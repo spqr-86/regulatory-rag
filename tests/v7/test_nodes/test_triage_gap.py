@@ -185,7 +185,35 @@ class TestGapClosing:
         assert result["sufficient"] is True
         assert result["final_passages"] == passages + added
         assert result["triage_gap"]["open"] == []
-        assert set(result["triage_gap"]["closed"]) >= {"clause:3", "clause:4", "clause:5"}
+        assert set(result["triage_gap"]["closed"]) >= {
+            "clause:3",
+            "clause:4",
+            "clause:5",
+        }
+
+    @pytest.mark.unit
+    def test_reordering_expander_does_not_displace_originals(self):
+        """The real expander inserts bbox-siblings after their parent, which
+        reorders the list. Triage must still hand originals on in their
+        original order with the fetched chunks appended at the tail, so a gold
+        passage near position 12 is not pushed out. Regression: issue #30."""
+        state, passages = _crossref_state()
+        added = [
+            _p(f"{n}. Ограждение лестница текст исключений.", score=0.4)
+            for n in (3, 4, 5)
+        ]
+
+        def _reordering_expander(ps, query):
+            ps = list(ps)
+            return [ps[0]] + added + ps[1:]
+
+        set_crossref_expander(_reordering_expander)
+
+        result = _legacy_triage(state)
+
+        assert result["sufficient"] is True
+        assert result["final_passages"][: len(passages)] == passages
+        assert result["final_passages"] == passages + added
 
     @pytest.mark.unit
     def test_original_passage_order_preserved(self):
@@ -251,7 +279,9 @@ class TestGapClosing:
     @pytest.mark.unit
     def test_enumeration_branch_still_applies_after_closing(self):
         """Enumeration queries keep their fallback contract after expansion."""
-        state, passages = _crossref_state(query="кто проходит обучение ограждение лестница")
+        state, passages = _crossref_state(
+            query="кто проходит обучение ограждение лестница"
+        )
         added = [
             _p("3. Ограждение лестница обучение проходит.", score=0.4),
             _p("4. За исключением ограждение лестница обучение.", score=0.4),
