@@ -9,6 +9,15 @@ Each record is: **Context → Options → Choice → Why → Evidence.** Numbers
 dataset-dependent; their source benchmark is named. Current production values:
 [FACTS](../reference/FACTS.md).
 
+> **Historical evidence caveat.** Every benchmark cited below that predates
+> `2026-09-02` (`eval_v7_2026-05-30_chunkid.jsonl`, `cps_2026-05-22.json`, the cap sweep)
+> was scored by `gpt-4o-mini`, not `gpt-4o` — `llm_factory` silently ignored
+> `JUDGE_MODEL_NAME` / `COMPLEX_MODEL_NAME` on the OpenAI branch until a fix on that date
+> (see §8 and [FACTS](../reference/FACTS.md#metrics)). The *directional* conclusions
+> (deterministic gates, abstain-first, CrossEncoder over FlashRank, namespaced `chunk_id`,
+> dropping the verifier subgraph, the candidate cap) held up on re-measurement; treat the
+> absolute figures in §2–§9 as the mini-judge baseline, and FACTS as canonical.
+
 ---
 
 ## 1. Deterministic hard gates, not LLM routing

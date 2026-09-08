@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "text-embedding-3-small"
 
     # Reranker (flashrank | crossencoder)
-    RERANKER_BACKEND: str = "flashrank"
+    RERANKER_BACKEND: str = "crossencoder"
     RERANKING_MODEL: str = "ms-marco-MiniLM-L-12-v2"
     CROSSENCODER_MODEL: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
     FLASHRANK_CACHE_DIR: str = ".flashrank_cache"
@@ -38,13 +38,13 @@ class Settings(BaseSettings):
     REQUEST_TIMEOUT: float = 120.0
 
     # Per-path model config — change independently without touching other paths
-    SIMPLE_LLM_PROVIDER: str = "gemini"
-    SIMPLE_MODEL_NAME: str = "gemini-2.5-flash"
-    COMPLEX_LLM_PROVIDER: str = "gemini"
-    COMPLEX_MODEL_NAME: str = "gemini-3-flash-preview"
+    SIMPLE_LLM_PROVIDER: str = "openai"
+    SIMPLE_MODEL_NAME: str = "gpt-4o-mini"
+    COMPLEX_LLM_PROVIDER: str = "openai"
+    COMPLEX_MODEL_NAME: str = "gpt-4o"
     # Eval judge — independent from pipeline provider
     JUDGE_LLM_PROVIDER: str = "openai"
-    JUDGE_MODEL_NAME: str = "gpt-4o-mini"
+    JUDGE_MODEL_NAME: str = "gpt-4o"
 
     # V7 node limits
     MAX_SEARCH_CALLS: int = 2

@@ -4,7 +4,7 @@ Runs the golden dataset through the V7 graph and scores it. Metric definitions a
 report format are in [reference/evaluation](../reference/evaluation.md).
 
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 
 python eval/run_v7_eval.py                              # full dataset, with LLM judge
 python eval/run_v7_eval.py --skip-judge                 # pipeline only, no judge (~$0)
@@ -15,8 +15,9 @@ python eval/run_v7_eval.py --output benchmarks/eval_v7_custom.jsonl
 **Flags:** `--limit N` (cap questions), `--skip-judge` (no LLM scoring),
 `--output PATH` (default `benchmarks/eval_v7_{date}.jsonl`).
 
-**Cost:** the judge issues separate LLM calls per metric per question — a full run costs
-a few cents to ~$0.30. Use `--skip-judge` for a free pipeline-only smoke run.
+**Cost:** the judge issues separate LLM calls per metric per question. A full run over the
+56-question dataset with the default `gpt-4o` judge costs ≈ $0.25 (pipeline + judge
+combined; measured 2026-09-08). Use `--skip-judge` for a free pipeline-only smoke run.
 
 **Output:** a JSONL report under `benchmarks/`. The judge model is set by
 `JUDGE_MODEL_NAME` (see [FACTS](../reference/FACTS.md#models)).

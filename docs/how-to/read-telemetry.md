@@ -15,11 +15,13 @@
 
 ## Что в строке
 
-Поля перечислены в спеке модуля (`docs/spec-monitoring.html`, раздел «Что пишем на каждый
-запрос»): `query_id`, `ts`, `source` (`ui` / `api` / `eval` / `mcp`), `question`, `path`
-(`simple` / `complex` / `clarify` / `abstain`), `answer_len`, `n_passages`, `latency_ms`,
-токены, `cost_usd`, `models`, `unpriced_models`, `error`. Плюс `run_id` — к какому
-пакетному прогону относится строка (issue #18).
+Канонический список полей — `EVENT_FIELDS` в `src/v7/telemetry.py` (та же кортеж-константа,
+из которой `pg_writer.py` собирает колонки). На момент написания: `query_id`, `run_id`,
+`ts`, `source` (`ui` / `api` / `eval` / `mcp`), `question`, `path`
+(`simple` / `complex` / `clarify` / `abstain`), `answer_len`, `n_passages`,
+`n_passages_found`, `latency_ms`, `prompt_tokens`, `completion_tokens`, `cost_usd`,
+`models`, `unpriced_models`, `error`. `run_id` — к какому пакетному прогону относится
+строка (issue #18); `None` у живого трафика.
 
 `n_passages` — сколько пассажей ушло в промпт генерации; `n_passages_found` — сколько нашёл
 поиск. Числа расходятся, когда cross-reference расширяет набор внутри узла генерации

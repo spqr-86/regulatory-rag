@@ -29,7 +29,24 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 | COMPLEX_MIN_PASSAGES | 8 | `V7_COMPLEX_MIN_PASSAGES` | |
 | COMPLEX_MIN_KW_OVERLAP | 0.20 | `V7_COMPLEX_MIN_KW_OVERLAP` | |
 | COMPLEX_TOP_K | 60 | `V7_COMPLEX_TOP_K` | |
+| FINAL_MERGE_TOP_K | 24 | `V7_FINAL_MERGE_TOP_K` | complex-branch output cap — chunks the generator sees (issue #10) |
+| RERANK_CANDIDATE_CAP | 100 | `V7_RERANK_CANDIDATE_CAP` | hard limit on CrossEncoder input; dominant latency/quality knob |
+| RRF_K | 60 | `V7_RRF_K` | RRF constant — measured dead on {1…200}, kept at 60 |
+| MMR_LAMBDA | 0.7 | `V7_MMR_LAMBDA` | |
 | DOMAIN_GATE_THRESHOLD | 0.25 | `V7_DOMAIN_GATE_THRESHOLD` | **`.env` override**; config default 0.0 (disabled) |
+
+### V8 flags (env prefix `V7_`, field name keeps `V8_`)
+
+| name | runtime | env | note |
+|---|---|---|---|
+| V8_ENABLE_EVIDENCE_ASSESS | **true** | `V7_V8_ENABLE_EVIDENCE_ASSESS` | **`.env` override**; config default false. When on, triage runs through `_evidence_assess` (reranker-score + coverage), not the legacy hard-gate. This is the production path. |
+| V8_ENABLE_MULTI_QUERY | **true** | `V7_V8_ENABLE_MULTI_QUERY` | **`.env` override**; config default false |
+| V8_EXPAND_N | 3 | `V7_V8_EXPAND_N` | query reformulations generated when multi-query is on |
+| V8_EVIDENCE_ANSWER_RERANKER_TOP1 | 0.6 | `V7_V8_EVIDENCE_ANSWER_RERANKER_TOP1` | evidence-assess "answer" gate |
+| V8_EVIDENCE_ANSWER_COVERAGE | 0.6 | `V7_V8_EVIDENCE_ANSWER_COVERAGE` | |
+| V8_EVIDENCE_ABSTAIN_RERANKER_TOP1 | 0.2 | `V7_V8_EVIDENCE_ABSTAIN_RERANKER_TOP1` | below → abstain |
+| V8_EVIDENCE_ABSTAIN_COVERAGE | 0.2 | `V7_V8_EVIDENCE_ABSTAIN_COVERAGE` | |
+| V8_SIMPLE_RERANK_TOP_K | 5 | `V7_V8_SIMPLE_RERANK_TOP_K` | |
 
 ## prompts
 - generate_answer: v8
@@ -61,27 +78,46 @@ visual_enrichment → generate_answer → END
 - `clarify_respond` returns a clarification request for short/ambiguous queries.
 - `visual_enrichment` is a no-op on VPS (`visual_proof_fn` not injected).
 - No `llm_verifier` / `rewriter` (removed session 61): `evaluate_triage` routes sufficient→generate, otherwise→`rag_complex`. <!--freshness:ignore-->
+- **`evaluate_triage` has two implementations.** Production (`V7_V8_ENABLE_EVIDENCE_ASSESS=true`) runs `_evidence_assess`: reranker-top1 + coverage scores against the V8 thresholds above, three-way answer / escalate / abstain. `_legacy_triage` is the fallback hard-gate path. Both emit a structured `triage_gap` (`TriageGap`/`GapRef`, issue #13) describing which referenced п./ст. are missing from the top-5; the gap is closed in place by appending cross-referenced passages to the tail (no reorder), and escalation happens only if the gap stays open. The B2 gap logic currently lives in `_legacy_triage` — porting it into the V8 branch is not yet ticketed.
 
 ## metrics
-Source: `benchmarks/eval_v7_2026-05-30_chunkid.jsonl` (dataset 57, valid 54).
+Source: `benchmarks/eval_v7_2026-09-08.jsonl` (dataset 56, valid 53).
+**First full run judged by `gpt-4o`** after the 2026-09-02 `llm_factory` fix — see the
+judge note below. Pipeline: OpenAI `gpt-4o-mini` (simple) / `gpt-4o` (complex),
+`V7_V8_ENABLE_EVIDENCE_ASSESS=true`, CrossEncoder reranker, cap 100.
 
-> **Judge caveat (found 2026-09-02):** this run was judged by **`gpt-4o-mini`, not `gpt-4o`**.
-> `llm_factory` carried the resolved settings model into the constructor only on the gemini
-> branch, so every OpenAI getter fell back to the `ChatOpenAI` default and `JUDGE_MODEL_NAME`
-> / `COMPLEX_MODEL_NAME` were silently ignored. Fixed 2026-09-02; the numbers below are not
-> comparable with runs made after that fix, and the complex path ran on mini as well.
+| metric | value | earlier (mini judge, 2026-05-30) |
+|---|---|---|
+| in-scope correctness | 7.56 / 10 | 7.44 |
+| correctness mean | 7.30 / 10 | 7.39 |
+| faithfulness | 0.840 | 0.859 |
+| answer relevance | 0.847 | 0.872 |
+| OOS rejection rate | 1.00 | 1.00 |
+| false-sufficiency rate | 0.048 | 0.098 |
+| complex-path rate | 0.208 | 0.241 |
+| latency p50 / p95 / mean | 5.2 / 19.1 / 7.2 s | — / — / 9.71 |
+| cost / query | $0.0045 ($0.24 run total) | — |
 
-| metric | value |
-|---|---|
-| in-scope correctness | 7.44 / 10 |
-| correctness mean | 7.39 / 10 |
-| faithfulness | 0.859 |
-| answer relevance | 0.872 |
-| OOS rejection rate | 1.00 |
-| false-sufficiency rate | 0.098 |
-| complex-path rate | 0.241 |
-| avg latency | 9.71 s |
-| cost | измеряется каждым прогоном, см. ниже |
+> **Judge note (fix 2026-09-02).** Every run before this date was judged by
+> **`gpt-4o-mini`, not `gpt-4o`** — `llm_factory` carried the resolved settings model into
+> the constructor only on the gemini branch, so every OpenAI getter fell back to the
+> `ChatOpenAI` default and `JUDGE_MODEL_NAME` / `COMPLEX_MODEL_NAME` were silently ignored
+> (the complex path ran on mini too). The 2026-09-08 run above is the first valid
+> post-fix baseline; the `gpt-4o` judge is stricter, so absolute faithfulness / relevance
+> sit slightly below the historical mini-judge numbers while being better calibrated.
+> Judge run-to-run variance is ~±0.25 on the correctness scale (design-decisions §8).
+
+### Retrieval (held-out 133, `eval/run_retrieval_eval.py`, 2026-09-08)
+
+| path | HR@5 | HR@12 | MRR | p50 latency |
+|---|---|---|---|---|
+| hybrid (production) | 0.692 | 0.827 | 0.542 | 502 ms |
+| vector-only | — | 0.842 | 0.539 | 141 ms |
+| bm25-only | — | 0.677 | 0.387 | 19 ms |
+
+Held-out set is a **development set, not an untouched final test** — labels were pooled
+from the systems under evaluation, so absolute Hit Rate is biased upward. See
+`docs/roadmap.md` (step 4) for the derivation.
 
 ### Стоимость и латентность запроса (roadmap 4a)
 
@@ -91,10 +127,9 @@ Source: `benchmarks/eval_v7_2026-05-30_chunkid.jsonl` (dataset 57, valid 54).
 путям и p50/p95 латентности. Цифры лежат в `aggregate.cost` каждого файла прогона —
 отдельной константы здесь больше нет, чтобы она не протухала.
 
-Смоук 05.09.2026 (N=3, `--skip-judge`, gpt-4o-mini simple / gpt-4o complex): simple
-$0.00095 за запрос, complex $0.02099 — разница в 22 раза при доле complex ~24%.
-**Это смоук, а не замер:** три вопроса, один из них complex. Старая цифра $0.0102 / query
-снята 22.05.2026 на N=10 и до фикса выбора моделей 02.09 — она описывала другой пайплайн.
+Замер 08.09.2026 (полный прогон, 53 запроса, судья gpt-4o): $0.0045 / запрос в среднем,
+$0.24 весь прогон. По путям: simple $0.00105 / запрос (n=42, p50 5.0 с), complex
+$0.01755 / запрос (n=11, p50 15.0 с) — разница ~17× при доле complex 20.8%.
 
 ## deploy
 - port: 8502

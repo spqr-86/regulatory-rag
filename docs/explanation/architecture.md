@@ -44,7 +44,7 @@ simple-path result or escalates straight to `rag_complex`.
 | `router` | `src/v7/nodes/router.py` | Classifies the query, builds a retrieval plan, expands `active_query` via the term glossary and multi-query. Short/ambiguous → clarification. |
 | `clarify_respond` | `src/v7/nodes/router.py` | Returns a clarification request for under-specified queries, then ends. |
 | `rag_simple` | `src/v7/nodes/rag_simple.py` | Fast hybrid retrieval (vector + BM25, RRF merge) → CrossEncoder rerank → top-K passages. |
-| `evaluate_triage` | `src/v7/nodes/evaluate_triage.py` | Deterministic hard gates → sufficient (→ generate) or insufficient (→ rag_complex). Enumeration intent forces rag_complex. |
+| `evaluate_triage` | `src/v7/nodes/evaluate_triage.py` | Deterministic sufficiency gate → sufficient (→ generate) or insufficient (→ rag_complex). Production runs the V8 `_evidence_assess` variant (reranker score + coverage); `_legacy_triage` (hard gate + structured `triage_gap`) is the fallback. Enumeration intent forces rag_complex on either path. |
 | `rag_complex` | `src/v7/nodes/rag_complex.py` | Deep retrieval (larger top-K + MMR), multiple attempts, merges all. |
 | `evaluate_complex` | `src/v7/nodes/evaluate_complex.py` | Hard gates on merged passages; pass → generate, fail → abstain. |
 | `visual_enrichment` | `src/v7/nodes/visual_enrichment.py` | Optional: adds table/image context before generation. No-op on VPS (`visual_proof_fn` not injected). |
@@ -56,11 +56,16 @@ configurable per path; current production values are in FACTS.
 
 ---
 
-## Hard gates
+## Sufficiency gate
 
-A hard gate (`src/v7/hard_gates.py`, `check_hard_gates()`) takes the retrieved passages
-and a plan (thresholds), and checks **three conditions simultaneously** — all must hold,
-else `sufficient = False`:
+Production triage (`V7_V8_ENABLE_EVIDENCE_ASSESS=true`) runs `_evidence_assess`: a
+three-way verdict (answer / improve / abstain) from the reranker top-1 score and a
+coverage estimate, against the V8 thresholds in [FACTS](../reference/FACTS.md#v8-flags).
+Full logic and the fallback path: [triage.md](./triage.md).
+
+The fallback **hard gate** (`src/v7/hard_gates.py`, `check_full_triage()`) takes the
+retrieved passages and a plan (thresholds), and checks **three conditions
+simultaneously** — all must hold, else `sufficient = False`:
 
 | Condition | Checks | Source of the number |
 |---|---|---|

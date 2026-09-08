@@ -1,10 +1,10 @@
-"""FastAPI REST API for Safety Incident Analyzer v7 pipeline.
+"""FastAPI REST API for the regulatory-rag v7 pipeline.
 
-Exposes the v7 RAG graph as a service so external apps (WTA, etc.) can query it.
+Exposes the v7 RAG graph as a service so external apps can query it.
 
 Endpoints:
     POST /query    — ask a question, get answer + passages (full v7 pipeline)
-    POST /retrieve — retrieval-only hybrid search (no LLM), for batch clients (WTA)
+    POST /retrieve — retrieval-only hybrid search (no LLM), for batch clients
     GET  /corpus   — unique source documents in the index
     GET  /health   — liveness check
 
@@ -27,6 +27,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
+from src import __version__
 from src.v7.runner import run_query as run_v7_query
 
 load_dotenv()
@@ -84,7 +85,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Regulatory RAG API",
     description="RAG API for Russian regulatory documents (ГОСТ, СНиП, ТК РФ, etc.)",
-    version="1.0.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -206,8 +207,8 @@ def _hybrid_retrieve(
 ) -> list[dict]:
     """Retrieval-only hybrid search: vector + BM25 → RRF merge (+ optional rerank).
 
-    No LLM calls (no multi-query expand, no generation) — built for batch
-    clients (WTA GOST-check) that need low latency.
+    No LLM calls (no multi-query expand, no generation) — built for latency-
+    sensitive batch clients.
 
     When source_filter is set, retrieval is scoped to that document via a
     native metadata filter (see _retrieve_by_source) instead of a global
@@ -316,7 +317,7 @@ def query(request: Request, req: QueryRequest) -> QueryResponse:
 @app.post("/retrieve", response_model=RetrieveResponse)
 @limiter.limit("600/minute")
 def retrieve(request: Request, req: RetrieveRequest) -> RetrieveResponse:
-    """Retrieval-only hybrid search — no LLM, for batch clients (WTA)."""
+    """Retrieval-only hybrid search — no LLM, for batch clients."""
     if getattr(request.app.state, "vector_store", None) is None:
         raise HTTPException(status_code=503, detail="vector store not initialized")
 

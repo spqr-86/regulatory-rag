@@ -1,3 +1,12 @@
+[project]
+name = "regulatory-rag"
+version = "2.0.0"
+description = "RAG showcase over Russian regulatory documents — deterministic LangGraph pipeline with hard-gated triage, hybrid retrieval and offline/online eval."
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+# Dependencies are pinned in requirements.txt (venv workflow, not a distributable package).
+
 [tool.black]
 line-length = 88
 

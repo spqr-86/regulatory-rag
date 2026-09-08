@@ -1,9 +1,0 @@
-from .settings import settings
-from .constants import MAX_FILE_SIZE, MAX_TOTAL_SIZE, ALLOWED_TYPES
-
-try:
-    from .legacy import *  # noqa: F401,F403
-except Exception:
-    pass
-
-__all__ = ["settings", "MAX_FILE_SIZE", "MAX_TOTAL_SIZE", "ALLOWED_TYPES"]
