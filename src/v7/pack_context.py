@@ -5,10 +5,15 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
-from typing import List
+import logging
+from typing import Callable, Dict, List, Optional
 
+from src.v7.config import v7_config
+from src.v7.contract import PackResult, PackStatus
+from src.v7.hard_gates import sanitize_for_llm
 from src.v7.nlp_core import passage_identity
 
 # ANCHOR: стабильная версия кандидата для кеша упаковки.
@@ -16,6 +21,28 @@ from src.v7.nlp_core import passage_identity
 # Key invariant: порядок пассажей не влияет, их текст влияет.
 
 _SEP = "|"
+# Надбавка на заголовок чанка ("[3] (HIGH) [Источник: …; Раздел: …]"),
+# который bridge приписывает каждому пассажу. Без неё бюджет упаковки
+# систематически занижает размер промпта.
+HEADER_TOKENS_ALLOWANCE = 48
+
+logger = logging.getLogger(__name__)
+
+# ─── DI: expander инжектится один раз при старте (bridge.init_v7_pipeline) ───
+
+_crossref_expander: Optional[Callable[[List[dict], str], List[dict]]] = None
+
+
+def set_crossref_expander(
+    fn: Optional[Callable[[List[dict], str], List[dict]]],
+) -> None:
+    """Инжект расширителя перекрёстных ссылок.
+
+    Это единственная точка вызова expander во всём пайплайне: решающий код
+    не расширяет ничего.
+    """
+    global _crossref_expander
+    _crossref_expander = fn
 
 
 def candidate_version(passages: List[dict], plan: dict, query: str) -> str:
@@ -32,3 +59,86 @@ def candidate_version(passages: List[dict], plan: dict, query: str) -> str:
     plan_snapshot = json.dumps(plan or {}, sort_keys=True, default=str)
     raw = _SEP.join(ids) + _SEP + plan_snapshot + _SEP + (query or "")
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def approx_tokens(text: str) -> int:
+    """То же приближение, что использовал bridge: 4 символа на токен."""
+    return len(text) // 4
+
+
+def passage_cost(p: dict) -> int:
+    """Стоимость пассажа в промпте: текст плюс заголовок, который допишет bridge."""
+    return approx_tokens(p.get("text", "")) + HEADER_TOKENS_ALLOWANCE
+
+
+def _passage_source(p: dict) -> str:
+    return (p.get("metadata") or {}).get("source") or p.get("doc_id", "")
+
+
+def _merge_new_at_tail(base: List[dict], expanded: List[dict]) -> List[dict]:
+    """Вернуть ``base`` в исходном порядке, затем новое из ``expanded``.
+
+    Реальный expander вставляет bbox-соседей рядом с родителем; отдавать этот
+    порядок дальше — значит вытолкнуть исходный чанк из головы списка (#30).
+    """
+    seen = {(_passage_source(p), p.get("text", "")) for p in base}
+    tail = [p for p in expanded if (_passage_source(p), p.get("text", "")) not in seen]
+    return list(base) + tail
+
+
+def pack_context(
+    passages: List[dict],
+    query: str,
+    plan: dict,
+    *,
+    cache: Optional[Dict[str, PackResult]] = None,
+) -> PackResult:
+    """Упаковать кандидата в контекст, который увидит генератор.
+
+    Порядок (спек §1): expand → sanitize → обрезка MAX_CHUNKS_FOR_LLM →
+    бюджет токенов. degraded (expander упал) запрещает снимать refs_resolved
+    (см. validate_context). Вход не мутируется; кеш отдаёт копию.
+    """
+    if not passages:
+        return {"final_context": [], "status": "ok", "dropped": 0}
+
+    key = candidate_version(passages, plan, query)
+    if cache is not None and key in cache:
+        return copy.deepcopy(cache[key])
+
+    status: PackStatus = "ok"
+    working = copy.deepcopy(passages)
+
+    if _crossref_expander is not None:
+        try:
+            expanded = list(_crossref_expander(copy.deepcopy(working), query))
+            if expanded:
+                working = _merge_new_at_tail(working, expanded)
+        except Exception as exc:  # noqa: BLE001 — живой запрос не должен умирать
+            logger.warning("pack_context: expansion failed: %s", exc)
+            status = "degraded"
+            working = copy.deepcopy(passages)
+
+    packed = [{**p, "text": sanitize_for_llm(p.get("text", ""))} for p in working]
+
+    n_before = len(packed)
+    packed = packed[: v7_config.MAX_CHUNKS_FOR_LLM]
+
+    budget = v7_config.PACK_TOKEN_BUDGET
+    kept: List[dict] = []
+    spent = 0
+    for p in packed:
+        cost = passage_cost(p)
+        if spent + cost > budget:
+            break
+        kept.append(p)
+        spent += cost
+
+    result: PackResult = {
+        "final_context": kept,
+        "status": status,
+        "dropped": n_before - len(kept),
+    }
+    if cache is not None:
+        cache[key] = copy.deepcopy(result)
+    return result
