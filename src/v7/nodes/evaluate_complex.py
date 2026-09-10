@@ -1,95 +1,178 @@
-"""V7 node: evaluate_complex — hard gates only, merge all attempts."""
+"""V7 node: evaluate_complex — перебор кандидатов через общий конвейер.
+
+Каждый кандидат проходит enrich → pack → validate, побеждает первый,
+для которого accept() истинно.
+"""
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, Dict, List, cast
 
 import structlog
 
 from src.v7.config import v7_config
-from src.v7.hard_gates import check_hard_gates, make_sufficiency
+from src.v7.contract import Candidate, PackResult, RejectedCandidate
+from src.v7.decide import accept, terminal_update
 from src.v7.nlp_core import merge_all_passages
-from src.v7.state_types import NextAfterEvalComplex, RAGState, RetrievalPlan
+from src.v7.nodes.visual_enrichment import enrich_passages
+from src.v7.pack_context import pack_context
+from src.v7.state_types import RAGState, RetrievalPlan
+from src.v7.validate import required_obligations, validate_context
 
 logger = structlog.get_logger()
 
+_ORIGIN_REASON = {
+    "merged": "complex_sufficient",
+    "last_attempt": "complex_sufficient",
+    "fallback_snapshot": "complex_fallback_accepted",
+}
 
-def evaluate_complex(state: RAGState) -> RAGState:
-    """Final check. Hard gates only, no triage.
 
-    Order: merged passages → last attempt → fallback → abstain.
-    """
+def _candidates(state: RAGState) -> List[Candidate]:
+    """Return merged, last-attempt, then immutable simple snapshot candidates."""
     attempts = state.get("retrieval_attempts") or []
-    if not attempts:
-        return {"sufficient": False}
-
     last = attempts[-1]
-    plan = cast(RetrievalPlan, last.get("attempt_plan") or state.get("plan", {}))
-    original_q = state.get("query", "")
-    active_q = state.get("active_query", original_q)
+    plan = cast(RetrievalPlan, last.get("attempt_plan") or state.get("plan") or {})
+    active_q = state.get("active_query", state.get("query", ""))
 
-    total_passages = sum(len(a.get("passages", [])) for a in attempts)
-    logger.info(
-        "evaluate_complex.enter", attempts=len(attempts), total_passages=total_passages
-    )
-
-    # 1. Merge passages from all attempts
     merged = merge_all_passages(
         attempts,
         top_k=v7_config.FINAL_MERGE_TOP_K,
         mmr_lambda=plan.get("mmr_lambda"),
     )
-    logger.info("evaluate_complex.merged", merged=len(merged))
-    if merged:
-        hard_m = check_hard_gates(original_q, active_q, merged, plan)
-        if hard_m["sufficient"]:
-            return {
-                "sufficient": True,
-                "final_passages": merged,
-                "final_score": hard_m["top_score"],
-                "sufficiency_details": make_sufficiency(hard_m, merged),
-            }
+    out: List[Candidate] = [
+        {
+            "passages": merged,
+            "plan": dict(plan),
+            "active_query": active_q,
+            "origin": "merged",
+            "packed": False,
+        },
+        {
+            "passages": last.get("passages", []),
+            "plan": dict(plan),
+            "active_query": active_q,
+            "origin": "last_attempt",
+            "packed": False,
+        },
+    ]
+    snapshot = state.get("fallback_snapshot")
+    if snapshot:
+        out.append(cast(Candidate, dict(snapshot)))
+    return out
 
-    # 2. Last attempt only
-    passages = last.get("passages", [])
-    hard = check_hard_gates(original_q, active_q, passages, plan)
-    if hard["sufficient"]:
+
+def _prepare(cand: Candidate, cache: Dict[str, Any]) -> PackResult:
+    """Enrich and pack a candidate, unless it is an already packed snapshot."""
+    if cand.get("packed"):
         return {
-            "sufficient": True,
-            "final_passages": passages,
-            "final_score": hard["top_score"],
-            "sufficiency_details": make_sufficiency(hard, passages),
+            "final_context": list(cand["passages"]),
+            "status": cand.get("pack_status", "ok"),
+            "dropped": 0,
         }
+    enriched = enrich_passages(cand["passages"])
+    return pack_context(enriched, cand["active_query"], cand["plan"], cache=cache)
 
-    # 3. Fallback (fast-path): only accept if fallback passages actually pass hard gates.
-    # Without this check, OOS queries whose rag_simple fallback had non-zero score
-    # would slip through as sufficient even when kw_overlap=0.
-    # Use the simple-attempt plan for gate evaluation: fallback was produced on
-    # simple-path thresholds (min_passages=5, keyword_overlap≥0.15), so checking
-    # it against complex-plan thresholds (min_passages=8, keyword_overlap≥0.20)
-    # would incorrectly reject a valid simple result.
-    fallback = state.get("fallback_passages")
-    fallback_score = state.get("fallback_score", 0.0)
-    if fallback and fallback_score > 0:
-        simple_plan = next(
-            (a["attempt_plan"] for a in attempts if a.get("stage") == "simple"),
-            plan,  # fall back to complex plan if no simple attempt found
+
+def evaluate_complex(state: RAGState) -> RAGState:
+    query = state.get("query", "")
+    active_q = state.get("active_query", query)
+    required = required_obligations(query)
+    attempts = state.get("retrieval_attempts") or []
+    plan = cast(RetrievalPlan, state.get("plan") or {})
+
+    if not attempts:
+        return cast(
+            RAGState,
+            terminal_update(
+                route="abstain",
+                reason="complex_exhausted",
+                final_context=[],
+                candidate_context=[],
+                verdict=None,
+                required=required,
+                technical_failure=True,
+            ),
         )
-        fb_hard = check_hard_gates(original_q, active_q, fallback, simple_plan)
-        if fb_hard["sufficient"]:
-            return {
-                "sufficient": True,
-                "final_passages": fallback,
-                "final_score": fallback_score,
-                "sufficiency_details": make_sufficiency(fb_hard, fallback),
+
+    snapshot = state.get("fallback_snapshot") or {}
+    prior = snapshot.get("passages") if snapshot else None
+    candidates = _candidates(state)
+    cache: Dict[str, Any] = {}
+    rejected: List[RejectedCandidate] = []
+    technical = any(a.get("retrieval_error") for a in attempts)
+
+    for i, cand in enumerate(candidates):
+        is_last = i == len(candidates) - 1
+        packed = _prepare(cand, cache)
+        if packed["status"] == "degraded":
+            technical = True
+        verdict = validate_context(
+            packed["final_context"],
+            query,
+            cand["active_query"],
+            cand["plan"],
+            required,
+            pack_status=packed["status"],
+            prior_context=prior,
+        )
+        logger.info(
+            "evaluate_complex.candidate",
+            origin=cand["origin"],
+            packed=len(packed["final_context"]),
+            unmet=verdict["obligations_unmet"],
+            pack_status=packed["status"],
+        )
+
+        if accept(
+            packed["final_context"],
+            verdict,
+            on_complex=True,
+            is_last_candidate=is_last,
+        ):
+            reason = _ORIGIN_REASON.get(cand["origin"], "complex_sufficient")
+            if verdict["obligations_unmet"]:
+                reason = "enumeration_best_effort"
+            return cast(
+                RAGState,
+                terminal_update(
+                    route="generate",
+                    reason=reason,
+                    final_context=packed["final_context"],
+                    candidate_context=cand["passages"],
+                    verdict=verdict,
+                    required=required,
+                    technical_failure=technical,
+                    rejected=cast(List[dict], rejected),
+                ),
+            )
+
+        rejected.append(
+            {
+                "origin": cand["origin"],
+                "obligations_unmet": list(verdict["obligations_unmet"]),
+                "triage": verdict["triage"],
+                "passages": len(packed["final_context"]),
+                "pack_status": packed["status"],
             }
+        )
 
-    # 4. Full failure
-    return {
-        "sufficient": False,
-        "sufficiency_details": make_sufficiency(hard, passages, triage="clearly_bad"),
-    }
+    empty_verdict = validate_context([], query, active_q, plan, required)
+    return cast(
+        RAGState,
+        terminal_update(
+            route="abstain",
+            reason="complex_exhausted",
+            final_context=[],
+            candidate_context=[],
+            verdict=empty_verdict,
+            required=required,
+            technical_failure=technical,
+            rejected=cast(List[dict], rejected),
+        ),
+    )
 
 
-def route_after_eval_complex(state: RAGState) -> NextAfterEvalComplex:
-    return "end" if state.get("sufficient") else "abstain"
+def route_after_decision(state: RAGState) -> str:
+    """Read the terminal route selected by either evaluator."""
+    return state.get("route_decision", "abstain")

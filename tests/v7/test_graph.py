@@ -83,3 +83,17 @@ class TestBuildGraph:
             result.get("abstain_reason") is not None
             or result.get("sufficient") is not None
         )
+
+
+def test_graph_has_no_visual_enrichment_node():
+    assert "visual_enrichment" not in build_graph().nodes
+
+
+def test_graph_compiles():
+    assert build_graph().compile() is not None
+
+
+def test_route_after_triage_is_gone():
+    import src.v7.nodes.evaluate_triage as et
+
+    assert not hasattr(et, "route_after_triage")

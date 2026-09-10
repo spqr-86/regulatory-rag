@@ -38,8 +38,8 @@ TriageCategory = Literal["sufficient", "borderline", "clearly_bad"]
 
 NextAfterIntent = Literal["end", "router"]
 NextAfterRouter = Literal["rag_simple", "clarify_respond"]
-NextAfterTriage = Literal["end", "rag_complex"]
-NextAfterEvalComplex = Literal["end", "abstain"]
+NextAfterTriage = Literal["generate", "complex", "abstain"]
+NextAfterEvalComplex = Literal["generate", "abstain"]
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 

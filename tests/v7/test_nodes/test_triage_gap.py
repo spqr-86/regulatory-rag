@@ -7,11 +7,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.v7.nodes.evaluate_triage import (
-    build_gap,
-    evaluate_triage,
-    set_crossref_expander,
-)
+from src.v7 import pack_context as pc
+from src.v7.gap import build_gap
+from src.v7.nodes.evaluate_triage import evaluate_triage
 
 
 def _p(text, source="SP486", score=0.8):
@@ -45,9 +43,9 @@ def _make_attempt(passages, plan=None):
 @pytest.fixture(autouse=True)
 def _reset_expander():
     """Every test starts with no expander injected."""
-    set_crossref_expander(None)
+    pc.set_crossref_expander(None)
     yield
-    set_crossref_expander(None)
+    pc.set_crossref_expander(None)
 
 
 class TestBuildGap:
@@ -181,7 +179,9 @@ class TestGapWithoutExpander:
         state, passages = _crossref_state()
         result = evaluate_triage(state)
         assert result["sufficient"] is False
-        assert result["fallback_passages"] == passages
+        assert result["route_decision"] == "complex"
+        assert result["route_reason"] == "refs_unresolved"
+        assert result["fallback_snapshot"]["passages"] == passages
         gap = result["triage_gap"]
         assert gap["kind"] == "unresolved_ref"
         assert "clause:3" in gap["open"]
@@ -197,7 +197,7 @@ class TestGapClosing:
             _p("4. За исключением ограждение временных лестница.", score=0.4),
             _p("5. Перечень ограждение лестница исключений.", score=0.4),
         ]
-        set_crossref_expander(lambda ps, query: list(ps) + added)
+        pc.set_crossref_expander(lambda ps, query: list(ps) + added)
 
         result = evaluate_triage(state)
 
@@ -226,7 +226,7 @@ class TestGapClosing:
             ps = list(ps)
             return [ps[0]] + added + ps[1:]
 
-        set_crossref_expander(_reordering_expander)
+        pc.set_crossref_expander(_reordering_expander)
 
         result = evaluate_triage(state)
 
@@ -238,29 +238,23 @@ class TestGapClosing:
     def test_original_passage_order_preserved(self):
         state, passages = _crossref_state()
         added = [_p(f"{n}. Ограждение лестница текст.", score=0.4) for n in (3, 4, 5)]
-        set_crossref_expander(lambda ps, query: list(ps) + added)
+        pc.set_crossref_expander(lambda ps, query: list(ps) + added)
 
         result = evaluate_triage(state)
 
         assert result["final_passages"][: len(passages)] == passages
 
     @pytest.mark.unit
-    def test_unclosed_gap_escalates_with_the_original_fallback(self):
-        """Expansion that closes nothing is discarded, not handed on.
-
-        The real expander inserts bbox siblings right after their parent, so a
-        list that grew from 12 to 42 pushes relevant chunks out of the top-12 —
-        measured on held-out 05.09.2026, one question lost its hit. When the
-        gap does not close, rag_complex starts from the original passages.
-        """
+    def test_unclosed_gap_escalates_with_the_packed_candidate(self):
+        """An unresolved expanded candidate is preserved for complex fallback."""
         state, passages = _crossref_state()
         added = [_p("Ничего похожего на искомые нормы.", score=0.4)]
-        set_crossref_expander(lambda ps, query: list(ps) + added)
+        pc.set_crossref_expander(lambda ps, query: list(ps) + added)
 
         result = evaluate_triage(state)
 
         assert result["sufficient"] is False
-        assert result["fallback_passages"] == passages
+        assert result["fallback_snapshot"]["passages"] == passages + added
         assert "clause:3" in result["triage_gap"]["open"]
 
     @pytest.mark.unit
@@ -268,13 +262,14 @@ class TestGapClosing:
         def _boom(ps, query):
             raise RuntimeError("backend down")
 
-        set_crossref_expander(_boom)
+        pc.set_crossref_expander(_boom)
         state, passages = _crossref_state()
 
         result = evaluate_triage(state)
 
         assert result["sufficient"] is False
-        assert result["fallback_passages"] == passages
+        assert result["technical_failure"] is True
+        assert result["fallback_snapshot"]["passages"] == passages
         assert "clause:3" in result["triage_gap"]["open"]
 
     @pytest.mark.unit
@@ -288,7 +283,7 @@ class TestGapClosing:
             _p("4. За исключением ограждение временных лестница.", score=0.4),
             _p("5. Перечень ограждение лестница исключений.", score=0.4),
         ]
-        set_crossref_expander(lambda ps, query: list(ps) + added)
+        pc.set_crossref_expander(lambda ps, query: list(ps) + added)
 
         result = evaluate_triage(state)
 
@@ -306,13 +301,13 @@ class TestGapClosing:
             _p("4. За исключением ограждение лестница обучение.", score=0.4),
             _p("5. Перечень ограждение лестница обучение.", score=0.4),
         ]
-        set_crossref_expander(lambda ps, query: list(ps) + added)
+        pc.set_crossref_expander(lambda ps, query: list(ps) + added)
 
         result = evaluate_triage(state)
 
-        assert result["sufficient"] is True
-        assert result["fallback_passages"] == passages + added
-        assert result["final_passages"] == passages + added
+        assert result["sufficient"] is False
+        assert result["route_reason"] == "enumeration_intent"
+        assert result["fallback_snapshot"]["passages"] == passages + added
 
 
 class TestNoGapNoEscalation:
