@@ -18,6 +18,16 @@ from eval.measure_triage_gap import (
 
 class TestPassagesAfterTriage:
     @pytest.mark.unit
+    def test_final_context_wins_even_when_empty(self):
+        retrieved = [{"text": "a"}]
+        update = {
+            "final_context": [],
+            "final_passages": [{"text": "legacy"}],
+            "sufficient": True,
+        }
+        assert passages_after_triage(update, retrieved) == []
+
+    @pytest.mark.unit
     def test_sufficient_hands_on_final_passages(self):
         retrieved = [{"text": "a"}]
         update = {"sufficient": True, "final_passages": [{"text": "a"}, {"text": "b"}]}
@@ -27,7 +37,10 @@ class TestPassagesAfterTriage:
     def test_escalation_hands_on_fallback_passages(self):
         """On escalation rag_complex starts from the fallback, so that is the output."""
         retrieved = [{"text": "a"}]
-        update = {"sufficient": False, "fallback_passages": [{"text": "a"}, {"text": "b"}]}
+        update = {
+            "sufficient": False,
+            "fallback_passages": [{"text": "a"}, {"text": "b"}],
+        }
         assert passages_after_triage(update, retrieved) == update["fallback_passages"]
 
     @pytest.mark.unit
@@ -40,10 +53,43 @@ class TestSummarize:
     @pytest.mark.unit
     def test_counts_escalations_gaps_and_hit_rate(self):
         records = [
-            {"question": "q1", "escalated": True, "hit": False, "gap_open": True, "gap_seen": True},
-            {"question": "q2", "escalated": False, "hit": True, "gap_open": False, "gap_seen": True},
-            {"question": "q3", "escalated": False, "hit": True, "gap_open": False, "gap_seen": False},
-            {"question": "q4", "escalated": False, "hit": False, "gap_open": False, "gap_seen": False},
+            {
+                "question": "q1",
+                "escalated": True,
+                "hit": False,
+                "gap_open": True,
+                "gap_seen": True,
+                "route_decision": "complex",
+                "route_reason": "refs_unresolved",
+                "technical_failure": True,
+            },
+            {
+                "question": "q2",
+                "escalated": False,
+                "hit": True,
+                "gap_open": False,
+                "gap_seen": True,
+                "route_decision": "generate",
+                "route_reason": "context_sufficient",
+            },
+            {
+                "question": "q3",
+                "escalated": False,
+                "hit": True,
+                "gap_open": False,
+                "gap_seen": False,
+                "route_decision": "generate",
+                "route_reason": "context_sufficient",
+            },
+            {
+                "question": "q4",
+                "escalated": False,
+                "hit": False,
+                "gap_open": False,
+                "gap_seen": False,
+                "route_decision": "abstain",
+                "route_reason": "empty_pool",
+            },
         ]
         s = summarize(records, k=12)
         assert s["n"] == 4
@@ -51,6 +97,13 @@ class TestSummarize:
         assert s["hit_rate@12"] == 0.5
         assert s["gaps_seen"] == 2
         assert s["gaps_closed"] == 1
+        assert s["route_decisions"] == {"abstain": 1, "complex": 1, "generate": 2}
+        assert s["route_reasons"] == {
+            "context_sufficient": 2,
+            "empty_pool": 1,
+            "refs_unresolved": 1,
+        }
+        assert s["technical_failures"] == 1
 
     @pytest.mark.unit
     def test_empty_batch_is_zeroed_not_a_crash(self):
@@ -61,20 +114,27 @@ class TestSummarize:
             "hit_rate@12": 0.0,
             "gaps_seen": 0,
             "gaps_closed": 0,
+            "route_decisions": {},
+            "route_reasons": {},
+            "technical_failures": 0,
         }
 
 
 class TestCompareRuns:
     @pytest.mark.unit
     def test_passes_when_escalations_drop_and_no_question_regresses(self):
-        base = {"records": [
-            {"question": "q1", "escalated": True, "hit": True},
-            {"question": "q2", "escalated": True, "hit": False},
-        ]}
-        new = {"records": [
-            {"question": "q1", "escalated": False, "hit": True},
-            {"question": "q2", "escalated": True, "hit": True},
-        ]}
+        base = {
+            "records": [
+                {"question": "q1", "escalated": True, "hit": True},
+                {"question": "q2", "escalated": True, "hit": False},
+            ]
+        }
+        new = {
+            "records": [
+                {"question": "q1", "escalated": False, "hit": True},
+                {"question": "q2", "escalated": True, "hit": True},
+            ]
+        }
         verdict = compare_runs(base, new)
         assert verdict["escalation_delta"] == -0.5
         assert verdict["regressed"] == []
@@ -82,14 +142,18 @@ class TestCompareRuns:
 
     @pytest.mark.unit
     def test_fails_when_a_single_question_loses_its_hit(self):
-        base = {"records": [
-            {"question": "q1", "escalated": True, "hit": True},
-            {"question": "q2", "escalated": True, "hit": True},
-        ]}
-        new = {"records": [
-            {"question": "q1", "escalated": False, "hit": False},
-            {"question": "q2", "escalated": False, "hit": True},
-        ]}
+        base = {
+            "records": [
+                {"question": "q1", "escalated": True, "hit": True},
+                {"question": "q2", "escalated": True, "hit": True},
+            ]
+        }
+        new = {
+            "records": [
+                {"question": "q1", "escalated": False, "hit": False},
+                {"question": "q2", "escalated": False, "hit": True},
+            ]
+        }
         verdict = compare_runs(base, new)
         assert verdict["regressed"] == ["q1"]
         assert verdict["passed"] is False

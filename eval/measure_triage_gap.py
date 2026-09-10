@@ -20,6 +20,10 @@ Usage:
         --baseline benchmarks/triage_gap_main.json
 """
 
+# ANCHOR: Offline route/recall measurement for the simple triage path.
+# Input: labeled questions plus injected project retrievers; output: JSON-ready
+# per-question records and aggregate route, gap, and hit-rate diagnostics.
+
 from __future__ import annotations
 
 import argparse
@@ -49,10 +53,12 @@ DEFAULT_K = 12
 def passages_after_triage(update: dict, retrieved: List[dict]) -> List[dict]:
     """The passage list the triage hands on to the next node.
 
-    Sufficient → final_passages (what generation sees). Escalation →
-    fallback_passages, the list rag_complex starts from; when the triage saved
-    no fallback, what the retriever returned.
+    Under the terminal contract, final_context is exactly what was validated.
+    An explicitly empty context is meaningful and must not be replaced by the
+    retriever output. Legacy keys remain for old benchmark snapshots.
     """
+    if "final_context" in update:
+        return update["final_context"]
     if update.get("sufficient"):
         return update.get("final_passages") or retrieved
     return update.get("fallback_passages") or retrieved
@@ -68,8 +74,20 @@ def summarize(records: Sequence[dict], k: int = DEFAULT_K) -> dict:
             f"hit_rate@{k}": 0.0,
             "gaps_seen": 0,
             "gaps_closed": 0,
+            "route_decisions": {},
+            "route_reasons": {},
+            "technical_failures": 0,
         }
     gaps_seen = sum(1 for r in records if r.get("gap_seen"))
+    route_decisions: dict[str, int] = {}
+    route_reasons: dict[str, int] = {}
+    for record in records:
+        decision = record.get("route_decision")
+        reason = record.get("route_reason")
+        if decision:
+            route_decisions[decision] = route_decisions.get(decision, 0) + 1
+        if reason:
+            route_reasons[reason] = route_reasons.get(reason, 0) + 1
     return {
         "n": n,
         "escalation_rate": sum(1 for r in records if r["escalated"]) / n,
@@ -77,6 +95,11 @@ def summarize(records: Sequence[dict], k: int = DEFAULT_K) -> dict:
         "gaps_seen": gaps_seen,
         "gaps_closed": sum(
             1 for r in records if r.get("gap_seen") and not r.get("gap_open")
+        ),
+        "route_decisions": dict(sorted(route_decisions.items())),
+        "route_reasons": dict(sorted(route_reasons.items())),
+        "technical_failures": sum(
+            1 for record in records if record.get("technical_failure")
         ),
     }
 
@@ -123,7 +146,7 @@ def compare_runs(baseline: dict, new: dict) -> dict:
 
 def run(gt_records: Sequence[dict], k: int = DEFAULT_K) -> dict:
     """Run router → rag_simple → evaluate_triage over the GT."""
-    from src.v7.nodes.evaluate_triage import evaluate_triage, route_after_triage
+    from src.v7.nodes.evaluate_triage import evaluate_triage
     from src.v7.nodes.rag_simple import rag_simple
     from src.v7.nodes.router import router
 
@@ -160,8 +183,7 @@ def run(gt_records: Sequence[dict], k: int = DEFAULT_K) -> dict:
             handed_on = passages_after_triage(update, retrieved)
             gap = update.get("triage_gap")
 
-            merged = {**state, **update}
-            escalated = route_after_triage(merged) == "rag_complex"
+            escalated = update.get("route_decision") == "complex"
 
             relevant = set(rec.get("relevant_chunk_ids") or [rec["chunk_id"]])
             hit = bool(set(extract_chunk_ids(handed_on)[:k]) & relevant)
@@ -176,6 +198,9 @@ def run(gt_records: Sequence[dict], k: int = DEFAULT_K) -> dict:
                     "gap_seen": gap is not None,
                     "gap_open": bool(gap and gap.get("open")),
                     "gap": gap,
+                    "route_decision": update.get("route_decision"),
+                    "route_reason": update.get("route_reason"),
+                    "technical_failure": bool(update.get("technical_failure")),
                 }
             )
         except Exception as exc:  # a dead query must not kill the run
