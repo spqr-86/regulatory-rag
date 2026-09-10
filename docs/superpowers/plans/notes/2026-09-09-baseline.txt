@@ -63,3 +63,31 @@ replayed faithfully through the new triage contract.
 The generative eval remains blocked by the same empty OpenAI balance. No route
 distribution, quality comparison, or push decision is recorded until both runs
 can complete. No push was attempted.
+
+TASK 14 PRE-PUSH GATES — RUN 2026-09-10, QUALITY GATE FAILED
+
+Route matrix (133/133, 0 errors, 0 technical failures): route decisions were
+generate=89, complex=43, abstain=1; route reasons were context_sufficient=89,
+refs_unresolved=36, triage_borderline=4, enumeration_intent=3, zero_overlap_both=1.
+Escalation rate increased from 0.248 to 0.323. HR@12 fell from 0.827 to 0.789:
+five baseline hits were lost and none gained. All five losses stayed on the simple
+route with reason=context_sufficient and handed 10 passages to generation versus
+12 in the baseline. This is consistent with moving the live final-context cap to
+MAX_CHUNKS_FOR_LLM=10; the route matrix is diagnostic, not itself the push gate.
+
+Generative eval used the same 56-question dataset and JUDGE_MODEL_NAME=gpt-4o.
+New vs variant-B baseline: valid 48/56 vs 53/56; faithfulness 0.894 vs 0.808;
+answer relevance 0.748 vs 0.881; correctness all 5.48 vs 7.09; correctness in-scope
+5.82 vs 7.40; OOS rejection 100% vs 100%; false-sufficiency 13.8% vs 13.0%;
+complex path 39.6% vs 13.2%; p50/p95 5.5/17.8s vs 4.8/14.7s; total cost
+$0.2130 vs $0.1739. Seventeen questions changed simple→complex. Five questions
+answered by the baseline now produced an empty answer; the most severe was the
+program A/B periodicity question (baseline 10/10). Several other former 9–10/10
+answers became 3/10 statements that the evidence was missing, including minimum
+internship duration and the practical-training share for PPE.
+
+Decision: DO NOT PUSH. The drop is coherent across relevance, correctness, empty
+answers, latency, cost, route changes, and named domain-critical examples; it is
+not plausibly only judge noise. Next step is a TDD diagnosis of final-context
+selection: test the 10-vs-12 simple truncation and preservation of the best direct
+evidence across simple→complex escalation, then rerun both Task 14 evaluations.
