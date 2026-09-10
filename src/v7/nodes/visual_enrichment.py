@@ -12,18 +12,20 @@ Limit: MAX_VISUAL_PROOFS per query (default 3).
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor  # noqa: F401 — used in visual proof timeout
+from concurrent.futures import (
+    ThreadPoolExecutor,
+)  # noqa: F401 — used in visual proof timeout
 from concurrent.futures import TimeoutError as FuturesTimeout  # noqa: F401
-from typing import Callable, Optional
-
-_VISUAL_PROOF_TIMEOUT_S = (
-    3  # seconds; _visual_proof hangs on headless PDF render without this
-)
+from typing import Callable, List, Optional
 
 from src.infra.parsers import detect_incomplete_chunk
 from src.v7.state_types import RAGState
 
 logger = logging.getLogger(__name__)
+
+_VISUAL_PROOF_TIMEOUT_S = (
+    3  # seconds; _visual_proof hangs on headless PDF render without this
+)
 
 MAX_VISUAL_PROOFS = 3  # overridden in init if settings available
 
@@ -61,22 +63,16 @@ def _needs_visual(passage: dict) -> bool:
 # ─── Node ─────────────────────────────────────────────────────────────────
 
 
-def visual_enrichment(state: RAGState) -> RAGState:
-    """Enrich final_passages with visual context before answer generation.
+def enrich_passages(passages: List[dict]) -> List[dict]:
+    """Дописать визуальный разбор таблиц в пассажи без мутации входа.
 
-    Reads:  final_passages
-    Writes: final_passages (updated in-place copy, only changed passages)
-    No-op if: no visual_proof_fn injected, no passages, or no passages need enrichment.
+    Вызывается до pack_context: визуальный анализ может ошибаться и расходует
+    бюджет промпта, поэтому вердикт проверяет уже обогащённый текст.
     """
-    import structlog as _sl
-
-    _log = _sl.get_logger()
     fn = _visual_proof_fn
-    passages = state.get("final_passages") or []
-    _log.info("visual_enrichment.enter", passages=len(passages), has_fn=fn is not None)
 
     if not fn or not passages:
-        return {}
+        return passages
 
     try:
         max_proofs = MAX_VISUAL_PROOFS
@@ -139,7 +135,12 @@ def visual_enrichment(state: RAGState) -> RAGState:
         except Exception as exc:
             logger.warning("visual_enrichment failed for passage %d: %s", i, exc)
 
-    if count == 0:
-        return {}
+    return enriched
 
-    return {"final_passages": enriched}
+
+def visual_enrichment(state: RAGState) -> RAGState:
+    """DEPRECATED-обёртка, оставленная для старых тестов и внешних вызовов."""
+    passages = state.get("final_passages") or []
+    enriched = enrich_passages(passages)
+
+    return {} if enriched == passages else {"final_passages": enriched}

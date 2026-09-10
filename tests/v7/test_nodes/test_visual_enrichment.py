@@ -142,3 +142,37 @@ class TestVisualEnrichmentNode:
         p = _passage("x", {**_coords(bbox=bbox_str), "element_type": "Table"})
         visual_enrichment({"final_passages": [p]})
         assert parsed_args[0] == [10.0, 20.0, 100.0, 80.0]
+
+
+def test_enrich_passages_is_pure_and_state_free():
+    import copy
+
+    from src.v7.nodes import visual_enrichment as ve
+
+    ve.set_visual_proof_fn(lambda source, page, bbox, mode: "РАЗБОР ТАБЛИЦЫ")
+    try:
+        passages = [
+            {
+                "text": "коротко",
+                "metadata": {
+                    "source": "d.pdf",
+                    "page_no": 1,
+                    "bbox": [0, 0, 1, 1],
+                    "element_type": "Table",
+                },
+            }
+        ]
+        snapshot = copy.deepcopy(passages)
+        out = ve.enrich_passages(passages)
+        assert passages == snapshot
+        assert "РАЗБОР ТАБЛИЦЫ" in out[0]["text"]
+    finally:
+        ve.set_visual_proof_fn(None)
+
+
+def test_enrich_passages_noop_without_fn():
+    from src.v7.nodes import visual_enrichment as ve
+
+    ve.set_visual_proof_fn(None)
+    passages = [{"text": "t", "metadata": {}}]
+    assert ve.enrich_passages(passages) == passages
