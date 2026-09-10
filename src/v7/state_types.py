@@ -161,7 +161,8 @@ class RAGState(TypedDict, total=False):
 
     INPUT:     query (immutable), filters.
     INTERNAL:  intent, plan, retrieval_id, active_query,
-               retrieval_attempts, sufficient.
+               retrieval_attempts, sufficient (DEPRECATED — производное от
+               route_decision == "generate").
     OUTPUT:    final_passages, final_score, fallback_passages, fallback_score,
                clarify_message, abstain_reason, sufficiency_details.
     UX:        status_message — progress for frontend streaming.
@@ -190,5 +191,15 @@ class RAGState(TypedDict, total=False):
     sufficiency_details: SufficiencyResult
     answer: str  # synthesised LLM answer (set by generate_answer node)
     triage_gap: TriageGap  # structured gap from legacy triage (#13); not filled by V8
+    # ─── Терминальный контракт решения (спек 2026-09-09) ─────────────────
+    route_decision: Literal["generate", "complex", "abstain"]
+    route_reason: str  # ровно один primary code
+    obligations_unmet: List[str]  # ВСЕ невыполненные, не только primary
+    obligations_required: List[str]  # какие вообще проверялись
+    candidate_context: List[dict]  # вход упаковки
+    final_context: List[dict]  # выход; после вердикта неизменяем, его читает генератор
+    technical_failure: bool  # сбой retrieval ИЛИ degraded-упаковка
+    fallback_snapshot: dict  # Candidate simple-ветки, неизменяемый
+    rejected_candidates: List[dict]  # диагностика перебора на complex
     # UX
     status_message: str
