@@ -2911,8 +2911,9 @@ git commit -m "test(v7): end-to-end contract invariants as the primary gate"
 **Files:**
 - Modify: `CLAUDE.md`, `roadmap.md`
 - Create: `benchmarks/triage_gap_contract.json`
+- Create: `benchmarks/eval_v7_triage_contract.jsonl`
 
-**Замер — не гейт.** Порога «доля эскалаций не должна просесть» не ставим: правильный фикс маршрутизации может законно её снизить. Цифры интерпретируются.
+**Офлайн-замер маршрутов — не гейт.** Порога «доля эскалаций не должна просесть» не ставим: правильный фикс маршрутизации может законно её снизить. Цифры интерпретируются. **Генеративный eval — pre-push quality gate:** точного требования монотонности средних нет из-за шума LLM-судьи и малого N, но новые технические ошибки, заметная совокупная просадка или опасные регрессии отдельных ответов блокируют push до разбора.
 
 - [ ] **Step 1: Снять матрицу маршрутов**
 
@@ -2923,15 +2924,27 @@ Expected: JSON записан, LLM не вызывается.
 
 Дописать в `docs/superpowers/plans/notes/2026-09-09-baseline.txt`: распределение по `route_reason`, куда ушли бывшие enumeration-«sufficient», сколько случаев дали `technical_failure`, изменился ли Hit Rate@12 и почему.
 
-- [ ] **Step 3: Починить неточность в CLAUDE.md**
+- [ ] **Step 3: Прогнать генеративный quality eval тем же судьёй**
+
+Run: `.venv/bin/python eval/run_v7_eval.py --output benchmarks/eval_v7_triage_contract.jsonl`
+
+Условия сравнимости: тот же 56-вопросный dataset, тот же генератор и `JUDGE_MODEL_NAME=gpt-4o`, без `--skip-judge`. Baseline — `benchmarks/eval_v7_2026-09-08_variantB.jsonl` (56 вопросов, 53 валидных). Ожидаемая стоимость порядка $0.25; запускать после пополнения баланса OpenAI.
+
+- [ ] **Step 4: Сравнить качество с baseline варианта B**
+
+Сравнить correctness, faithfulness, relevance, false-sufficiency, стоимость и latency. Отдельно разобрать вопросы с ухудшением ответа и все новые technical failures. Не требовать, чтобы каждая средняя метрика не снизилась ни на одну сотую: выборка мала, судья стохастичен. Push блокируют новая техническая ошибка, заметная согласованная просадка нескольких метрик или опасная предметная регрессия в конкретном ответе.
+
+Интерпретацию и решение «можно пушить / сначала исправить» дописать в `docs/superpowers/plans/notes/2026-09-09-baseline.txt`.
+
+- [ ] **Step 5: Починить неточность в CLAUDE.md**
 
 В `CLAUDE.md`, секция 09.09-3, заменить «после merge FINAL_MERGE_TOP_K=24 + MAX_CHUNKS_FOR_LLM=10» на: «после merge FINAL_MERGE_TOP_K=24; финальную обрезку до MAX_CHUNKS_FOR_LLM и токенный бюджет делает pack_context (до 09.09.2026 конфиг был мёртвым, реальная обрезка жила в bridge как [:30])».
 
-- [ ] **Step 4: Обновить roadmap**
+- [ ] **Step 6: Обновить roadmap**
 
 В `roadmap.md`: контракт решения — выполнен, ссылки на спек и план; из сетки калибровки #9 убрать `TRIAGE_SOFT_THRESHOLD` со ссылкой на §8 спека.
 
-- [ ] **Step 5: Финальная проверка и пуш**
+- [ ] **Step 7: Финальная проверка и пуш**
 
 ```bash
 .venv/bin/pytest -q 2>&1 | tail -5
