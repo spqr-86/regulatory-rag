@@ -9,14 +9,25 @@ import pytest
 def test_init_v7_from_chroma_with_real_backend(tmp_path, monkeypatch):
     """Smoke test: init_v7_pipeline works against a real ChromaBackend."""
     from langchain_core.documents import Document
+    from langchain_core.embeddings import DeterministicFakeEmbedding
 
     from src.backends.chroma_backend import ChromaBackend
     from src.v7.bridge import init_v7_pipeline
 
+    import src.indexing.vector_store as vector_store_mod
     import src.v7.nlp_core as nlp_core_mod
     import src.v7.nodes.rag_simple as rag_simple_mod
 
-    monkeypatch.setenv("CHROMA_DB_PATH", str(tmp_path / "test_chroma"))
+    test_chroma_path = str(tmp_path / "test_chroma")
+    monkeypatch.setenv("CHROMA_DB_PATH", test_chroma_path)
+    # ``settings`` is a process-wide singleton created before this test runs,
+    # so changing os.environ alone does not redirect the already-loaded value.
+    monkeypatch.setattr(vector_store_mod.settings, "CHROMA_DB_PATH", test_chroma_path)
+    monkeypatch.setattr(
+        vector_store_mod,
+        "get_embedding_model",
+        lambda: DeterministicFakeEmbedding(size=8),
+    )
     # Capture module globals before init so monkeypatch restores them after the test.
     # init_v7_pipeline injects into rag_simple AND populates nlp_core._bm25_index —
     # both must be restored to avoid contaminating subsequent unit tests.
