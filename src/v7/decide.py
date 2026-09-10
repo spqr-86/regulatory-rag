@@ -5,9 +5,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from src.v7.contract import OBL_ENUM, RouteDecision, Verdict
+from src.v7.contract import OBL_ENUM, OBL_ORIGINAL, OBL_REFS, RouteDecision, Verdict
 
 # ANCHOR: единая граница решения для simple/complex путей.
 # Input: packed context + Verdict. Output: accept bool or complete state update.
@@ -50,6 +50,62 @@ def accept(
             is_last_candidate=is_last_candidate,
         )
     return True
+
+
+def _zero_overlap_both(verdict: Verdict) -> bool:
+    details = verdict.get("details") or {}
+    return (
+        details.get("keyword_overlap_active", 1.0) <= 0.0
+        and details.get("keyword_overlap_original", 1.0) <= 0.0
+    )
+
+
+def decide_simple(
+    final_context: List[dict],
+    verdict: Verdict,
+    *,
+    retrieval_error: bool,
+    abstain_on_empty: bool,
+) -> Tuple[RouteDecision, str]:
+    """Применить таблицу решений simple-ветки; первое совпадение выигрывает.
+
+    ``retrieval_error`` означает именно сбой retrieval. Degraded-упаковка
+    блокирует refs_resolved и попадает в строку 5, а не в строку 1.
+    """
+    if retrieval_error:
+        return "abstain", "retrieval_error"
+
+    if not final_context:
+        return (
+            ("abstain", "empty_pool")
+            if abstain_on_empty
+            else ("complex", "empty_pool_escalated")
+        )
+
+    if _zero_overlap_both(verdict):
+        return (
+            ("abstain", "zero_overlap_both")
+            if abstain_on_empty
+            else ("complex", "zero_overlap_both_escalated")
+        )
+
+    unmet = set(verdict["obligations_unmet"])
+
+    if OBL_ENUM in unmet:
+        return "complex", "enumeration_intent"
+    if OBL_REFS in unmet:
+        return "complex", "refs_unresolved"
+    if OBL_ORIGINAL in unmet:
+        return "complex", "zero_overlap_original"
+
+    if verdict["triage"] == "borderline":
+        return "complex", "triage_borderline"
+    if verdict["triage"] == "clearly_bad":
+        return "complex", "triage_clearly_bad"
+
+    if accept(final_context, verdict, on_complex=False, is_last_candidate=True):
+        return "generate", "context_sufficient"
+    return "complex", "triage_borderline"
 
 
 def terminal_update(

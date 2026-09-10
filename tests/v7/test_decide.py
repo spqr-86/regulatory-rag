@@ -1,5 +1,5 @@
 from src.v7.contract import OBL_ENUM, OBL_ORIGINAL, OBL_REFS
-from src.v7.decide import accept, best_effort_allowed, terminal_update
+from src.v7.decide import accept, best_effort_allowed, decide_simple, terminal_update
 
 CTX = [{"chunk_id": 1, "text": "t", "metadata": {"source": "d"}}]
 
@@ -118,3 +118,131 @@ def test_terminal_update_sufficient_is_derived():
     )
     assert update["sufficient"] is True
     assert update["final_passages"] == CTX
+
+
+def _d(
+    ctx,
+    unmet,
+    hard_ok=True,
+    triage="sufficient",
+    err=False,
+    abstain=True,
+    active=0.5,
+    original=0.5,
+):
+    return decide_simple(
+        ctx,
+        _v(
+            unmet,
+            hard_ok=hard_ok,
+            triage=triage,
+            active=active,
+            original=original,
+        ),
+        retrieval_error=err,
+        abstain_on_empty=abstain,
+    )
+
+
+def test_row1_retrieval_error_wins_over_everything():
+    assert _d(CTX, [], err=True) == ("abstain", "retrieval_error")
+
+
+def test_row2_empty_pool():
+    assert _d([], []) == ("abstain", "empty_pool")
+
+
+def test_row2_empty_pool_escalates_when_policy_off():
+    assert _d([], [], abstain=False) == ("complex", "empty_pool_escalated")
+
+
+def test_row3_zero_overlap_both():
+    assert _d(
+        CTX,
+        [OBL_ORIGINAL],
+        hard_ok=False,
+        triage="clearly_bad",
+        active=0.0,
+        original=0.0,
+    ) == ("abstain", "zero_overlap_both")
+
+
+def test_row3_escalates_when_policy_off():
+    assert _d(
+        CTX,
+        [OBL_ORIGINAL],
+        hard_ok=False,
+        triage="clearly_bad",
+        active=0.0,
+        original=0.0,
+        abstain=False,
+    ) == ("complex", "zero_overlap_both_escalated")
+
+
+def test_row4_enumeration_intent_escalates():
+    assert _d(CTX, [OBL_ENUM]) == ("complex", "enumeration_intent")
+
+
+def test_row5_refs_unresolved_escalates():
+    assert _d(CTX, [OBL_REFS]) == ("complex", "refs_unresolved")
+
+
+def test_row5_covers_degraded_pack_without_calling_it_a_retrieval_error():
+    v = _v([OBL_REFS])
+    v["pack_status"] = "degraded"
+    assert decide_simple(
+        CTX,
+        v,
+        retrieval_error=False,
+        abstain_on_empty=True,
+    ) == ("complex", "refs_unresolved")
+
+
+def test_row4_wins_over_row5():
+    assert _d(CTX, [OBL_ENUM, OBL_REFS]) == ("complex", "enumeration_intent")
+
+
+def test_row6_zero_overlap_original():
+    assert _d(CTX, [OBL_ORIGINAL], active=0.4, original=0.0) == (
+        "complex",
+        "zero_overlap_original",
+    )
+
+
+def test_row7_borderline():
+    assert _d(CTX, [], hard_ok=False, triage="borderline") == (
+        "complex",
+        "triage_borderline",
+    )
+
+
+def test_row8_clearly_bad():
+    assert _d(
+        CTX,
+        [],
+        hard_ok=False,
+        triage="clearly_bad",
+        active=0.3,
+        original=0.3,
+    ) == ("complex", "triage_clearly_bad")
+
+
+def test_row9_generate():
+    assert _d(CTX, []) == ("generate", "context_sufficient")
+
+
+def test_every_reason_is_a_declared_simple_code():
+    from src.v7.contract import SIMPLE_REASONS
+
+    cases = [
+        _d(CTX, [], err=True),
+        _d([], []),
+        _d([], [], abstain=False),
+        _d(CTX, [OBL_ENUM]),
+        _d(CTX, [OBL_REFS]),
+        _d(CTX, [OBL_ORIGINAL], active=0.4, original=0.0),
+        _d(CTX, [], hard_ok=False, triage="borderline"),
+        _d(CTX, []),
+    ]
+    for route, reason in cases:
+        assert reason in SIMPLE_REASONS, reason
