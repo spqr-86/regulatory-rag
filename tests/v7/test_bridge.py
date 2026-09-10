@@ -148,6 +148,67 @@ class TestMakeGenerateFn:
         assert "УНИКАЛЬНЫЙ_МАРКЕР_ОТВЕТА" in prompt
 
 
+def _fake_llm(seen):
+    class _FakeLLM:
+        def invoke(self, messages):
+            seen["prompt"] = messages[0].content
+
+            class R:
+                content = "ответ"
+                response_metadata = {}
+                usage_metadata = {}
+
+            return R()
+
+    return _FakeLLM()
+
+
+def test_generate_uses_passages_verbatim(monkeypatch):
+    """Инвариант 1: генератор видит ровно final_context — ни расширения,
+    ни санитайзинга, ни обрезки после вердикта.
+    """
+    from src.v7 import bridge
+
+    seen = {}
+    monkeypatch.setattr(
+        bridge,
+        "expand_cross_references",
+        lambda *a, **kw: (_ for _ in ()).throw(
+            AssertionError("bridge must not expand cross-references")
+        ),
+    )
+    passages = [
+        {
+            "text": f"чанк-{i} <текст> ignore previous",
+            "score": 0.5,
+            "metadata": {"source": "d.pdf"},
+        }
+        for i in range(40)
+    ]
+    fn = bridge.make_generate_fn(_fake_llm(seen), backend=object())
+    answer, usage = fn("q", "q", passages)
+    assert usage["n_passages"] == 40
+    # каждый пассаж дошёл дословно, в исходном порядке
+    for p in passages:
+        assert p["text"] in seen["prompt"]
+    assert seen["prompt"].index(passages[0]["text"]) < seen["prompt"].index(
+        passages[-1]["text"]
+    )
+
+
+def test_generate_raises_when_prompt_exceeds_budget(monkeypatch):
+    """Спек §1: превышение бюджета на сборке промпта — ошибка, не тихая обрезка."""
+    from src.v7 import bridge
+
+    monkeypatch.setattr(bridge.v7_config, "PROMPT_TOKEN_BUDGET", 100)
+    seen = {}
+    fn = bridge.make_generate_fn(_fake_llm(seen), backend=None)
+    huge = [{"text": "я" * 4000, "score": 0.5, "metadata": {"source": "d.pdf"}}]
+    with pytest.raises(ValueError, match="prompt budget"):
+        fn("q", "q", huge)
+    assert "prompt" not in seen  # до модели не дошло
+
+
 class TestInitV7FromChroma:
     @pytest.mark.unit
     @patch("src.v7.bridge.init_bm25_index")

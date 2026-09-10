@@ -82,3 +82,23 @@ class TestGenerateAnswer:
             assert called_with["query"] == "тест"
         finally:
             set_generate_fn(None)  # restore stub
+
+
+def test_generator_reads_final_context_even_when_empty():
+    """Запрещено выбирать вход по остаточным ключам: пустой final_context —
+    это решение узла, а не повод взять старые final_passages.
+    """
+    seen = {}
+    set_generate_fn(lambda q, aq, ps: (seen.update(ps=ps), "ответ")[1])
+    try:
+        generate_answer(
+            {
+                "query": "q",
+                "final_context": [],
+                "final_passages": [{"text": "остаток от прошлой ветки"}],
+                "retrieval_attempts": [],
+            }
+        )
+        assert seen["ps"] == []
+    finally:
+        set_generate_fn(None)

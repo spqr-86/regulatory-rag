@@ -1,4 +1,4 @@
-"""V7 node: generate_answer — LLM synthesis from final_passages.
+"""V7 node: generate_answer — LLM synthesis from final_context.
 
 The node dispatches between two injected LLM-backed generators based on which
 retrieval path produced the final passages:
@@ -11,6 +11,10 @@ retrieval path produced the final passages:
 Path is detected from ``state["retrieval_attempts"]``: if the latest attempt
 has ``stage == "complex"`` we treat the request as complex.
 """
+
+# ANCHOR: Terminal generation node for a validated v7 context.
+# Input is RAGState.final_context (legacy final_passages only when absent);
+# output is answer plus stage-stamped LLM usage from the injected generator.
 
 from __future__ import annotations
 
@@ -77,13 +81,19 @@ def _last_stage(state: RAGState) -> str:
 def generate_answer(state: RAGState) -> RAGState:
     """Synthesise final answer from retrieved passages.
 
-    Reads:  query, active_query, final_passages, retrieval_attempts.
+    Reads:  query, active_query, final_context, retrieval_attempts.
     Writes: answer, llm_usage (token usage of the generation call, tagged with
             the retrieval path — the runner needs cost split by path).
     """
     query = state.get("query", "")
     active_query = state.get("active_query", query)
-    passages = state.get("final_passages") or []
+    # The terminal contract owns final_context. An explicitly empty value is a
+    # decision, not permission to reuse stale legacy passages. Fall back only
+    # when the new key is absent altogether.
+    if "final_context" in state:
+        passages = state.get("final_context") or []
+    else:
+        passages = state.get("final_passages") or []
 
     stage = _last_stage(state)
     fn: Optional[GenerateFn] = (

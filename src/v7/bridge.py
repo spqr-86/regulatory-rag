@@ -8,10 +8,14 @@ Responsibilities:
 5. Inject LLM-backed generate and expand functions
 """
 
+# ANCHOR: Production adapters between storage/LLM clients and the v7 graph.
+# Inputs are backend results and packed passages; outputs are injected search,
+# rerank, expansion, and generation callables with normalized usage records.
+
 from __future__ import annotations
 
 import threading
-import time  # used for generate.timing.crossref / generate.timing.llm logs
+import time
 from typing import Callable, List
 
 import structlog
@@ -25,8 +29,8 @@ from src.infra.parsers import (
     extract_text,
 )  # noqa: F401  # used by other make_*_fn
 from src.infra.prompt_manager import PromptManager
+from src.v7.config import v7_config
 from src.v7.cross_ref import expand_cross_references
-from src.v7.hard_gates import sanitize_for_llm
 from src.v7.nlp_core import init_bm25_index
 from src.v7.usage import LLMUsage, usage_from_response
 from src.v7 import pack_context as pack_context_mod
@@ -351,7 +355,8 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
     Relies on ChatGoogleGenerativeAI's built-in retry (max_retries=3 in
     ``get_gemini_llm``) for transient 5xx / 429 errors. On final failure
     falls back to a stub (concatenated top passages).
-    If backend is provided, cross-reference expansion is applied before generation.
+    ``backend`` is no longer used for cross-reference expansion: that belongs to
+    ``pack_context``. The parameter remains for backward-compatible call sites.
     """
 
     model = model_name_of(llm)
@@ -403,32 +408,28 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
         if not passages:
             # Nothing to answer from: no call, no context (issue #22).
             return "", {**_zero_usage(model, "generate"), "n_passages": 0}
-        t0 = time.perf_counter()
-        expanded = (
-            expand_cross_references(passages, backend, query=query)
-            if backend
-            else passages
-        )
-        t_crossref = time.perf_counter() - t0
-        # final_passages is already capped upstream by V7_FINAL_MERGE_TOP_K
-        # (merge_all_passages, 24 by default);
-        # cross-reference expansion appends extra passages — allow up to 30 so
-        # low-ranked but answer-bearing cross-refs (e.g. п.60 для программа В) are included.
-        top_passages = expanded[:30]
+        # Context arrives packed: pack_context expanded, sanitised, truncated,
+        # and budgeted it before the verdict (spec 2026-09-09, §1). It must
+        # remain unchanged here so the generator sees what was validated.
+        top_passages = passages
         passages_text = "\n\n".join(
-            f"{_chunk_header(i, p)}\n{sanitize_for_llm(p.get('text', ''))}"
+            f"{_chunk_header(i, p)}\n{p.get('text', '')}"
             for i, p in enumerate(top_passages)
         )
-        prompt_tokens_approx = len(passages_text) // 4
         prompt = _pm.render(
             "generate_answer",
             query=query,
             context=passages_text,
             passages_count=len(top_passages),
         )
+        prompt_tokens_approx = len(prompt) // 4
+        if prompt_tokens_approx > v7_config.PROMPT_TOKEN_BUDGET:
+            raise ValueError(
+                f"prompt budget exceeded: ~{prompt_tokens_approx} tokens > "
+                f"{v7_config.PROMPT_TOKEN_BUDGET} (passages={len(top_passages)})"
+            )
         logger.info(
-            "generate.timing.crossref",
-            crossref_s=round(t_crossref, 3),
+            "generate.timing.context",
             passages_in=len(passages),
             passages_out=len(top_passages),
             prompt_tokens_approx=prompt_tokens_approx,
