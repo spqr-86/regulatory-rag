@@ -47,3 +47,19 @@ open_ref: sufficient=True, triage=sufficient, top_score=0.8,
   keyword_overlap_active=1.0, keyword_overlap_original=1.0, passage_count=2
 zero_overlap: sufficient=False, triage=borderline, top_score=0.8,
   keyword_overlap_active=0.0, keyword_overlap_original=0.0, passage_count=2
+
+TASK 14 PRE-PUSH GATES — BLOCKED 2026-09-10
+Tasks 0–13 are complete. Full suite after Task 13: 945 passed, 5 known failed,
+7 warnings (950 collected, 43.85 seconds; outside the Codex sandbox).
+
+The route-matrix command was started against the comparable 133-question
+baseline `benchmarks/triage_gap_main_133_2026-09-08.json` because the plan's
+short alias `triage_gap_main.json` does not exist. It was stopped without an
+output artifact: `rag_simple` dense retrieval calls the OpenAI embeddings API,
+which returned 429 `credit_balance_exhausted`. The saved benchmark records have
+chunk identities but not passage text or retrieval scores, so they cannot be
+replayed faithfully through the new triage contract.
+
+The generative eval remains blocked by the same empty OpenAI balance. No route
+distribution, quality comparison, or push decision is recorded until both runs
+can complete. No push was attempted.
