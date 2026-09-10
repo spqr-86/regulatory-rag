@@ -74,12 +74,18 @@ def rag_simple(state: RAGState) -> RAGState:
     # Run vector + BM25 for each query; collect per-query result lists for RRF
     all_vector_lists: List[List[dict]] = []
     all_bm25_lists: List[List[dict]] = []
+    retrieval_error = False
 
-    for q in all_queries:
-        v_res = _vector_search(query=q, filters=safe_filters, top_k=plan["top_k"])
-        b_res = bm25_search(query=q, filters=safe_filters, top_k=plan["top_k"])
-        all_vector_lists.append(v_res)
-        all_bm25_lists.append(b_res)
+    try:
+        for q in all_queries:
+            v_res = _vector_search(query=q, filters=safe_filters, top_k=plan["top_k"])
+            b_res = bm25_search(query=q, filters=safe_filters, top_k=plan["top_k"])
+            all_vector_lists.append(v_res)
+            all_bm25_lists.append(b_res)
+    except Exception as exc:  # noqa: BLE001 — failure is represented in graph state
+        logger.warning("rag_simple: retrieval failed: %s", exc)
+        retrieval_error = True
+        all_vector_lists, all_bm25_lists = [[]], [[]]
 
     # top_score anchored to original query only (threshold gate must not be
     # inflated by low-relevance passages from expanded queries)
@@ -119,6 +125,7 @@ def rag_simple(state: RAGState) -> RAGState:
                 top_score=top_score,
                 attempt_plan=dict(plan),
                 metrics=metrics,
+                retrieval_error=retrieval_error,
             )
         ],
         "status_message": f"Found {len(passages)} fragments (hybrid search).",

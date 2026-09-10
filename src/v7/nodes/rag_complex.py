@@ -87,16 +87,27 @@ def rag_complex(state: RAGState) -> RAGState:
     # 22 of 26 misses the right chunk never entered the pool, while BM25 found
     # it in 19 of them. The cross-encoder re-scores everything anyway, so what
     # matters here is membership, not the order this merge produces.
-    vector_results = _vector_search(
-        query=active_q,
-        filters=safe_filters,
-        top_k=slow_plan["top_k"],
-    )
+    retrieval_error = False
     try:
-        bm25_results = bm25_search(
+        vector_results = _vector_search(
             query=active_q,
             filters=safe_filters,
             top_k=slow_plan["top_k"],
+        )
+    except Exception as exc:  # noqa: BLE001 — failure is represented in graph state
+        logger.warning("rag_complex: retrieval failed: %s", exc)
+        retrieval_error = True
+        vector_results = []
+
+    try:
+        bm25_results = (
+            bm25_search(
+                query=active_q,
+                filters=safe_filters,
+                top_k=slow_plan["top_k"],
+            )
+            if not retrieval_error
+            else []
         )
     except Exception as exc:  # a missing BM25 index must not kill the slow path
         logger.warning("bm25_search failed, complex pool stays dense-only: %s", exc)
@@ -152,6 +163,7 @@ def rag_complex(state: RAGState) -> RAGState:
                 top_score=top_score,
                 attempt_plan=dict(slow_plan),
                 metrics=metrics,
+                retrieval_error=retrieval_error,
             )
         ],
         "status_message": f"Расширенный поиск: {len(passages)} фрагментов.",

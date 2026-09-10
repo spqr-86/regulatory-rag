@@ -89,6 +89,7 @@ class RetrievalAttempt(TypedDict, total=False):
     top_score: float
     attempt_plan: dict
     metrics: dict
+    retrieval_error: bool  # search failed; empty passages do not mean no matches
 
 
 class HardGateResult(TypedDict):

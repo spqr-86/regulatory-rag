@@ -80,6 +80,7 @@ class TestRetrievalAttempt:
             "top_score": 0.85,
             "attempt_plan": {"top_k": 10},
             "metrics": {"overlap": 0.5},
+            "retrieval_error": False,
         }
         assert attempt["stage"] == "simple"
         assert attempt["top_score"] == 0.85
@@ -94,6 +95,7 @@ class TestRetrievalAttempt:
             "top_score",
             "attempt_plan",
             "metrics",
+            "retrieval_error",
         }
         assert set(RetrievalAttempt.__annotations__) == expected_keys
 
