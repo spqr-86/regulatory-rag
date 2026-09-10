@@ -1,0 +1,49 @@
+Triage decision contract — test baseline
+Captured: 2026-09-10 (Europe/Berlin)
+Commit: 025beb1620be9c67b7f5bc7be71c2db2fd8e35b8
+Runner A: Codex sandbox with syscall/network isolation
+Runner B: Codex command executed outside the sandbox after explicit approval
+Command (both runners): .venv/bin/pytest -q
+Python: 3.13.5
+pytest: 9.1.1
+
+Comparison rule: treat a later result as a regression only when commit ancestry,
+test command, network isolation, and Python/pytest versions are compatible with
+the conditions above. Otherwise first recapture the baseline for that environment.
+
+FULL-SUITE STATUS: COMPLETE. The plan's five-failure baseline holds after
+commit 025beb1 isolated tests from developer-machine embedding configuration.
+
+Runner A cannot execute Starlette TestClient tests: its syscall filter rejects
+send() on an AF_UNIX socketpair with EPERM. That prevents
+asyncio.call_soon_threadsafe() from waking the event loop. The hang reproduces with
+a minimal FastAPI app and is not caused by api.py or the RAG pipeline.
+
+Runner B completed in 42.99 seconds:
+  881 passed, 5 failed, 7 warnings (886 collected)
+
+The five baseline failures comprise:
+  - 2 known visual-proof failures in tests/test_agent_tools.py;
+  - 3 known FlashRank adapter failures in tests/v7/test_bridge_rerank.py;
+
+Before commit 025beb1, nine additional tests inherited
+V7_DOMAIN_GATE_THRESHOLD=0.25 and the OpenAI embedding provider from .env, made
+real network calls, and failed with 429 insufficient_quota. The shared pytest
+fixture now disables the runtime domain gate by default, while the real-Chroma
+integration test injects DeterministicFakeEmbedding and directly redirects the
+already-loaded settings singleton to tmp_path. A focused verification completed
+with 65 passed and one warning; no OpenAI request was made.
+
+HARD-GATE FIXTURES
+Measurement call: check_full_triage(query, query, passages, PLAN). The implementation
+requires both original_query and active_query. The current revision-2 plan already
+uses the corrected four-argument call.
+
+positive: sufficient=True, triage=sufficient, top_score=0.8,
+  keyword_overlap_active=1.0, keyword_overlap_original=1.0, passage_count=2
+enumeration: sufficient=True, triage=sufficient, top_score=0.8,
+  keyword_overlap_active=1.0, keyword_overlap_original=1.0, passage_count=2
+open_ref: sufficient=True, triage=sufficient, top_score=0.8,
+  keyword_overlap_active=1.0, keyword_overlap_original=1.0, passage_count=2
+zero_overlap: sufficient=False, triage=borderline, top_score=0.8,
+  keyword_overlap_active=0.0, keyword_overlap_original=0.0, passage_count=2
