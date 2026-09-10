@@ -6,10 +6,9 @@ import logging
 import re
 from typing import Any, Callable, Dict, List, Optional, cast
 
-from src.v7.cross_ref import _extract_refs
+from src.v7.gap import build_gap, has_enumeration_intent, passage_source
 from src.v7.hard_gates import check_full_triage
 from src.v7.state_types import (
-    GapRef,
     NextAfterTriage,
     RAGState,
     RetrievalPlan,
@@ -17,22 +16,6 @@ from src.v7.state_types import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Enumeration question patterns — require complete coverage of all categories/conditions.
-# For such queries rag_simple may return an incomplete answer even at high top_score.
-_ENUMERATION_PATTERNS = [
-    r"\bкто\s+проходит\b",
-    r"\bкто\s+обязан\b",
-    r"\bкакие\s+категори[яи]\b",
-    r"\bв\s+каких\s+случаях\b",
-    r"\bкогда\s+не\s+требуется\b",
-    r"\bкому\s+не\s+требуется\b",
-    r"\bкто\s+освобождается\b",
-    r"\bперечислите\b",
-    r"\bкакие\s+работники\b",
-    r"\bкаким\s+работникам\b",
-]
-
 
 # Cross-reference patterns in regulatory documents.
 # If retrieved chunks contain many such markers, the answer is likely spread
@@ -62,17 +45,10 @@ def _count_crossref_hits(passages: list[dict]) -> int:
     return total
 
 
-def _has_enumeration_intent(query: str) -> bool:
-    """True if the query requires complete enumeration of categories/conditions.
-
-    Such queries are routed to rag_complex even when simple-triage is sufficient,
-    because the answer is often spread across multiple document clauses.
-    """
-    q = query.lower()
-    return any(re.search(p, q) for p in _ENUMERATION_PATTERNS)
-
-
 # ─── Structured gap (issue #13) ───────────────────────────────────────────────
+
+# Re-export for backwards compatibility with existing tests and callers.
+_has_enumeration_intent = has_enumeration_intent
 
 # Expander injected at graph build time (see init_v7_pipeline). Signature:
 # fn(passages: list[dict], query: str) -> list[dict]. Not injected → the node
@@ -88,79 +64,6 @@ def set_crossref_expander(
     _crossref_expander = fn
 
 
-def _passage_source(passage: dict) -> str:
-    return passage.get("metadata", {}).get("source") or passage.get("doc_id", "")
-
-
-def _ref_present(kind: str, num: str, content: str) -> bool:
-    """True if the chunk text structurally *contains* the referenced unit.
-
-    Deliberately narrower than cross_ref._ref_matches_doc: a chunk merely
-    naming "пункт 12" is what creates the gap, so a phrase match must not
-    count as its resolution. Only a structural heading does.
-    """
-    v = re.escape(num)
-    if kind == "clause":
-        return bool(re.search(rf"(?m)^\s*{v}\.(?=\s)", content))
-    if kind == "article":
-        return bool(
-            re.search(rf"(?mi)^\s*(?:стать\w+\s+)?{v}[.\s]", content)
-            and re.search(rf"(?i)стать\w+\s+{v}\b", content)
-        )
-    if kind == "subpara":
-        # The chunker flattens ordered lists and prepends a running item number,
-        # so "46. а)" is stored as "6. а)". Tolerate an optional leading number.
-        return bool(re.search(rf"(?mi)^\s*(?:\d+\.\s+)?{v}\)", content))
-    return False
-
-
-def build_gap(
-    passages: List[dict], resolve_in: Optional[List[dict]] = None
-) -> TriageGap:
-    """Describe what the retrieved text names but does not contain.
-
-    Refs are extracted from the top-5 passages — the same slice that trips
-    the crossref escalation — and deduplicated by (doc_id, kind, num).
-    Resolution is checked across the whole of `resolve_in` (defaults to
-    `passages`) within the same source: a clause sitting at position 9 is
-    not a gap. Markers carry no doc_id, so one number named in two documents
-    gives two refs and a single marker; the marker stays open while any of
-    its refs is unresolved.
-    """
-    haystack = passages if resolve_in is None else resolve_in
-
-    refs: List[GapRef] = []
-    seen: set[tuple[str, str, str]] = set()
-    for passage in passages[:5]:
-        source = _passage_source(passage)
-        for kind, num in _extract_refs(passage.get("text", "")):
-            key = (source, kind, num)
-            if key in seen:
-                continue
-            seen.add(key)
-            refs.append({"kind": kind, "num": num, "doc_id": source})
-
-    by_source: Dict[str, List[str]] = {}
-    for passage in haystack:
-        by_source.setdefault(_passage_source(passage), []).append(
-            passage.get("text", "")
-        )
-
-    resolved: Dict[str, bool] = {}
-    for ref in refs:
-        marker = f"{ref['kind']}:{ref['num']}"
-        present = any(
-            _ref_present(ref["kind"], ref["num"], text)
-            for text in by_source.get(ref["doc_id"], [])
-        )
-        resolved[marker] = resolved.get(marker, True) and present
-
-    closed = [m for m, ok in resolved.items() if ok]
-    open_ = [m for m, ok in resolved.items() if not ok]
-
-    return {"kind": "unresolved_ref", "refs": refs, "closed": closed, "open": open_}
-
-
 def _merge_new_at_tail(base: List[dict], expanded: List[dict]) -> List[dict]:
     """`base` in its original order, then the passages `expanded` added, in
     theirs. The real cross-ref expander inserts bbox siblings next to their
@@ -168,8 +71,8 @@ def _merge_new_at_tail(base: List[dict], expanded: List[dict]) -> List[dict]:
     top-12 the next node reads (issue #30). Merging here makes the triage
     output independent of how the expander arranges its result.
     """
-    seen = {(_passage_source(p), p.get("text", "")) for p in base}
-    tail = [p for p in expanded if (_passage_source(p), p.get("text", "")) not in seen]
+    seen = {(passage_source(p), p.get("text", "")) for p in base}
+    tail = [p for p in expanded if (passage_source(p), p.get("text", "")) not in seen]
     return list(base) + tail
 
 
