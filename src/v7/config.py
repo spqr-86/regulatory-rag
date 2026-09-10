@@ -26,6 +26,9 @@ class V7Config(BaseSettings):
     # Soft floor: [0.38, 0.50) = uncertain → borderline → rag_complex.
     # Below 0.38 = garbage → clearly_bad → rag_complex.
     HARD_GATE_THRESHOLD: float = 0.50  # plan.threshold (similarity acceptance gate)
+    # ДИАГНОСТИЧЕСКИЙ, не управляющий: разделяет borderline и clearly_bad,
+    # но обе категории идут в rag_complex. На долю эскалаций не влияет —
+    # влияет только на текст abstain. Из калибровочной сетки #9 исключён.
     TRIAGE_SOFT_THRESHOLD: float = 0.38  # plan.borderline_threshold (floor)
     MIN_PASSAGES: int = 5  # plan.min_passages
     # Russian adj/noun lemmas differ ("лестничный"≠"лестница") → keep low
@@ -33,6 +36,10 @@ class V7Config(BaseSettings):
     MAX_SINGLE_DOC_RATIO: float = 0.8  # plan.max_single_doc_ratio
     SIMPLE_TOP_K: int = 12  # plan.top_k
     SIMPLE_TIMEOUT_MS: int = 250  # plan.timeout_ms
+    # Продуктовая политика: пустая simple-выдача или нулевой overlap по обоим
+    # запросам → прямой abstain, не оплачивая complex (×22 по цене).
+    # False → те же случаи уходят в complex с кодами *_escalated.
+    ABSTAIN_ON_EMPTY_EVIDENCE: bool = True
 
     # ── Complex path (rag_complex) ────────────────────────────────────────
     COMPLEX_THRESHOLD: float = 0.35  # min threshold for complex (floor, ≤ simple)
@@ -60,7 +67,16 @@ class V7Config(BaseSettings):
 
     # ── LLM & Limits ──────────────────────────────────────────────────────
     MAX_REWRITE_ATTEMPTS: int = 2
+    # Потолок числа чанков, которые видит генератор. Применяется в pack_context —
+    # единственном владельце обрезки. До 09.09.2026 конфиг был мёртвым:
+    # реальная обрезка жила в bridge._generate ([:30]) и не настраивалась.
     MAX_CHUNKS_FOR_LLM: int = 10
+    # Потолок пассажей вместе с их заголовками, в токенах (приближение len//4).
+    # Упаковка отбрасывает всё, что не влезает, включая первый пассаж.
+    PACK_TOKEN_BUDGET: int = 60000
+    # Потолок СОБРАННОГО промпта (шаблон + запрос + контекст). Превышение —
+    # ошибка на стадии сборки, а не тихая обрезка (спек §1).
+    PROMPT_TOKEN_BUDGET: int = 70000
     VERIFIER_CONFIDENCE_ANCHOR: float = 0.7  # plan.min_verifier_confidence
 
     # ── Anti-injection ────────────────────────────────────────────────────

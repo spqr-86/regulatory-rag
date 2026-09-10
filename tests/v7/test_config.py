@@ -4,6 +4,28 @@
 from __future__ import annotations
 
 
+def test_pack_budget_defaults():
+    from src.v7.config import V7Config
+
+    cfg = V7Config()
+    assert cfg.MAX_CHUNKS_FOR_LLM == 10
+    assert cfg.PACK_TOKEN_BUDGET == 60000
+    assert cfg.PROMPT_TOKEN_BUDGET == 70000
+    # The prompt is always wider than passages: template and query cost tokens too.
+    assert cfg.PROMPT_TOKEN_BUDGET > cfg.PACK_TOKEN_BUDGET
+    assert cfg.ABSTAIN_ON_EMPTY_EVIDENCE is True
+
+
+def test_pack_budget_from_env(monkeypatch):
+    from src.v7.config import V7Config
+
+    monkeypatch.setenv("V7_PACK_TOKEN_BUDGET", "1234")
+    monkeypatch.setenv("V7_ABSTAIN_ON_EMPTY_EVIDENCE", "false")
+    cfg = V7Config()
+    assert cfg.PACK_TOKEN_BUDGET == 1234
+    assert cfg.ABSTAIN_ON_EMPTY_EVIDENCE is False
+
+
 class TestV7ConfigDefaults:
     """Verify all default values match the design doc."""
 
