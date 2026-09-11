@@ -483,6 +483,36 @@ def test_grid_selection_enforces_risk_then_cost_coverage_and_latency():
         },
     ]
 
-    selected = select_grid_profile(rows, baseline_unsafe=2, baseline_critical_misses=2)
+    selected = select_grid_profile(
+        rows,
+        baseline_unsafe=2,
+        baseline_critical_misses=2,
+        baseline_profile={"hard_gate_threshold": 0.50},
+    )
 
     assert selected["profile"]["hard_gate_threshold"] == 0.55
+
+
+@pytest.mark.unit
+def test_grid_selection_prefers_baseline_when_outcomes_are_identical():
+    summary = {
+        "unsafe_generate": {"count": 2},
+        "critical_miss_generate": {"count": 2},
+        "escalated": {"count": 4},
+        "full_coverage_generate": {"count": 27},
+        "latency_ms": {"terminal": {"p95": 5000.0}},
+    }
+    baseline_profile = {"hard_gate_threshold": 0.50}
+    rows = [
+        {"profile": {"hard_gate_threshold": 0.45}, "summary": summary},
+        {"profile": baseline_profile, "summary": summary},
+    ]
+
+    selected = select_grid_profile(
+        rows,
+        baseline_unsafe=2,
+        baseline_critical_misses=2,
+        baseline_profile=baseline_profile,
+    )
+
+    assert selected["profile"] == baseline_profile

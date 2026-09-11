@@ -151,8 +151,9 @@ def select_grid_profile(
     *,
     baseline_unsafe: int,
     baseline_critical_misses: int,
+    baseline_profile: Mapping[str, object],
 ) -> Mapping[str, object] | None:
-    """Select the cheapest risk-safe profile using the approved tie-breaks."""
+    """Select the cheapest risk-safe profile, avoiding arbitrary config drift."""
     eligible = [
         row
         for row in rows
@@ -168,6 +169,7 @@ def select_grid_profile(
             row["summary"]["escalated"]["count"],
             -row["summary"]["full_coverage_generate"]["count"],
             row["summary"]["latency_ms"]["terminal"]["p95"],
+            row["profile"] != baseline_profile,
         ),
     )
 
@@ -847,6 +849,7 @@ def run_calibration_grid(questions: Sequence[CalibrationQuestion]) -> dict:
         rows,
         baseline_unsafe=baseline["summary"]["unsafe_generate"]["count"],
         baseline_critical_misses=baseline["summary"]["critical_miss_generate"]["count"],
+        baseline_profile=baseline["profile"],
     )
     return {
         "comparison_questions": comparison_count,

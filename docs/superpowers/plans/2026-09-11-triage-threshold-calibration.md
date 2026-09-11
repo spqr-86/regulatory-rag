@@ -1,7 +1,7 @@
 # Triage threshold calibration — implementation plan
 
 **Issue:** #9  
-**Status:** approved direction; implementation starts after terminal-decision contract  
+**Status:** completed with a measured negative result (2026-09-11)
 **Datasets:** original 43 questions = development; later 90 practitioner questions = validation
 
 ## Goal
@@ -90,3 +90,21 @@ calibration command rather than silently treated as complete.
 - If no profile satisfies the risk constraint, retain current defaults and close #9 with a
   measured negative result.
 - A generated answer is never used to label the context that produced it.
+
+## Result
+
+The full 43-question development grid evaluated 81 profiles over one immutable paired
+retrieval snapshot. The production baseline reproduced the frozen result: 4/43 escalations,
+16/43 unsafe and critical-miss generations, 27/43 full-coverage generations, and mean final
+coverage 0.767.
+
+All profiles met the non-regression constraint, but none improved safety or full coverage.
+Fifty-four profiles, including the production defaults, were outcome-identical to baseline.
+The remaining 27 profiles (`HARD_GATE_THRESHOLD=0.55`) increased escalations from 4 to 11
+without reducing unsafe generations. The other swept controls did not change a terminal
+decision on this development set.
+
+Therefore the production defaults remain unchanged. There is no candidate profile to freeze,
+so the one-time 90-question validation annotation/run is not justified for issue #9. The grid
+selector now prefers the baseline on an otherwise exact tie, preventing axis order from being
+reported as evidence for config drift.
