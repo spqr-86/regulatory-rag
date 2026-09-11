@@ -56,9 +56,13 @@ def rag_complex(state: RAGState) -> RAGState:
         "top_k": v7_config.COMPLEX_TOP_K,
         "rerank": True,
         "timeout_ms": v7_config.COMPLEX_TIMEOUT_MS,
-        "threshold": max(v7_config.COMPLEX_THRESHOLD, current_plan.get("threshold", 0)),
+        # The slow path has its own acceptance floor. Inheriting the simple
+        # threshold couples two calibration controls and can make escalation
+        # stricter precisely when the simple gate is tightened.
+        "threshold": v7_config.COMPLEX_THRESHOLD,
         "min_passages": v7_config.COMPLEX_MIN_PASSAGES,
         "min_keyword_overlap": v7_config.COMPLEX_MIN_KW_OVERLAP,
+        "min_keyword_overlap_original": v7_config.MIN_KEYWORD_OVERLAP_ORIGINAL,
         "max_single_doc_ratio": v7_config.COMPLEX_MAX_SINGLE_DOC_RATIO,
         "borderline_threshold": v7_config.COMPLEX_BORDERLINE_THRESHOLD,
         "min_verifier_confidence": v7_config.VERIFIER_CONFIDENCE_ANCHOR,

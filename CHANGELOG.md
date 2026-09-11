@@ -6,15 +6,28 @@ All notable changes are documented here. Format: [Keep a Changelog](https://keep
 
 ## [Unreleased]
 
+### Added
+- Terminal triage decision contract: retrieval nodes now emit one typed
+  `route_decision` / `route_reason`, and generation consumes only the validated,
+  budgeted `final_context`.
+- Risk-aware threshold calibration for issue #9. The full 81-profile grid retained the
+  current defaults: no candidate reduced unsafe generations.
+
+### Changed
+- Final 56-question quality gate (53 valid, `gpt-4o` judge): in-scope correctness 7.47,
+  faithfulness 0.891, relevance 0.879, false-sufficiency 11.4%, complex-path 17%,
+  $0.00387/query, p50/p95 4.51/15.70 s.
+- Project status is now **portfolio MVP complete**. Judge validation, generated model
+  comparisons, error attribution, and chunking experiments remain optional post-MVP work.
+
 ### Removed
 - V8 evidence-assess triage variant and the `V7_V8_ENABLE_EVIDENCE_ASSESS` flag
   (with `V8_EVIDENCE_*` thresholds and `V8_SIMPLE_RERANK_TOP_K`). `evaluate_triage` is
   now a single deterministic hard-gate path — the reranker score is uncalibrated for
   this domain and had already caused a ranking bug (design decisions §3). The
-  correctness numbers in the `[2.0.0]` entry were measured on the removed path; FACTS
-  and README now carry the hard-gate re-run (56-q golden, `gpt-4o` judge): in-scope
-  correctness 7.4, faithfulness 0.808, relevance 0.881, false-sufficiency 13%
-  (vs 4.8%), complex-path 13% (vs 20.8%), $0.0033/query.
+  correctness numbers in the `[2.0.0]` entry were measured on the removed path. The
+  intermediate hard-gate baseline was then superseded by the terminal triage contract;
+  current values live in FACTS and the README.
 
 ---
 

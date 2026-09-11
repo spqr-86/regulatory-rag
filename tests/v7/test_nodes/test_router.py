@@ -56,6 +56,7 @@ class TestRouter:
             "threshold",
             "min_passages",
             "min_keyword_overlap",
+            "min_keyword_overlap_original",
             "max_single_doc_ratio",
             "borderline_threshold",
             "min_verifier_confidence",

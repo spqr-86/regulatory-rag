@@ -3,9 +3,9 @@
 The node dispatches between two injected LLM-backed generators based on which
 retrieval path produced the final passages:
 
-* simple path (rag_simple → evaluate_triage → visual_enrichment → here)
+* simple path (rag_simple → evaluate_triage → here)
   uses ``_generate_fn_simple`` — typically a cheaper model.
-* complex path (… → rag_complex → evaluate_complex → visual_enrichment → here)
+* complex path (… → rag_complex → evaluate_complex → here)
   uses ``_generate_fn_complex`` — the higher-quality model.
 
 Path is detected from ``state["retrieval_attempts"]``: if the latest attempt

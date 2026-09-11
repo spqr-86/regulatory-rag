@@ -59,6 +59,30 @@ def test_zero_original_overlap_keeps_original_obligation():
     assert OBL_ORIGINAL in v["obligations_unmet"]
 
 
+def test_positive_original_overlap_below_plan_floor_keeps_obligation(monkeypatch):
+    plan = {**PLAN, "min_keyword_overlap_original": 0.10}
+    monkeypatch.setattr(
+        "src.v7.validate.check_full_triage",
+        lambda *args, **kwargs: {
+            "sufficient": True,
+            "triage": "sufficient",
+            "top_score": 0.9,
+            "keyword_overlap_active": 0.5,
+            "keyword_overlap_original": 0.05,
+        },
+    )
+
+    verdict = validate_context(
+        [_p(1, "медосмотр")],
+        "медосмотр водителей",
+        "медосмотр",
+        plan,
+        {OBL_ORIGINAL},
+    )
+
+    assert OBL_ORIGINAL in verdict["obligations_unmet"]
+
+
 def test_enumeration_cleared_only_when_not_subset_of_prior():
     prior = [_p(1, "а) водители"), _p(2, "б) машинисты")]
     same = [_p(1, "а) водители"), _p(2, "б) машинисты")]

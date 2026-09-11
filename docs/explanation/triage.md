@@ -5,6 +5,11 @@ the retrieved passages are enough to answer, need a broader search (`rag_complex
 should lead straight to an abstain. The decision is deterministic — numbers only, no LLM.
 Threshold values live in [FACTS](../reference/FACTS.md#thresholds).
 
+The node returns a terminal contract rather than a loose boolean:
+`route_decision` (`generate`, `complex`, or `abstain`) plus a stable `route_reason`.
+An answer is generated only from `final_context` after `pack_context` has expanded,
+sanitized, truncated, and budget-checked the evidence.
+
 `evaluate_triage` is a single hard-gate path. (Before 2026-09-08 the node dispatched by a
 `V7_V8_ENABLE_EVIDENCE_ASSESS` flag to an alternative `_evidence_assess` variant that
 scored the reranker top-1 plus a coverage estimate; that variant and the flag were removed
@@ -50,7 +55,7 @@ let the expanded list reorder the output and pushed a gold chunk past the top-12
 `route_after_triage` collapses every verdict to two paths:
 
 ```
-sufficient          → generate (via visual_enrichment)
+sufficient          → generate
 everything else      → rag_complex   (then answer or abstain)
 ```
 

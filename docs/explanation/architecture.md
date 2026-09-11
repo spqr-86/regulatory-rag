@@ -23,16 +23,17 @@ intent_gate ─(noise)──────→ END
             └(in-domain)──→ router ─(ambiguous)→ clarify_respond → END
                                    └(ok)────────→ rag_simple → evaluate_triage
                                                                    │
-                                  (sufficient) ───────────────────┤
-                                                                   │            ┌─(pass)→ visual_enrichment
-                                  (insufficient) → rag_complex → evaluate_complex┤
+                                  (generate) ─────────────────────┤
+                                                                   │            ┌─(generate)→ generate_answer → END
+                                  (complex) ─────→ rag_complex → evaluate_complex┤
                                                                                 └─(fail)→ abstain → END
-visual_enrichment → generate_answer → END
 ```
 
 There is **no** `llm_verifier` or `rewriter` stage — that subgraph was removed (see <!--freshness:ignore-->
-[Design decisions §5](./design-decisions.md)). `evaluate_triage` either accepts the
-simple-path result or escalates straight to `rag_complex`.
+[Design decisions §5](./design-decisions.md)). Retrieval nodes emit the terminal
+`route_decision` / `route_reason` contract. Generation reads only `final_context`, which
+`pack_context` expands, sanitizes, truncates, and validates before the graph commits to
+answering.
 
 ---
 
@@ -44,12 +45,16 @@ simple-path result or escalates straight to `rag_complex`.
 | `router` | `src/v7/nodes/router.py` | Classifies the query, builds a retrieval plan, expands `active_query` via the term glossary and multi-query. Short/ambiguous → clarification. |
 | `clarify_respond` | `src/v7/nodes/router.py` | Returns a clarification request for under-specified queries, then ends. |
 | `rag_simple` | `src/v7/nodes/rag_simple.py` | Fast hybrid retrieval (vector + BM25, RRF merge) → CrossEncoder rerank → top-K passages. |
-| `evaluate_triage` | `src/v7/nodes/evaluate_triage.py` | Deterministic sufficiency gate → sufficient (→ generate) or insufficient (→ rag_complex): a three-metric hard gate plus a structured `triage_gap` that pulls in cross-referenced clauses before escalating. Enumeration intent forces rag_complex. |
+| `evaluate_triage` | `src/v7/nodes/evaluate_triage.py` | Deterministic sufficiency gate → terminal `route_decision` and `route_reason`: a three-metric hard gate plus a structured `triage_gap` that pulls in cross-referenced clauses before escalating. Enumeration intent forces rag_complex. |
 | `rag_complex` | `src/v7/nodes/rag_complex.py` | Deep retrieval (larger top-K + MMR), multiple attempts, merges all. |
 | `evaluate_complex` | `src/v7/nodes/evaluate_complex.py` | Hard gates on merged passages; pass → generate, fail → abstain. |
-| `visual_enrichment` | `src/v7/nodes/visual_enrichment.py` | Optional: adds table/image context before generation. No-op on VPS (`visual_proof_fn` not injected). |
 | `generate_answer` | `src/v7/nodes/generate_answer.py` | Synthesizes the answer from final passages via the active prompt template. |
 | `abstain` | `src/v7/nodes/abstain.py` | Explicit refusal when retrieval stays poor. |
+
+`visual_enrichment` and `pack_context` are no longer graph nodes. Both evaluators run the
+same internal `enrich → pack → validate → decide` pipeline before emitting their terminal
+route contract. This makes the evidence in `final_context` exactly the evidence that was
+validated for generation.
 
 Node list and thresholds: see [FACTS](../reference/FACTS.md). The LLM provider is
 configurable per path; current production values are in FACTS.

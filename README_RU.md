@@ -6,7 +6,7 @@
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Качество ответов** (56-вопросный golden set, судья `gpt-4o`): in-scope correctness **7.4 / 10** · faithfulness **0.808** · answer relevance **0.881** · отказ на OOS **1.00** · false-sufficiency **13%** · complex-путь **13%** · **~$0.0033/запрос**, p50 **4.8 с**.
+**Качество ответов** (56-вопросный golden set, судья `gpt-4o`): in-scope correctness **7.47 / 10** · faithfulness **0.891** · answer relevance **0.879** · отказ на OOS **1.00** · false-sufficiency **11.4%** · complex-путь **17%** · **~$0.0039/запрос**, p50 **4.5 с**.
 
 > Метрики зависят от судьи — канонические значения в [docs/reference/FACTS.md](./docs/reference/FACTS.md). Архитектурные решения описаны в [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
 
@@ -57,15 +57,15 @@ evaluate_triage      — детерминированный гейт доста�
 
 | Метрика | Значение |
 |---|---|
-| In-scope correctness | 7.4 / 10 |
-| Correctness (все вопросы) | 7.1 / 10 |
-| Faithfulness | 0.808 |
-| Answer relevance | 0.881 |
+| In-scope correctness | 7.47 / 10 |
+| Correctness (все вопросы) | 7.26 / 10 |
+| Faithfulness | 0.891 |
+| Answer relevance | 0.879 |
 | Отказ на OOS-запросах | 1.00 |
-| False-sufficiency rate | 13% |
-| Доля complex-пути | 13% |
-| Латентность p50 / p95 / mean | 4.8 / 14.7 / 5.9 с |
-| Стоимость запроса | $0.0033 ($0.17 / прогон) |
+| False-sufficiency rate | 11.4% |
+| Доля complex-пути | 17% |
+| Латентность p50 / p95 / mean | 4.51 / 15.70 / 6.83 с |
+| Стоимость запроса | $0.00387 ($0.205 / прогон) |
 | Retrieval HR@5 / HR@12 / MRR (hybrid, 90 вопросов практиков) | 0.63 / 0.81 / 0.50 |
 
 Eval: 56-вопросный golden dataset (`tests/dataset.csv`), `eval/run_v7_eval.py`, LLM-судья
@@ -239,6 +239,11 @@ terms:
 
 ## Статус проекта
 
+**Портфельный MVP завершён 11.09.2026.** Развёрнутое приложение, offline eval,
+терминальный контракт triage, учёт цены каждого запроса и онлайн-мониторинг составляют
+завершённый демонстрационный объём. Оставшиеся идеи — необязательные post-MVP
+эксперименты, а не блокеры релиза.
+
 - ✅ V7 LangGraph-пайплайн — все ноды, детерминированный роутинг (verifier/rewriter убраны — insufficient triage ведёт сразу в rag_complex)
 - ✅ Гибридный retrieval — BM25 + семантический, двухэтапный (simple/complex path)
 - ✅ Детерминированный гейт достаточности — hard-gate по трём метрикам, без LLM в роутинге
@@ -252,8 +257,10 @@ terms:
 - ✅ Offline eval — golden dataset + тест-набор для retrieval из 90 вопросов практиков, цена и латентность на запрос
 - ✅ Онлайн-мониторинг — каждый запрос строкой в Postgres (цена, латентность, маршрут, токены, `source`), дашборд Grafana, 👍/👎 под ответом; весь стек — один `docker compose up`
 - ✅ Задеплоен на VPS (порт 8502, Streamlit)
-- 🔄 Устойчивость value↔condition на запросах с несколькими значениями
-- 🔄 Переписка нарезки под таблицы и заголовки разделов (модули 06/07)
+
+Необязательный post-MVP backlog: независимая валидация судьи, генерируемая таблица
+сравнений, разделение ошибок retrieval и generation и эксперимент с нарезкой таблиц и
+заголовков. См. [docs/roadmap.md](./docs/roadmap.md).
 
 ---
 

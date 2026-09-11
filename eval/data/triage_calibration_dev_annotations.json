@@ -1,0 +1,173 @@
+{
+  "base_sha256": "da9dac72509e0637df59f0c104be455f178ee73c985210b23bdf266f855b220b",
+  "status": "reviewed",
+  "count": 43,
+  "factoid_indices": [3, 6, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 28, 35, 37, 38, 40, 41, 43],
+  "elements_by_index": {
+    "1": [
+      {"id": "public_authority_leads", "label": "руководители и заместители органов власти", "acceptable_chunk_ids": ["2464.pdf#103"], "critical": true},
+      {"id": "public_authority_safety_specialists", "label": "специалисты по охране труда органов власти", "acceptable_chunk_ids": ["2464.pdf#104"], "critical": true},
+      {"id": "employer_and_deputies", "label": "работодатель, заместители и руководство филиалов", "acceptable_chunk_ids": ["2464.pdf#105"], "critical": true},
+      {"id": "unit_leads", "label": "руководители подразделений и их заместители", "acceptable_chunk_ids": ["2464.pdf#106"], "critical": true},
+      {"id": "safety_specialists", "label": "специалисты по охране труда", "acceptable_chunk_ids": ["2464.pdf#107"], "critical": true},
+      {"id": "worker_representatives", "label": "комитеты и уполномоченные представители работников", "acceptable_chunk_ids": ["2464.pdf#109"], "critical": true},
+      {"id": "worker_representatives_program", "label": "обучение представителей работников по программам А и Б", "acceptable_chunk_ids": ["2464.pdf#110"], "critical": true}
+    ],
+    "2": [
+      {"id": "general_types", "label": "вводный, на рабочем месте и целевой инструктаж", "acceptable_chunk_ids": ["2464.pdf#15"], "critical": true},
+      {"id": "workplace_types", "label": "первичный, повторный и внеплановый инструктаж", "acceptable_chunk_ids": ["2464.pdf#20"], "critical": true}
+    ],
+    "4": [
+      {"id": "office_equipment_hazards", "label": "работа связана только с офисной и бытовой техникой", "acceptable_chunk_ids": ["2464.pdf#22"], "critical": true},
+      {"id": "no_other_hazards_and_safe_conditions", "label": "другие опасности отсутствуют, условия труда оптимальные или допустимые", "acceptable_chunk_ids": ["2464.pdf#23"], "critical": true},
+      {"id": "intro_program_and_approved_list", "label": "безопасные методы включены во вводный инструктаж, перечень должностей утвержден работодателем", "acceptable_chunk_ids": ["2464.pdf#24"], "critical": true}
+    ],
+    "5": [
+      {"id": "equipment_or_process_change", "label": "изменение оборудования, процессов, сырья и материалов", "acceptable_chunk_ids": ["2464.pdf#25"], "critical": true},
+      {"id": "duty_change", "label": "изменение должностных обязанностей", "acceptable_chunk_ids": ["2464.pdf#26"], "critical": true},
+      {"id": "rule_change", "label": "изменение нормативных или локальных актов", "acceptable_chunk_ids": ["2464.pdf#27"], "critical": true},
+      {"id": "new_hazards_orders_accidents", "label": "новые опасности, предписание, авария или несчастный случай", "acceptable_chunk_ids": ["2464.pdf#28"], "critical": true},
+      {"id": "break_or_employer_decision", "label": "перерыв более 60 дней или решение работодателя", "acceptable_chunk_ids": ["2464.pdf#29"], "critical": true}
+    ],
+    "7": [
+      {"id": "instructors_and_workers", "label": "инструктирующие и работники рабочих профессий", "acceptable_chunk_ids": ["2464.pdf#52"], "critical": true},
+      {"id": "first_aid_and_drivers", "label": "обязанные оказывать помощь, водители и специальные компетенции", "acceptable_chunk_ids": ["2464.pdf#53"], "critical": true},
+      {"id": "commissions_trainers_specialists", "label": "комиссии, преподаватели, специалисты и иные назначенные работники", "acceptable_chunk_ids": ["2464.pdf#54"], "critical": true}
+    ],
+    "14": [
+      {"id": "regular_instructor", "label": "специалист по охране труда или уполномоченный работник", "acceptable_chunk_ids": ["2464.pdf#18"], "critical": true},
+      {"id": "absence_of_service", "label": "кто проводит инструктаж при отсутствии службы или специалиста", "acceptable_chunk_ids": ["2464.pdf#19"], "critical": true}
+    ],
+    "21": [
+      {"id": "general_types", "label": "вводный, на рабочем месте и целевой инструктаж", "acceptable_chunk_ids": ["2464.pdf#15"], "critical": true},
+      {"id": "workplace_types", "label": "первичный, повторный и внеплановый инструктаж", "acceptable_chunk_ids": ["2464.pdf#20"], "critical": true}
+    ],
+    "22": [
+      {"id": "employer_organizes", "label": "работодатель организует СОУТ", "acceptable_chunk_ids": ["426-ФЗ.pdf#50"], "critical": true},
+      {"id": "specialized_organization_performs", "label": "СОУТ проводится совместно с привлеченной специализированной организацией", "acceptable_chunk_ids": ["426-ФЗ.pdf#50"], "critical": true}
+    ],
+    "23": [
+      {"id": "measurement_protocols", "label": "протоколы исследований и измерений факторов", "acceptable_chunk_ids": ["426-ФЗ.pdf#113", "817н.pdf#81"], "critical": true},
+      {"id": "expert_conclusion", "label": "заключение эксперта по идентификации", "acceptable_chunk_ids": ["817н.pdf#57"], "critical": true}
+    ],
+    "24": [
+      {"id": "commission", "label": "работодатель незамедлительно образует комиссию не менее чем из трех человек", "acceptable_chunk_ids": ["тк рф.pdf#1522"], "critical": true},
+      {"id": "light_injury_deadline", "label": "срок расследования легкого несчастного случая", "acceptable_chunk_ids": ["тк рф.pdf#1544"], "critical": true},
+      {"id": "severe_or_fatal_deadline", "label": "срок расследования тяжелого или смертельного несчастного случая", "acceptable_chunk_ids": ["тк рф.pdf#1546"], "critical": true},
+      {"id": "witness_interviews", "label": "опрос очевидцев и лиц, допустивших нарушения", "acceptable_chunk_ids": ["тк рф.pdf#1550"], "critical": true},
+      {"id": "employer_information", "label": "получение информации работодателя и объяснений пострадавшего", "acceptable_chunk_ids": ["тк рф.pdf#1551"], "critical": true},
+      {"id": "investigation_materials", "label": "сбор материалов расследования", "acceptable_chunk_ids": ["тк рф.pdf#1555"], "critical": true},
+      {"id": "causes_and_prevention", "label": "установление обстоятельств, причин, виновных лиц и мер предупреждения", "acceptable_chunk_ids": ["тк рф.pdf#1562"], "critical": true},
+      {"id": "qualification", "label": "квалификация случая как связанного или не связанного с производством", "acceptable_chunk_ids": ["тк рф.pdf#1563"], "critical": true},
+      {"id": "act", "label": "оформление акта о несчастном случае на производстве", "acceptable_chunk_ids": ["тк рф.pdf#1579"], "critical": true},
+      {"id": "act_approval", "label": "подписание и утверждение акта", "acceptable_chunk_ids": ["тк рф.pdf#1583"], "critical": true}
+    ],
+    "25": [
+      {"id": "qualification", "label": "квалификационные требования к ответственному лицу", "acceptable_chunk_ids": ["О пожарной безопасности.pdf#326"], "critical": true},
+      {"id": "appointment", "label": "назначение ответственных за пожарную безопасность", "acceptable_chunk_ids": ["1479 ппр.pdf#13"], "critical": true},
+      {"id": "training", "label": "допуск после обучения мерам пожарной безопасности", "acceptable_chunk_ids": ["1479 ппр.pdf#11"], "critical": true}
+    ],
+    "26": [
+      {"id": "general_violation_scope", "label": "общий состав нарушения требований охраны труда", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#1"], "critical": true},
+      {"id": "general_violation_penalty", "label": "штраф за общий состав нарушения", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#2"], "critical": true},
+      {"id": "assessment_violation_scope", "label": "нарушение порядка специальной оценки", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#2"], "critical": true},
+      {"id": "assessment_violation_penalty", "label": "штраф за нарушение порядка специальной оценки", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#3"], "critical": true},
+      {"id": "admission_violation_scope", "label": "допуск без обучения или медосмотра", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#4"], "critical": true},
+      {"id": "admission_violation_penalty", "label": "штраф за допуск без обучения или медосмотра", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#5"], "critical": true},
+      {"id": "ppe_violation_scope", "label": "необеспечение средствами индивидуальной защиты", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#5"], "critical": true},
+      {"id": "ppe_violation_penalty", "label": "штраф за необеспечение средствами индивидуальной защиты", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#6"], "critical": true},
+      {"id": "repeat_violation_scope", "label": "повторное административное нарушение", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#7"], "critical": true},
+      {"id": "repeat_violation_penalty", "label": "штраф за повторное административное нарушение", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#8"], "critical": true},
+      {"id": "criminal_violation_scope", "label": "уголовный состав при тяжком вреде здоровью", "acceptable_chunk_ids": ["Статья 143 УК РФ.md#1"], "critical": true},
+      {"id": "criminal_violation_penalty", "label": "штраф и иные санкции за причинение тяжкого вреда", "acceptable_chunk_ids": ["Статья 143 УК РФ.md#2"], "critical": true}
+    ],
+    "27": [
+      {"id": "content_ab", "label": "содержание территории и безопасность процессов", "acceptable_chunk_ids": ["1479 ппр.pdf#615"], "critical": true},
+      {"id": "content_cdef", "label": "хранение, закрытие, огонь и горючие материалы", "acceptable_chunk_ids": ["1479 ппр.pdf#616"], "critical": true},
+      {"id": "stock_waste_and_instrument_limits", "label": "лимиты продукции, уборка отходов и предельные показания приборов", "acceptable_chunk_ids": ["1479 ппр.pdf#617"], "critical": true},
+      {"id": "worker_actions", "label": "обязанности и действия работников при пожаре", "acceptable_chunk_ids": ["1479 ппр.pdf#618"], "critical": true},
+      {"id": "occupancy_and_duty_staff", "label": "предельное число людей и дежурный персонал", "acceptable_chunk_ids": ["1479 ппр.pdf#619"], "critical": true},
+      {"id": "responsible_actions_ab", "label": "оповещение и спасение людей", "acceptable_chunk_ids": ["1479 ппр.pdf#621"], "critical": true},
+      {"id": "systems_check", "label": "проверка систем противопожарной защиты", "acceptable_chunk_ids": ["1479 ппр.pdf#622"], "critical": true},
+      {"id": "shutdown", "label": "отключение энергии и остановка оборудования", "acceptable_chunk_ids": ["1479 ппр.pdf#623"], "critical": true},
+      {"id": "communications_and_ventilation_shutdown", "label": "перекрытие коммуникаций и остановка вентиляции", "acceptable_chunk_ids": ["1479 ппр.pdf#624"], "critical": true},
+      {"id": "stop_work_and_evacuate", "label": "остановка работ, удаление людей и руководство тушением", "acceptable_chunk_ids": ["1479 ппр.pdf#625"], "critical": true},
+      {"id": "safety_and_fire_service_meeting", "label": "безопасность тушения, эвакуация ценностей и встреча пожарных", "acceptable_chunk_ids": ["1479 ппр.pdf#626"], "critical": true},
+      {"id": "hazard_information", "label": "сведения об опасных веществах", "acceptable_chunk_ids": ["1479 ппр.pdf#627"], "critical": true},
+      {"id": "incident_information", "label": "информирование руководителя тушения пожара", "acceptable_chunk_ids": ["1479 ппр.pdf#628"], "critical": true},
+      {"id": "resource_mobilization", "label": "привлечение сил и средств объекта", "acceptable_chunk_ids": ["1479 ппр.pdf#629"], "critical": true}
+    ],
+    "29": [
+      {"id": "unscheduled_sout_trigger", "label": "основание для внеплановой СОУТ", "acceptable_chunk_ids": ["426-ФЗ.pdf#189"], "critical": true},
+      {"id": "unscheduled_sout_deadline", "label": "двенадцатимесячный срок внеплановой СОУТ при изменении технологии", "acceptable_chunk_ids": ["426-ФЗ.pdf#194"], "critical": true},
+      {"id": "risk_management_cycle", "label": "выявление, оценка, снижение и пересмотр рисков", "acceptable_chunk_ids": ["776н.pdf#34"], "critical": true},
+      {"id": "condition_classification", "label": "классификация условий по результатам измерений", "acceptable_chunk_ids": ["426-ФЗ.pdf#117"], "critical": true},
+      {"id": "sout_sequence", "label": "последовательность процедур СОУТ", "acceptable_chunk_ids": ["817н.pdf#16"], "critical": true},
+      {"id": "risk_method", "label": "выбор метода оценки риска", "acceptable_chunk_ids": ["776н.pdf#39"], "critical": true},
+      {"id": "expert_identification", "label": "идентификация экспертом и утверждение комиссией", "acceptable_chunk_ids": ["817н.pdf#28"], "critical": true},
+      {"id": "technology_change_monitoring", "label": "учет и анализ изменений технологических процессов в СУОТ", "acceptable_chunk_ids": ["776н.pdf#84"], "critical": true}
+    ],
+    "30": [
+      {"id": "purpose", "label": "цель и локальные акты СУОТ", "acceptable_chunk_ids": ["776н.pdf#5"], "critical": true},
+      {"id": "coverage", "label": "охват работников и рабочих мест", "acceptable_chunk_ids": ["776н.pdf#13"], "critical": true},
+      {"id": "contractors", "label": "доведение требований до подрядчиков", "acceptable_chunk_ids": ["776н.pdf#15"], "critical": true},
+      {"id": "structure", "label": "структура обязанностей и ответственности", "acceptable_chunk_ids": ["776н.pdf#8", "776н.pdf#24"], "critical": true},
+      {"id": "employer_ownership", "label": "создание и функционирование работодателем", "acceptable_chunk_ids": ["776н.pdf#10"], "critical": true},
+      {"id": "policy_review", "label": "оценка и пересмотр политики", "acceptable_chunk_ids": ["776н.pdf#22"], "critical": true},
+      {"id": "worker_participation", "label": "участие и консультации работников", "acceptable_chunk_ids": ["776н.pdf#27", "776н.pdf#29", "776н.pdf#30", "776н.pdf#32"], "critical": true},
+      {"id": "risk_management", "label": "управление профессиональными рисками", "acceptable_chunk_ids": ["776н.pdf#34"], "critical": true},
+      {"id": "training_records", "label": "обучение и документирование", "acceptable_chunk_ids": ["776н.pdf#55"], "critical": true},
+      {"id": "continuous_improvement", "label": "систематическое улучшение СУОТ", "acceptable_chunk_ids": ["776н.pdf#103"], "critical": true}
+    ],
+    "31": [
+      {"id": "right_to_refuse", "label": "право отказаться от опасной работы", "acceptable_chunk_ids": ["тк рф.pdf#1386", "тк рф.pdf#1402", "тк рф.pdf#2809"], "critical": true},
+      {"id": "notify", "label": "обязанность сообщить об угрозе", "acceptable_chunk_ids": ["тк рф.pdf#147"], "critical": true},
+      {"id": "alternative_work", "label": "обязанность предоставить другую работу", "acceptable_chunk_ids": ["тк рф.pdf#1398"], "critical": true},
+      {"id": "paid_downtime", "label": "оплата простоя, если другую работу предоставить невозможно", "acceptable_chunk_ids": ["тк рф.pdf#1400"], "critical": true},
+      {"id": "no_discipline", "label": "отсутствие дисциплинарной ответственности", "acceptable_chunk_ids": ["тк рф.pdf#1402"], "critical": true},
+      {"id": "stop_dangerous_work", "label": "приостановление опасных работ работодателем", "acceptable_chunk_ids": ["тк рф.pdf#1365"], "critical": true}
+    ],
+    "32": [
+      {"id": "unscheduled_sout", "label": "внеплановая СОУТ при изменении технологии", "acceptable_chunk_ids": ["426-ФЗ.pdf#189"], "critical": true},
+      {"id": "unscheduled_sout_deadline", "label": "двенадцатимесячный срок внеплановой СОУТ", "acceptable_chunk_ids": ["426-ФЗ.pdf#194"], "critical": true},
+      {"id": "risk_reassessment", "label": "пересмотр профессиональных рисков", "acceptable_chunk_ids": ["776н.pdf#84"], "critical": true}
+    ],
+    "33": [
+      {"id": "general_violation_scope", "label": "общий состав нарушения требований охраны труда", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#1"], "critical": true},
+      {"id": "general_violation_penalty", "label": "штраф за общий состав нарушения", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#2"], "critical": true},
+      {"id": "assessment_violation_scope", "label": "нарушение порядка специальной оценки", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#2"], "critical": true},
+      {"id": "assessment_violation_penalty", "label": "штраф за нарушение порядка специальной оценки", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#3"], "critical": true},
+      {"id": "admission_violation_scope", "label": "допуск без обучения или медосмотра", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#4"], "critical": true},
+      {"id": "admission_violation_penalty", "label": "штраф за допуск без обучения или медосмотра", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#5"], "critical": true},
+      {"id": "ppe_violation_scope", "label": "необеспечение средствами индивидуальной защиты", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#5"], "critical": true},
+      {"id": "ppe_violation_penalty", "label": "штраф за необеспечение средствами индивидуальной защиты", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#6"], "critical": true},
+      {"id": "repeat_violation_scope", "label": "повторное административное нарушение", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#7"], "critical": true},
+      {"id": "repeat_violation_penalty", "label": "штраф за повторное административное нарушение", "acceptable_chunk_ids": ["Статья 5.27.1..pdf#8"], "critical": true},
+      {"id": "criminal_violation_scope", "label": "уголовный состав при тяжком вреде здоровью", "acceptable_chunk_ids": ["Статья 143 УК РФ.md#1"], "critical": true},
+      {"id": "criminal_violation_penalty", "label": "штраф и иные санкции за причинение тяжкого вреда", "acceptable_chunk_ids": ["Статья 143 УК РФ.md#2"], "critical": true}
+    ],
+    "34": [
+      {"id": "general_composition", "label": "общий состав комиссии", "acceptable_chunk_ids": ["тк рф.pdf#1522"], "critical": true},
+      {"id": "worker_representatives_and_chair", "label": "представители работников и председатель комиссии", "acceptable_chunk_ids": ["тк рф.pdf#1523"], "critical": true},
+      {"id": "severe_or_fatal_case", "label": "дополнительные члены при тяжелом или смертельном случае", "acceptable_chunk_ids": ["тк рф.pdf#1525"], "critical": true},
+      {"id": "insurer_representative", "label": "представитель страховщика при расследовании страхового случая", "acceptable_chunk_ids": ["тк рф.pdf#1526"], "critical": true},
+      {"id": "excluded_persons", "label": "исключение лиц, отвечавших за охрану труда на месте происшествия", "acceptable_chunk_ids": ["тк рф.pdf#1529"], "critical": true},
+      {"id": "seconded_worker", "label": "представитель направившего работодателя для командированного работника", "acceptable_chunk_ids": ["тк рф.pdf#1531"], "critical": true},
+      {"id": "odd_member_count", "label": "нечетное число членов комиссии", "acceptable_chunk_ids": ["223н.pdf#188"], "critical": true}
+    ],
+    "36": [
+      {"id": "owner_responsibility", "label": "ответственность собственника или руководителя", "acceptable_chunk_ids": ["О пожарной безопасности.pdf#327", "О пожарной безопасности.pdf#326"], "critical": true},
+      {"id": "appointed_persons", "label": "назначенные ответственные лица", "acceptable_chunk_ids": ["1479 ппр.pdf#13"], "critical": true}
+    ],
+    "39": [
+      {"id": "transition_rule", "label": "переходное правило для аттестации до 2014 года", "acceptable_chunk_ids": ["426-ФЗ.pdf#313"], "critical": true},
+      {"id": "old_results_and_early_sout", "label": "использование старых результатов и право провести СОУТ раньше", "acceptable_chunk_ids": ["426-ФЗ.pdf#314"], "critical": true}
+    ],
+    "42": [
+      {"id": "admission_rule", "label": "запрет допуска без первичного инструктажа", "acceptable_chunk_ids": ["2464.pdf#21"], "critical": true},
+      {"id": "office_equipment_hazards", "label": "работа связана только с офисной и бытовой техникой", "acceptable_chunk_ids": ["2464.pdf#22"], "critical": true},
+      {"id": "no_other_hazards_and_safe_conditions", "label": "другие опасности отсутствуют, условия труда оптимальные или допустимые", "acceptable_chunk_ids": ["2464.pdf#23"], "critical": true},
+      {"id": "intro_program_and_approved_list", "label": "безопасные методы включены во вводный инструктаж, перечень должностей утвержден работодателем", "acceptable_chunk_ids": ["2464.pdf#24"], "critical": true}
+    ]
+  }
+}
