@@ -170,6 +170,18 @@ class TestHybridPool:
 
 class TestUnchangedContract:
     @pytest.mark.unit
+    def test_complex_threshold_is_independent_from_simple_threshold(
+        self, wired, monkeypatch
+    ):
+        """Tuning the simple gate must not silently tighten complex acceptance."""
+        monkeypatch.setattr(rc.v7_config, "COMPLEX_THRESHOLD", 0.35)
+        attempt = rag_complex(_make_state(plan={"top_k": 12, "threshold": 0.80}))[
+            "retrieval_attempts"
+        ][0]
+
+        assert attempt["attempt_plan"]["threshold"] == 0.35
+
+    @pytest.mark.unit
     def test_dedup_skips_existing_attempt(self, wired):
         state = _make_state(
             retrieval_attempts=[

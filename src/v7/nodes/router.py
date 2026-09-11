@@ -83,6 +83,7 @@ def router(state: RAGState) -> RAGState:
         "threshold": v7_config.HARD_GATE_THRESHOLD,
         "min_passages": v7_config.MIN_PASSAGES,
         "min_keyword_overlap": v7_config.MIN_KEYWORD_OVERLAP_ACTIVE,
+        "min_keyword_overlap_original": v7_config.MIN_KEYWORD_OVERLAP_ORIGINAL,
         "max_single_doc_ratio": v7_config.MAX_SINGLE_DOC_RATIO,
         "borderline_threshold": v7_config.TRIAGE_SOFT_THRESHOLD,
         "min_verifier_confidence": v7_config.VERIFIER_CONFIDENCE_ANCHOR,

@@ -56,7 +56,9 @@ def validate_context(
             unmet.append(OBL_REFS)
 
     if OBL_ORIGINAL in required:
-        if details["keyword_overlap_original"] <= 0.0:
+        original_overlap = details["keyword_overlap_original"]
+        original_floor = plan.get("min_keyword_overlap_original", 0.0)
+        if original_overlap <= 0.0 or original_overlap < original_floor:
             unmet.append(OBL_ORIGINAL)
 
     if OBL_ENUM in required:

@@ -55,7 +55,7 @@ class RetrievalPlan(TypedDict, total=False):
     """Retrieval parameters. Created by router, updated on escalation.
 
     Retrieval: top_k, rerank, timeout_ms.
-    Hard gates: threshold, min_passages, min_keyword_overlap.
+    Hard gates: threshold, min_passages, active/original keyword overlap.
     Soft signals: max_single_doc_ratio.
     Borderline zone: borderline_threshold.
     LLM verifier: min_verifier_confidence — minimum LLM confidence
@@ -68,6 +68,7 @@ class RetrievalPlan(TypedDict, total=False):
     threshold: float
     min_passages: int
     min_keyword_overlap: float
+    min_keyword_overlap_original: float
     max_single_doc_ratio: float
     borderline_threshold: float
     min_verifier_confidence: float
