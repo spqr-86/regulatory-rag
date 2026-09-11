@@ -41,6 +41,7 @@ COMPLEX_REASONS = {
     "complex_sufficient",
     "complex_fallback_accepted",
     "enumeration_best_effort",
+    "refs_best_effort",
     "complex_exhausted",
 }
 

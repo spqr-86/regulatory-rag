@@ -34,6 +34,7 @@ def test_reason_codes_match_the_spec():
         "complex_sufficient",
         "complex_fallback_accepted",
         "enumeration_best_effort",
+        "refs_best_effort",
         "complex_exhausted",
     }
     assert "retrieval_error" not in COMPLEX_REASONS

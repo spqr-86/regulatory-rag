@@ -13,6 +13,7 @@ from typing import Callable, Dict, List, Optional
 
 from src.v7.config import v7_config
 from src.v7.contract import PackResult, PackStatus
+from src.v7.gap import build_gap
 from src.v7.hard_gates import sanitize_for_llm
 from src.v7.nlp_core import passage_identity
 
@@ -76,14 +77,41 @@ def _passage_source(p: dict) -> str:
 
 
 def _merge_new_at_tail(base: List[dict], expanded: List[dict]) -> List[dict]:
-    """Вернуть ``base`` в исходном порядке, затем новое из ``expanded``.
+    """Вернуть ``base``, затем закрывающие ссылки и остальное расширение.
 
     Реальный expander вставляет bbox-соседей рядом с родителем; отдавать этот
     порядок дальше — значит вытолкнуть исходный чанк из головы списка (#30).
+    Но простое добавление всего нового в хвост тоже ошибочно: лимит чанков мог
+    отсечь найденный expander-ом текст пункта раньше нерелевантных соседей.
     """
     seen = {(_passage_source(p), p.get("text", "")) for p in base}
     tail = [p for p in expanded if (_passage_source(p), p.get("text", "")) not in seen]
-    return list(base) + tail
+
+    # Стабильный greedy-проход: переносим вперёд только пассажи, которые
+    # уменьшают множество открытых ссылок из исходного top-5. Порядок base и
+    # относительный порядок остальных результатов expander сохраняются.
+    prioritized: List[dict] = []
+    remaining = list(tail)
+    resolve_in = list(base)
+    open_refs = set(build_gap(base, resolve_in=resolve_in)["open"])
+    while open_refs:
+        chosen = None
+        chosen_open = open_refs
+        for i, passage in enumerate(remaining):
+            candidate_open = set(
+                build_gap(base, resolve_in=resolve_in + [passage])["open"]
+            )
+            if len(candidate_open) < len(chosen_open):
+                chosen = i
+                chosen_open = candidate_open
+        if chosen is None:
+            break
+        passage = remaining.pop(chosen)
+        prioritized.append(passage)
+        resolve_in.append(passage)
+        open_refs = chosen_open
+
+    return list(base) + prioritized + remaining
 
 
 def pack_context(

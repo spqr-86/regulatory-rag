@@ -138,8 +138,7 @@ abstain в другом):
 accept(candidate) :=
         final_context непуст
     AND hard gates пройдены
-    AND obligations \ {enumeration_complete} — сняты все
-    AND ( enumeration_complete снято
+    AND ( obligations сняты все
           OR best_effort_allowed(candidate) )
 ```
 
@@ -147,12 +146,16 @@ accept(candidate) :=
 
 - мы на complex-ветке (эскалация уже оплачена),
 - это последний кандидат в очереди,
-- все прочие обязательства сняты.
+- не снято ровно одно обязательство: `enumeration_complete` **или** `refs_resolved`.
+- для `refs_resolved` упаковка имеет статус `ok`, а не `degraded`.
 
 То есть исключение применяется **после** остальных блокеров, а не вместо них:
-сочетание «enumeration + незакрытые ссылки» ответ разрешить не может. При
-сработавшем исключении: `route_decision = generate`,
-`route_reason = enumeration_best_effort`, `obligations_unmet = ["enumeration_complete"]`.
+сочетание «enumeration + незакрытые ссылки» ответ разрешить не может. Для enumeration
+пишется `route_reason = enumeration_best_effort`; для ссылки, которую exhaustive expansion
+не смог материализовать, — `route_reason = refs_best_effort`. Во втором случае hard gates
+и релевантность исходному запросу уже пройдены. Исключение добавлено по результатам Task 14:
+ссылки на внешнюю статью из заголовка приказа и второстепенные ссылки соседнего чанка иначе
+давали ложный abstain при наличии прямой отвечающей нормы.
 
 Обязательство остаётся невыполненным в телеметрии — исключение разрешает ответ,
 но не объявляет полноту доказанной.
@@ -209,7 +212,7 @@ immutable snapshot simple-fallback. Каждый проходит `enrich → pa
 `abstain` с `complex_exhausted`.
 
 Терминальные коды complex-ветки: `complex_sufficient`, `complex_fallback_accepted`,
-`enumeration_best_effort`, `complex_exhausted`.
+`enumeration_best_effort`, `refs_best_effort`, `complex_exhausted`.
 
 Snapshot fallback хранится вместе со своими `plan` и `active_query`: проверять
 simple-кандидата под последним complex-планом нельзя.

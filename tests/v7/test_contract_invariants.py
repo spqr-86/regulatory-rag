@@ -141,6 +141,34 @@ def test_invariant_2b_version_is_order_independent():
     )
 
 
+def test_simple_evidence_survives_escalation_to_complex():
+    """A direct norm at simple rank 12 must still reach the generator."""
+    q = "кто проходит медосмотр"
+    direct = _p(12, "медосмотр проходят водители и машинисты")
+    simple_ps = [_p(i, f"медосмотр работников правило {i}") for i in range(1, 12)] + [
+        direct
+    ]
+
+    simple_state = _simple_state(simple_ps, q)
+    simple_out = evaluate_triage(simple_state)
+    assert simple_out["route_decision"] == "complex"
+
+    complex_state = {**simple_state, **simple_out}
+    complex_state["retrieval_attempts"] = [
+        simple_state["retrieval_attempts"][0],
+        {
+            "stage": "complex",
+            "passages": [],
+            "attempt_plan": PLAN,
+            "retrieval_error": False,
+        },
+    ]
+    out = evaluate_complex(complex_state)
+
+    assert out["route_decision"] == "generate"
+    assert any(p["chunk_id"] == direct["chunk_id"] for p in out["final_context"])
+
+
 def test_invariant_3_obligation_cleared_only_on_packed_context(monkeypatch):
     """Ссылку закрывает чанк, срезанный ТОКЕННЫМ БЮДЖЕТОМ — обязательство стоит."""
     monkeypatch.setattr(pc.v7_config, "MAX_CHUNKS_FOR_LLM", 10)

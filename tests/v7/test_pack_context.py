@@ -111,6 +111,32 @@ def test_pack_truncates_to_max_chunks(monkeypatch):
     assert res["dropped"] == 7
 
 
+def test_default_pack_keeps_all_twelve_simple_retrieval_chunks(monkeypatch):
+    """The packer must not discard ranks 11-12 from SIMPLE_TOP_K."""
+    monkeypatch.setattr(pc.v7_config, "PACK_TOKEN_BUDGET", 10**6)
+    res = pc.pack_context([_p(i) for i in range(12)], "q", PLAN)
+    assert len(res["final_context"]) == 12
+    assert res["dropped"] == 0
+
+
+def test_pack_prioritizes_reference_closer_before_expansion_noise(monkeypatch):
+    """A closing clause must survive the chunk cap ahead of unrelated expansion."""
+    base = _p(1, text="Требование установлено в пункте 12 настоящего порядка.")
+    noise = _p(2, text="Соседний фрагмент без текста пункта.")
+    closer = _p(3, text="12. Работодатель обязан выполнить требование.")
+
+    def expander(passages, query):
+        return list(passages) + [noise, closer]
+
+    pc.set_crossref_expander(expander)
+    monkeypatch.setattr(pc.v7_config, "MAX_CHUNKS_FOR_LLM", 2)
+    monkeypatch.setattr(pc.v7_config, "PACK_TOKEN_BUDGET", 10**6)
+
+    res = pc.pack_context([base], "требование", PLAN)
+
+    assert [p["chunk_id"] for p in res["final_context"]] == [1, 3]
+
+
 def test_budget_drops_everything_that_does_not_fit(monkeypatch):
     """Пассаж, не влезающий в бюджет, отбрасывается даже первым."""
     monkeypatch.setattr(pc.v7_config, "MAX_CHUNKS_FOR_LLM", 10)

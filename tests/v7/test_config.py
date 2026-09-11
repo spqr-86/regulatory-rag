@@ -8,7 +8,7 @@ def test_pack_budget_defaults():
     from src.v7.config import V7Config
 
     cfg = V7Config()
-    assert cfg.MAX_CHUNKS_FOR_LLM == 10
+    assert cfg.MAX_CHUNKS_FOR_LLM == 30
     assert cfg.PACK_TOKEN_BUDGET == 60000
     assert cfg.PROMPT_TOKEN_BUDGET == 70000
     # The prompt is always wider than passages: template and query cost tokens too.
@@ -76,7 +76,7 @@ class TestV7ConfigDefaults:
     def test_max_chunks_for_llm(self):
         from src.v7.config import v7_config
 
-        assert v7_config.MAX_CHUNKS_FOR_LLM == 10
+        assert v7_config.MAX_CHUNKS_FOR_LLM == 30
 
     def test_verifier_confidence_anchor(self):
         from src.v7.config import v7_config

@@ -91,3 +91,31 @@ answers, latency, cost, route changes, and named domain-critical examples; it is
 not plausibly only judge noise. Next step is a TDD diagnosis of final-context
 selection: test the 10-vs-12 simple truncation and preservation of the best direct
 evidence across simple→complex escalation, then rerun both Task 14 evaluations.
+
+TASK 14 PRE-PUSH GATES — FIXED 2026-09-11, QUALITY GATE PASSED
+
+Root causes were confirmed by regression tests and live traces: the revived
+MAX_CHUNKS_FOR_LLM=10 cut ranks 11-12 that the old bridge actually passed through
+under its [:30] cap; complex merging could displace the direct simple norm; and
+cross-reference expansion appended structural closers after unrelated neighbours.
+The fixes set the explicit cap to 30, anchor the simple top-k ahead of novel complex
+passages, and prioritize chunks that reduce the top-5 structural gap before other
+expansion output. A narrow refs_best_effort exception now applies only to the last
+complex candidate, only after hard gates pass, and only when refs_resolved is the
+sole unmet obligation. This handles external citations such as article 213 of the
+Labour Code named in the title of Order 29n without weakening the simple path.
+
+Final route matrix: 133/133, 0 errors; escalation 0.195 versus baseline 0.248;
+114/133 gaps closed; HR@12 0.827 versus 0.827, with 0 lost and 0 gained hits. Final comparable generative
+run (`eval_v7_triage_contract_final_2026-09-11.jsonl`): valid 53/56 versus 53/56;
+faithfulness 0.891 versus 0.808; relevance 0.879 versus 0.881; correctness all 7.26
+versus 7.09; correctness in-scope 7.47 versus 7.40; false-sufficiency 11.4% versus
+13.0%; complex path 17.0% versus 13.2%; p50/p95 4.5/15.7s versus 4.8/14.7s; total
+cost $0.2049 versus $0.1739. There are no new in-scope empty answers. Two apparent
+per-question judge drops are not dangerous regressions: the evacuation answer does
+state the mass-occupancy condition in its rationale, and the instruction-types answer
+is materially equivalent to the baseline response.
+
+Decision: QUALITY GATE PASSED. Full suite after the final fixes: 952 passed and the
+same 5 known failures. The local series is ready for commit and may be pushed only
+after Petr's separate confirmation.

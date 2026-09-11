@@ -11,9 +11,9 @@ from typing import Any, Dict, List, cast
 import structlog
 
 from src.v7.config import v7_config
-from src.v7.contract import Candidate, PackResult, RejectedCandidate
+from src.v7.contract import OBL_REFS, Candidate, PackResult, RejectedCandidate
 from src.v7.decide import accept, terminal_update
-from src.v7.nlp_core import merge_all_passages
+from src.v7.nlp_core import merge_all_passages, passage_identity
 from src.v7.nodes.visual_enrichment import enrich_passages
 from src.v7.pack_context import pack_context
 from src.v7.state_types import RAGState, RetrievalPlan
@@ -40,6 +40,16 @@ def _candidates(state: RAGState) -> List[Candidate]:
         top_k=v7_config.FINAL_MERGE_TOP_K,
         mmr_lambda=plan.get("mmr_lambda"),
     )
+    snapshot = state.get("fallback_snapshot")
+    if snapshot:
+        # Escalation is an additive search step. Keep the original simple top-k
+        # at the head so a high-scoring direct norm cannot be displaced by a
+        # larger complex pool with scores from a different ranking stage.
+        anchors = list(snapshot.get("passages") or [])[: v7_config.SIMPLE_TOP_K]
+        anchor_ids = {passage_identity(p) for p in anchors}
+        novel = [p for p in merged if passage_identity(p) not in anchor_ids]
+        if novel:
+            merged = (anchors + novel)[: v7_config.FINAL_MERGE_TOP_K]
     out: List[Candidate] = [
         {
             "passages": merged,
@@ -56,7 +66,6 @@ def _candidates(state: RAGState) -> List[Candidate]:
             "packed": False,
         },
     ]
-    snapshot = state.get("fallback_snapshot")
     if snapshot:
         out.append(cast(Candidate, dict(snapshot)))
     return out
@@ -131,7 +140,9 @@ def evaluate_complex(state: RAGState) -> RAGState:
             is_last_candidate=is_last,
         ):
             reason = _ORIGIN_REASON.get(cand["origin"], "complex_sufficient")
-            if verdict["obligations_unmet"]:
+            if verdict["obligations_unmet"] == [OBL_REFS]:
+                reason = "refs_best_effort"
+            elif verdict["obligations_unmet"]:
                 reason = "enumeration_best_effort"
             return cast(
                 RAGState,

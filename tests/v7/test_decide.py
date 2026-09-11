@@ -36,6 +36,19 @@ def test_reject_when_refs_unmet():
     assert accept(CTX, _v([OBL_REFS])) is False
 
 
+def test_refs_best_effort_allowed_only_on_last_complex_candidate():
+    verdict = _v([OBL_REFS])
+    assert accept(CTX, verdict, on_complex=True, is_last_candidate=False) is False
+    assert accept(CTX, verdict, on_complex=True, is_last_candidate=True) is True
+
+
+def test_refs_best_effort_rejects_degraded_pack():
+    verdict = _v([OBL_REFS])
+    verdict["pack_status"] = "degraded"
+
+    assert accept(CTX, verdict, on_complex=True, is_last_candidate=True) is False
+
+
 def test_enumeration_alone_blocks_on_simple():
     assert (
         accept(CTX, _v([OBL_ENUM]), on_complex=False, is_last_candidate=True) is False

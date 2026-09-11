@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from src.v7 import pack_context as pc
-from src.v7.contract import COMPLEX_REASONS
+from src.v7.contract import COMPLEX_REASONS, OBL_REFS
 from src.v7.nodes.evaluate_complex import evaluate_complex, route_after_decision
 
 PLAN = {
@@ -73,6 +73,27 @@ def test_merged_candidate_accepted():
     assert out["route_decision"] == "generate"
     assert out["route_reason"] == "complex_sufficient"
     assert out["final_context"]
+
+
+def test_merged_candidate_keeps_simple_evidence_ahead_of_complex_noise(monkeypatch):
+    """Escalation may add evidence, but it must not displace the direct simple norm."""
+    monkeypatch.setattr(pc.v7_config, "SIMPLE_TOP_K", 2)
+    monkeypatch.setattr(pc.v7_config, "FINAL_MERGE_TOP_K", 4)
+    direct = _p(1, "медосмотр водителей проводится ежегодно", score=0.4)
+    simple = [direct, _p(2, "медосмотр водителей обязателен", score=0.4)]
+    complex_noise = [
+        _p(i, f"медосмотр водителей посторонний фрагмент {i}", score=0.99)
+        for i in range(10, 16)
+    ]
+    snap = _snapshot(simple)
+    state = _state(complex_noise, snapshot=snap)
+    state["retrieval_attempts"][0]["passages"] = simple
+
+    out = evaluate_complex(state)
+
+    assert out["route_decision"] == "generate"
+    assert out["route_reason"] == "complex_sufficient"
+    assert out["final_context"][0]["chunk_id"] == direct["chunk_id"]
 
 
 def test_exhausted_queue_abstains_with_a_verdict_on_the_returned_context():
@@ -148,6 +169,22 @@ def test_enumeration_best_effort_on_the_last_candidate():
     assert out["route_decision"] == "generate"
     assert out["route_reason"] == "enumeration_best_effort"
     assert out["obligations_unmet"] == ["enumeration_complete"]
+
+
+def test_refs_best_effort_on_the_last_candidate():
+    snap = _snapshot(
+        [
+            _p(1, "медосмотр водителей по пункту 15"),
+            _p(2, "медосмотр водителей обязателен"),
+        ]
+    )
+    state = _state([], snapshot=snap)
+
+    out = evaluate_complex(state)
+
+    assert out["route_decision"] == "generate"
+    assert out["route_reason"] == "refs_best_effort"
+    assert out["obligations_unmet"] == [OBL_REFS]
 
 
 def test_route_after_decision_reads_the_decision():

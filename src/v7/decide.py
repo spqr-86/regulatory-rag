@@ -22,10 +22,18 @@ def best_effort_allowed(
     on_complex: bool,
     is_last_candidate: bool,
 ) -> bool:
-    """Разрешить исключение только для enumeration последнего complex-кандидата."""
+    """Разрешить одно незакрытое обязательство последнему complex-кандидату.
+
+    ``refs_resolved`` здесь означает, что exhaustive expansion уже не смог
+    материализовать внешнюю/второстепенную ссылку. Hard gates и релевантность
+    исходному запросу всё равно обязательны и проверяются в ``accept``.
+    """
     if not (on_complex and is_last_candidate):
         return False
-    return set(verdict["obligations_unmet"]) <= {OBL_ENUM}
+    unmet = set(verdict["obligations_unmet"])
+    if unmet == {OBL_REFS}:
+        return verdict["pack_status"] == "ok"
+    return unmet == {OBL_ENUM}
 
 
 def accept(
@@ -40,10 +48,7 @@ def accept(
         return False
     if not verdict["hard_ok"]:
         return False
-    unmet = set(verdict["obligations_unmet"])
-    if unmet - {OBL_ENUM}:
-        return False
-    if OBL_ENUM in unmet:
+    if verdict["obligations_unmet"]:
         return best_effort_allowed(
             verdict,
             on_complex=on_complex,
