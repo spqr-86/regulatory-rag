@@ -62,41 +62,39 @@ Graph nodes (`src/v7/graph.py`), entry = `intent_gate`:
 ```
 intent_gate ─(noise)→ END
             └(domain)→ router ─(ambiguous)→ clarify_respond → END
-                              └(ok)→ rag_simple → evaluate_triage ─(sufficient)→ visual_enrichment
-                                                                  └(insufficient)→ rag_complex → evaluate_complex ─(pass)→ visual_enrichment
-                                                                                                                  └(fail)→ abstain → END
-visual_enrichment → generate_answer → END
+                              └(ok)→ rag_simple → evaluate_triage ─(generate)→ generate_answer → END
+                                                                  ├(complex)→ rag_complex → evaluate_complex ─(generate)→ generate_answer → END
+                                                                  │                                       └(abstain)→ abstain → END
+                                                                  └(abstain)→ abstain → END
 ```
 
 - The **domain gate** (cosine-to-centroid OOS filter) is a step *inside* `intent_gate`, active when `DOMAIN_GATE_THRESHOLD > 0` — not a separate node.
 - `clarify_respond` returns a clarification request for short/ambiguous queries.
-- `visual_enrichment` is a no-op on VPS (`visual_proof_fn` not injected).
+- Both evaluators own the internal `enrich → pack → validate → decide` pipeline;
+  `visual_enrichment` and `pack_context` are helpers, not graph nodes.
 - No `llm_verifier` / `rewriter` (removed session 61): `evaluate_triage` routes sufficient→generate, otherwise→`rag_complex`. <!--freshness:ignore-->
 - **`evaluate_triage` is a single hard-gate path** (`check_full_triage`: `top_score` / `passage_count` / `keyword_overlap`). On a sufficient verdict it emits a structured `triage_gap` (`TriageGap`/`GapRef`, issue #13) describing which referenced п./ст. are missing from the top-5; the gap is closed in place by appending cross-referenced passages to the tail (no reorder), and escalation to `rag_complex` happens only if the gap stays open. The V8 `_evidence_assess` variant and its `V7_V8_ENABLE_EVIDENCE_ASSESS` flag were removed 2026-09-08 (variant B).
 
 ## metrics
-Source: `benchmarks/eval_v7_2026-09-08_variantB.jsonl` (dataset 56, valid 53) — single
-hard-gate triage path (variant B).
-**First full run judged by `gpt-4o`** after the 2026-09-02 `llm_factory` fix — see the
-judge note below. Pipeline: OpenAI `gpt-4o-mini` (simple) / `gpt-4o` (complex),
-CrossEncoder reranker, cap 100.
+Source: `benchmarks/eval_v7_triage_contract_final_2026-09-11.jsonl` (dataset 56,
+valid 53). Pipeline: the final terminal triage contract, OpenAI `gpt-4o-mini` (simple) /
+`gpt-4o` (complex), `gpt-4o` judge, CrossEncoder reranker, cap 100.
 
-| metric | value | removed evidence-assess path (2026-09-08) |
+| metric | value | pre-contract baseline (2026-09-08) |
 |---|---|---|
-| in-scope correctness | 7.4 / 10 | 7.56 |
-| correctness mean | 7.1 / 10 | 7.30 |
-| faithfulness | 0.808 | 0.840 |
-| answer relevance | 0.881 | 0.847 |
+| in-scope correctness | 7.47 / 10 | 7.40 |
+| correctness mean | 7.26 / 10 | 7.09 |
+| faithfulness | 0.891 | 0.808 |
+| answer relevance | 0.879 | 0.881 |
 | OOS rejection rate | 1.00 | 1.00 |
-| false-sufficiency rate | 0.130 | 0.048 |
-| complex-path rate | 0.132 | 0.208 |
-| latency p50 / p95 / mean | 4.8 / 14.7 / 5.9 s | 5.2 / 19.1 / 7.2 s |
-| cost / query | $0.0033 ($0.17 run total) | $0.0045 |
+| false-sufficiency rate | 0.114 | 0.130 |
+| complex-path rate | 0.170 | 0.132 |
+| latency p50 / p95 / mean | 4.51 / 15.70 / 6.83 s | 4.8 / 14.7 / 5.9 s |
+| cost / query | $0.00387 ($0.205 run total) | $0.0033 |
 
-The hard-gate path escalates less (13.2% vs 20.8% to complex), which trims cost and
-latency but raises false-sufficiency (0.130 vs 0.048) on this 53-question set — small N,
-and 2 of the 6 flagged cases are the OOS/injection probes. Correctness and faithfulness
-move within judge run-to-run variance (~±0.25).
+The terminal contract improved faithfulness and false sufficiency without losing
+correctness or relevance beyond judge variance. It costs about 18% more per query and
+adds about 7% to p95 latency relative to the pre-contract hard-gate baseline.
 
 > **Judge note (fix 2026-09-02).** Every run before this date was judged by
 > **`gpt-4o-mini`, not `gpt-4o`** — `llm_factory` carried the resolved settings model into
@@ -136,9 +134,9 @@ honest headline number.
 путям и p50/p95 латентности. Цифры лежат в `aggregate.cost` каждого файла прогона —
 отдельной константы здесь больше нет, чтобы она не протухала.
 
-Замер 08.09.2026 (полный прогон, 53 запроса, судья gpt-4o): $0.0045 / запрос в среднем,
-$0.24 весь прогон. По путям: simple $0.00105 / запрос (n=42, p50 5.0 с), complex
-$0.01755 / запрос (n=11, p50 15.0 с) — разница ~17× при доле complex 20.8%.
+Финальный замер 11.09.2026 (53 валидных запроса, судья gpt-4o): $0.00387 / запрос,
+$0.205 весь прогон. По путям: simple $0.00107 / запрос (n=44, p50 4.31 с), complex
+$0.01755 / запрос (n=9, p50 14.04 с) — разница ~16× при доле complex 17.0%.
 
 ## deploy
 - port: 8502

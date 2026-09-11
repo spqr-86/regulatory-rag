@@ -1,6 +1,6 @@
 # How to run tests and checks
 
-Always work inside the project venv (`source venv/bin/activate`).
+Always work inside the project venv (`source .venv/bin/activate`).
 
 ## Unit tests
 
@@ -13,7 +13,8 @@ pytest tests/test_hard_gates.py -v   # a single file
 
 Markers (`unit` / `integration` / `slow`) are configured in `pyproject.toml`. New features
 and bugfixes must ship with unit tests in `tests/test_*.py` using `unittest.mock` for
-injected dependencies.
+injected dependencies. Unit tests must not initialize live LLM, embedding, vector-store,
+or reranker clients; patch their factories at the test boundary.
 
 ## Lint
 

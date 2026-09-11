@@ -1,4 +1,4 @@
-"""V7 node: visual_enrichment — enrich passages with visual context before generation.
+"""V7 helper: enrich passages with visual context before validation and generation.
 
 Triggered for passages that are:
 - From a table (element_type contains "Table")

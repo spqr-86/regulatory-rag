@@ -1,6 +1,6 @@
 # Triage threshold calibration — implementation plan
 
-**Issue:** #9  
+**Issue:** #9
 **Status:** completed with a measured negative result (2026-09-11)
 **Datasets:** original 43 questions = development; later 90 practitioner questions = validation
 

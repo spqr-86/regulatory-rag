@@ -66,7 +66,7 @@ streamlit run app.py --server.port 8502
 ```
 
 Open `http://localhost:8502`. The query goes through the V7 graph:
-`intent_gate → router → rag_simple → evaluate_triage → [rag_complex] → generate_answer`
+`intent_gate → router → rag_simple → evaluate_triage → [rag_complex] → pack_context → generate_answer`
 (insufficient results escalate to `rag_complex`, then answer or abstain).
 
 ## Run the API
@@ -91,7 +91,7 @@ Results written to `benchmarks/eval_v7_{date}.jsonl`. See [eval/README.md](../ev
 ## Tests
 
 ```bash
-pytest -m unit          # ~550 unit tests (CI gate)
+pytest -m unit          # ~520 unit tests (CI gate)
 pytest                  # full suite (~900 tests; 5 pre-existing failures —
                         # test_agent_tools, v7/test_bridge_rerank)
 ```

@@ -9,6 +9,7 @@ Offline evaluation suite for the V7 RAG pipeline. Runs the golden question datas
 | `run_v7_eval.py` | Main eval runner — runs dataset through V7 graph, writes JSONL to `benchmarks/` | CLI |
 | `advanced_generation_metrics.py` | LLM-based metrics: faithfulness, answer relevance, context relevance, completeness | `run_v7_eval.py` |
 | `run_retrieval_eval.py` | Retrieval-only IR eval — Hit Rate@k, MRR, per-query latency; `--path vector\|bm25` backbones | CLI |
+| `triage_calibration.py` | Deterministic route/risk audit and threshold grid; issue #9 retained current defaults after 81 profiles | CLI |
 | `pricing.py` | Re-export of `src/pricing.py` rate card — `price_for()` per model | eval runners |
 | `metrics.py` | Deterministic (no LLM) metrics: completeness via lemma overlap, abstain rates, inversion detection, citation parsing | `tests/test_eval_metrics.py` |
 | `retrieval_metrics.py` | Standard IR metrics: hit rate, MRR, precision/recall, NDCG | `tests/test_retrieval_metrics.py` |

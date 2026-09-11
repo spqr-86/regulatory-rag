@@ -31,3 +31,8 @@ For a single-question trace instead of a full run:
 ```bash
 python scripts/trace_v7.py "your question"
 ```
+
+For deterministic triage calibration (no judge), use the reviewed annotations and an
+immutable retrieval snapshot as described in
+[`2026-09-11-triage-threshold-calibration.md`](../superpowers/plans/2026-09-11-triage-threshold-calibration.md).
+The completed 81-profile run retained the current defaults.

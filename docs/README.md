@@ -6,13 +6,17 @@ retrieval confidence is low. These docs follow a [Diátaxis](https://diataxis.fr
 split: start here, learn *why* in Explanation, find recipes in How-to, look up facts in
 Reference.
 
+**Status:** portfolio MVP complete as of 2026-09-11. The application, evaluation,
+terminal triage contract, cost accounting, and monitoring are the finished showcase.
+The roadmap retains optional experiments for future work.
+
 ## Getting started
 
 - [getting-started.md](./getting-started.md) — install, configure, index, run the UI and API
 
 ## Roadmap
 
-- [roadmap.md](./roadmap.md) — **where the project is going and why** — the single place the plan lives
+- [roadmap.md](./roadmap.md) — completed route, evidence, and optional post-MVP backlog
 
 ## Explanation — how and why it works
 

@@ -6,7 +6,7 @@
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Answer quality** (56-question golden set, `gpt-4o` judge): in-scope correctness **7.4 / 10** · faithfulness **0.808** · answer relevance **0.881** · OOS rejection **1.00** · false-sufficiency **13%** · complex-path **13%** · **~$0.0033/query**, p50 **4.8 s**.
+**Answer quality** (56-question golden set, `gpt-4o` judge): in-scope correctness **7.47 / 10** · faithfulness **0.891** · answer relevance **0.879** · OOS rejection **1.00** · false-sufficiency **11.4%** · complex-path **17%** · **~$0.0039/query**, p50 **4.5 s**.
 
 > Metrics are judge-dependent — canonical values live in [docs/reference/FACTS.md](./docs/reference/FACTS.md). The reasoning behind the architecture is in [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
 
@@ -57,15 +57,15 @@ sufficiency gap that pulls in cross-referenced clauses before escalating. See
 
 | Metric | Value |
 |---|---|
-| In-scope correctness | 7.4 / 10 |
-| Correctness (all questions) | 7.1 / 10 |
-| Faithfulness | 0.808 |
-| Answer relevance | 0.881 |
+| In-scope correctness | 7.47 / 10 |
+| Correctness (all questions) | 7.26 / 10 |
+| Faithfulness | 0.891 |
+| Answer relevance | 0.879 |
 | OOS rejection rate | 1.00 |
-| False-sufficiency rate | 13% |
-| Complex-path rate | 13% |
-| Latency p50 / p95 / mean | 4.8 / 14.7 / 5.9 s |
-| Cost / query | $0.0033 ($0.17 / run) |
+| False-sufficiency rate | 11.4% |
+| Complex-path rate | 17% |
+| Latency p50 / p95 / mean | 4.51 / 15.70 / 6.83 s |
+| Cost / query | $0.00387 ($0.205 / run) |
 | Retrieval HR@5 / HR@12 / MRR (hybrid, 90 practitioner questions) | 0.63 / 0.81 / 0.50 |
 
 Eval: 56-question golden dataset (`tests/dataset.csv`), `eval/run_v7_eval.py`, LLM judge
@@ -252,6 +252,11 @@ No code changes needed — edit the YAML and restart.
 
 ## Project status
 
+**Portfolio MVP complete (2026-09-11).** The deployed application, offline evaluation,
+terminal triage contract, per-query cost accounting, and online monitoring form the
+finished showcase scope. Remaining ideas are optional post-MVP experiments, not release
+blockers.
+
 - ✅ V7 LangGraph pipeline — all nodes, deterministic routing (verifier/rewriter retired — insufficient triage routes straight to rag_complex)
 - ✅ Hybrid retrieval — BM25 + semantic, two-stage (simple/complex path)
 - ✅ Deterministic sufficiency gate — three-metric hard gate, no LLM decisions in routing
@@ -265,8 +270,10 @@ No code changes needed — edit the YAML and restart.
 - ✅ Offline eval — golden dataset + 90-question practitioner retrieval test set, per-query cost and latency
 - ✅ Online monitoring — every query is a row in Postgres (cost, latency, route, tokens, `source`), Grafana dashboard, 👍/👎 under the answer; the whole stack is one `docker compose up`
 - ✅ Deployed on a VPS (port 8502, Streamlit)
-- 🔄 Value↔condition robustness on multi-value queries (e.g. program-type periodicity)
-- 🔄 Chunking rewrite for tables and section headers (modules 06/07)
+
+Optional post-MVP backlog: independent judge validation, generated comparison tables,
+error attribution between retrieval and generation, and a chunking experiment for tables
+and section headers. See [docs/roadmap.md](./docs/roadmap.md).
 
 ---
 

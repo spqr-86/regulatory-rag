@@ -210,6 +210,17 @@ def test_generate_raises_when_prompt_exceeds_budget(monkeypatch):
 
 
 class TestInitV7FromChroma:
+    @pytest.fixture(autouse=True)
+    def _stub_reranker_factories(self, monkeypatch):
+        """Unit tests must not load or download a real reranker model."""
+        monkeypatch.setattr(
+            "src.v7.bridge.make_crossencoder_rerank_fn",
+            MagicMock(return_value=MagicMock()),
+        )
+        monkeypatch.setattr(
+            "src.v7.bridge.make_rerank_fn", MagicMock(return_value=MagicMock())
+        )
+
     @pytest.mark.unit
     @patch("src.v7.bridge.init_bm25_index")
     @patch("src.v7.bridge.rag_simple_mod")
