@@ -8,12 +8,16 @@ import pytest
 from pydantic import ValidationError
 
 from eval.triage_calibration import (
+    CalibrationProfile,
     CalibrationQuestion,
+    apply_profile_to_plan,
     binary_hit,
+    build_grid_profiles,
     load_calibration_gt,
     load_calibration_split,
     make_audit_record,
     score_context,
+    select_grid_profile,
     summarize_audit,
 )
 
@@ -386,3 +390,99 @@ def test_split_loader_rejects_draft_without_explicit_diagnostic_override(tmp_pat
     with pytest.raises(ValueError, match="manifest is draft"):
         load_calibration_split(base, manifest)
     assert len(load_calibration_split(base, manifest, allow_draft=True)) == 1
+
+
+@pytest.mark.unit
+def test_profile_overrides_only_effective_controls_for_each_path():
+    base = {
+        "threshold": 0.50,
+        "min_passages": 5,
+        "min_keyword_overlap": 0.15,
+        "min_keyword_overlap_original": 0.10,
+        "require_multi_doc": True,
+    }
+    profile = CalibrationProfile(
+        hard_gate_threshold=0.55,
+        min_passages=8,
+        min_keyword_overlap_active=0.20,
+        min_keyword_overlap_original=0.15,
+        comparison_require_multi_doc=False,
+    )
+
+    simple = apply_profile_to_plan(base, profile, comparison_query=True)
+    complex_ = apply_profile_to_plan(
+        base, profile, comparison_query=True, on_complex=True
+    )
+
+    assert simple == {
+        "threshold": 0.55,
+        "min_passages": 8,
+        "min_keyword_overlap": 0.20,
+        "min_keyword_overlap_original": 0.15,
+        "require_multi_doc": False,
+    }
+    assert complex_ == {
+        **base,
+        "min_keyword_overlap_original": 0.15,
+        "require_multi_doc": False,
+    }
+
+
+@pytest.mark.unit
+def test_grid_keeps_comparison_policy_fixed_without_comparison_questions():
+    baseline = CalibrationProfile()
+
+    profiles = build_grid_profiles(
+        baseline,
+        hard_gate_thresholds=[0.45, 0.50],
+        min_passages_values=[5],
+        active_overlap_values=[0.15],
+        original_overlap_values=[0.10],
+        comparison_policy_values=[False, True],
+        has_comparison_questions=False,
+    )
+
+    assert len(profiles) == 2
+    assert {p.comparison_require_multi_doc for p in profiles} == {
+        baseline.comparison_require_multi_doc
+    }
+
+
+@pytest.mark.unit
+def test_grid_selection_enforces_risk_then_cost_coverage_and_latency():
+    rows = [
+        {
+            "profile": {"hard_gate_threshold": 0.45},
+            "summary": {
+                "unsafe_generate": {"count": 3},
+                "critical_miss_generate": {"count": 3},
+                "escalated": {"count": 1},
+                "full_coverage_generate": {"count": 8},
+                "latency_ms": {"terminal": {"p95": 100.0}},
+            },
+        },
+        {
+            "profile": {"hard_gate_threshold": 0.50},
+            "summary": {
+                "unsafe_generate": {"count": 2},
+                "critical_miss_generate": {"count": 2},
+                "escalated": {"count": 2},
+                "full_coverage_generate": {"count": 9},
+                "latency_ms": {"terminal": {"p95": 120.0}},
+            },
+        },
+        {
+            "profile": {"hard_gate_threshold": 0.55},
+            "summary": {
+                "unsafe_generate": {"count": 2},
+                "critical_miss_generate": {"count": 2},
+                "escalated": {"count": 2},
+                "full_coverage_generate": {"count": 10},
+                "latency_ms": {"terminal": {"p95": 130.0}},
+            },
+        },
+    ]
+
+    selected = select_grid_profile(rows, baseline_unsafe=2, baseline_critical_misses=2)
+
+    assert selected["profile"]["hard_gate_threshold"] == 0.55
