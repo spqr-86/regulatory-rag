@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1200
     CACHE_DIR: str = "document_cache"
     CACHE_EXPIRE_DAYS: int = 7
+    # UI reindex button rebuilds the whole index; off for public deployments (issue #32)
+    ENABLE_UI_REINDEX: bool = False
 
     # Vector store
     CHROMA_DB_PATH: str = "./chroma_db"
