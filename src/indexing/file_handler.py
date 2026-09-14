@@ -106,7 +106,9 @@ class DocumentProcessor:
         self.validate_files(files)
 
         all_chunks: List[Document] = []
-        seen_chunk_hashes: set[str] = set()
+        # Dedup key is (source, content hash): identical text in two documents or
+        # two editions keeps provenance in each (issue #33).
+        seen_chunk_keys: set[tuple[str, str]] = set()
         # Per-source 0-based sequential counter. Assigned AFTER dedup so ids are
         # contiguous and stable per source (no gaps from dropped duplicates).
         # Powers RRF fusion / dedup (passage_identity) and range queries
@@ -141,20 +143,20 @@ class DocumentProcessor:
                             "(conversion error or empty document) — not cached"
                         )
 
-                # Deduplication
+                # Deduplication within a source
                 for ch in chunks:
-                    # Uniqueness by text + coordinates (if present);
-                    # for simplicity we use text only, though different bboxes may share text
-                    content_hash = hashlib.sha256(
-                        ch.page_content.encode("utf-8")
-                    ).hexdigest()
-                    if content_hash not in seen_chunk_hashes:
-                        source = ch.metadata.get("source", display_name)
+                    # Uniqueness by text only, though different bboxes may share text
+                    source = ch.metadata.get("source", display_name)
+                    key = (
+                        source,
+                        hashlib.sha256(ch.page_content.encode("utf-8")).hexdigest(),
+                    )
+                    if key not in seen_chunk_keys:
                         cid = source_chunk_counter.get(source, 0)
                         ch.metadata["chunk_id"] = cid
                         source_chunk_counter[source] = cid + 1
                         all_chunks.append(ch)
-                        seen_chunk_hashes.add(content_hash)
+                        seen_chunk_keys.add(key)
 
             except Exception as e:
                 logger.error(
