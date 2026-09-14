@@ -116,13 +116,17 @@ with st.sidebar:
     st.subheader("📄 Библиотека документов")
     st.caption(f"БД: `{settings.CHROMA_DB_PATH}`")
 
-    if INDEX_AVAILABLE:
+    if not settings.ENABLE_UI_REINDEX:
+        st.caption("Переиндексация из интерфейса отключена.")
+    elif INDEX_AVAILABLE:
         if st.button("♻️ Переиндексировать библиотеку", use_container_width=True):
             with st.spinner("Индексация… это может занять несколько минут"):
                 try:
                     index_module.main()
                     load_resources.clear()
                     st.success("Готово: библиотека переиндексирована.")
+                except index_module.IndexingError as e:
+                    st.warning(f"Индексация отменена: {e}")
                 except Exception as e:
                     st.error(f"Ошибка индексации: {e}")
     else:

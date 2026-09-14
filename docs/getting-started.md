@@ -53,7 +53,12 @@ Place PDF/DOCX files in `source_docs/` and run:
 python index.py
 ```
 
-> WARNING: `index.py` is destructive — it drops the entire ChromaDB collection before reindexing.
+> WARNING: `index.py` replaces the entire ChromaDB collection. It first checks that
+> `source_docs/` has supported files and that they produce chunks; if not, it exits with
+> code 1 and leaves the existing index untouched.
+
+The UI reindex button is hidden unless `ENABLE_UI_REINDEX=true` is set in `.env` — keep it
+off for public deployments.
 
 The indexer uses docling `HybridChunker` (`max_tokens=400`, `merge_peers`) to chunk
 documents by structural headings and clauses. The shipped index holds 12 regulatory

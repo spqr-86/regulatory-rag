@@ -1,6 +1,7 @@
 # index.py
 import os
 import shutil
+import sys
 
 from dotenv import load_dotenv
 
@@ -22,12 +23,21 @@ def _collect_paths(root_dir: str, allowed_exts: list[str]) -> list[str]:
     return paths
 
 
+class IndexingError(RuntimeError):
+    """Reindex aborted before touching the existing index."""
+
+
 def main():
     logger.info("Starting indexing...")
 
-    if os.path.exists(settings.CHROMA_DB_PATH):
-        logger.info(f"Dropping existing DB: {settings.CHROMA_DB_PATH}...")
-        shutil.rmtree(settings.CHROMA_DB_PATH, ignore_errors=True)
+    # Validate inputs first: an empty or missing source dir must not cost the
+    # existing index (issue #32).
+    file_paths = _collect_paths(settings.SOURCE_DOCS_PATH, settings.ALLOWED_TYPES)
+    if not file_paths:
+        raise IndexingError(
+            f"No suitable files found in {settings.SOURCE_DOCS_PATH}; "
+            "existing index left untouched."
+        )
 
     # Invalidate caches tied to index contents.
     # Without this, BM25/Docling caches survive a destructive reindex and
@@ -42,24 +52,28 @@ def main():
         logger.info(f"Removing stale BM25 cache: {bm25_cache}")
         os.remove(bm25_cache)
 
-    # Collect all files of allowed types
-    file_paths = _collect_paths(settings.SOURCE_DOCS_PATH, settings.ALLOWED_TYPES)
-    if not file_paths:
-        logger.warning(f"No suitable files found in {settings.SOURCE_DOCS_PATH}.")
-        return
-
-    # Process via DocumentProcessor
     processor = DocumentProcessor()
     chunks = processor.process(file_paths)
+    if not chunks:
+        raise IndexingError(
+            "No chunks produced. Check documents/conversion; "
+            "existing index left untouched."
+        )
 
-    if chunks:
-        logger.info(f"Indexing {len(chunks)} chunks...")
-        # Embed chunks and persist to ChromaDB (destructive: drops old collection).
-        get_vector_store_backend(load_existing=False).create(chunks)
-        logger.info("Indexing complete.")
-    else:
-        logger.warning("No chunks produced. Check documents/conversion.")
+    # Drop the old index only once replacement chunks are ready.
+    if os.path.exists(settings.CHROMA_DB_PATH):
+        logger.info(f"Dropping existing DB: {settings.CHROMA_DB_PATH}...")
+        shutil.rmtree(settings.CHROMA_DB_PATH, ignore_errors=True)
+
+    logger.info(f"Indexing {len(chunks)} chunks...")
+    # Embed chunks and persist to ChromaDB (destructive: drops old collection).
+    get_vector_store_backend(load_existing=False).create(chunks)
+    logger.info("Indexing complete.")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except IndexingError as e:
+        logger.error(str(e))
+        sys.exit(1)
