@@ -67,7 +67,7 @@ def test_chunk_id_contiguous_after_dedup(processor):
     docs_a = [
         _doc("уникальный 1", "a.pdf"),
         _doc("дубликат", "a.pdf"),
-        _doc("дубликат", "a.pdf"),  # dropped by global content dedup
+        _doc("дубликат", "a.pdf"),  # dropped by per-source content dedup
         _doc("уникальный 2", "a.pdf"),
     ]
 
@@ -87,3 +87,38 @@ def test_chunk_id_contiguous_after_dedup(processor):
     ids = [ch.metadata["chunk_id"] for ch in result]
     assert ids == list(range(len(result)))
     assert len(result) == 3  # one duplicate removed
+
+
+@pytest.mark.unit
+def test_same_text_in_two_sources_keeps_both_with_provenance(processor):
+    # Issue #33: dedup is per source. An identical clause in two documents (or
+    # two editions of one act) must survive in each, with its own source and id.
+    shared = "Инструктаж проводится не реже одного раза в год."
+    docs_a = [_doc("вводная часть a", "a.pdf"), _doc(shared, "a.pdf")]
+    docs_b = [_doc(shared, "b.pdf"), _doc("вводная часть b", "b.pdf")]
+
+    def fake_extract(stream, name, file_hash):
+        return docs_a if name == "a.pdf" else docs_b
+
+    with (
+        patch.object(processor, "validate_files", lambda files: None),
+        patch.object(
+            processor,
+            "_get_stream_and_name",
+            side_effect=[(_stream(), "a.pdf"), (_stream(), "b.pdf")],
+        ),
+        patch.object(processor, "_hash_bytes_stream", side_effect=["ha", "hb"]),
+        patch.object(processor, "_cache_path_for", side_effect=lambda h: None),
+        patch.object(processor, "_is_cache_valid", return_value=False),
+        patch.object(processor, "_convert_and_extract", side_effect=fake_extract),
+        patch.object(processor, "_save_to_cache", lambda chunks, path: None),
+    ):
+        result = processor.process(["a.pdf", "b.pdf"])
+
+    shared_hits = sorted(
+        (ch.metadata["source"], ch.metadata["chunk_id"])
+        for ch in result
+        if ch.page_content == shared
+    )
+    assert shared_hits == [("a.pdf", 1), ("b.pdf", 0)]
+    assert len(result) == 4
