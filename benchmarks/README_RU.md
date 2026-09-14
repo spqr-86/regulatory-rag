@@ -46,8 +46,30 @@ Retrieval eval (`eval/run_retrieval_eval.py`, held-out 133, 2026-09-08):
 ```bash
 python eval/run_v7_eval.py --skip-judge --output benchmarks/eval_v7_$(date +%F).jsonl  # только пайплайн, ~$0
 python eval/run_v7_eval.py --output benchmarks/eval_v7_$(date +%F).jsonl               # полный, судья gpt-4o, ~$0.25
-python eval/run_retrieval_eval.py --path hybrid                                        # IR-метрики retrieval
 ```
+
+IR-метрики retrieval. `--path simple` — продовый hybrid (vector + BM25 → RRF);
+`vector` и `bm25` — отдельные backbone; `complex` — vector → rerank → MMR.
+
+```bash
+# основной тестовый набор: 90 вопросов практиков (docs/reference/FACTS.md)
+python eval/run_retrieval_eval.py --path simple --gt eval/data/golden_retrieval_labeled_ext.jsonl
+python eval/run_retrieval_eval.py --path vector --gt eval/data/golden_retrieval_labeled_ext.jsonl
+python eval/run_retrieval_eval.py --path bm25   --gt eval/data/golden_retrieval_labeled_ext.jsonl
+
+# development-набор (по умолчанию --gt eval/data/retrieval_gt_reviewed.jsonl)
+python eval/run_retrieval_eval.py --path simple
+
+# smoke-проверка перед полным прогоном
+python eval/run_retrieval_eval.py --path simple --gt eval/data/golden_retrieval_labeled_ext.jsonl --limit 3
+```
+
+Для воспроизведения нужен проиндексированный корпус: исходные документы (`source_docs/`) и
+индекс ChromaDB не хранятся в git — см. [getting started](../docs/getting-started.md) и
+список документов в [FACTS](../docs/reference/FACTS.md#corpus). Эмбеддинги запросов идут
+через настроенного провайдера (по умолчанию OpenAI, доли цента за прогон). Raw-выходы
+прогонов (`benchmarks/*.json`, `benchmarks/*.jsonl`) в .gitignore; таблицы выше перенесены
+из них вручную.
 
 ## Обновление baseline
 
