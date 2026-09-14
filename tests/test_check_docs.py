@@ -5,6 +5,7 @@ import pytest
 from scripts.check_docs import (
     STALE_DENYLIST,
     check_prompt_versions,
+    find_retrieval_eval_path_drift,
     find_stale_terms,
 )
 
@@ -79,3 +80,32 @@ def test_check_prompt_versions_detects_drift(tmp_path):
 
 def test_denylist_nonempty():
     assert "llm_verifier" in STALE_DENYLIST
+
+
+VALID_PATHS = ("simple", "complex", "vector", "bm25")
+
+
+def test_retrieval_eval_path_drift_flags_unknown_path(tmp_path):
+    md = tmp_path / "README.md"
+    md.write_text(
+        "```bash\npython eval/run_retrieval_eval.py --path hybrid\n```\n",
+        encoding="utf-8",
+    )
+    hits = find_retrieval_eval_path_drift([md], VALID_PATHS)
+    assert [(h.path.name, h.line, h.term) for h in hits] == [("README.md", 2, "hybrid")]
+
+
+def test_retrieval_eval_path_drift_accepts_valid_and_alternatives(tmp_path):
+    md = tmp_path / "doc.md"
+    md.write_text(
+        "python eval/run_retrieval_eval.py --path simple --limit 3\n"
+        "`eval/run_retrieval_eval.py --path simple|complex`: thin layer\n",
+        encoding="utf-8",
+    )
+    assert find_retrieval_eval_path_drift([md], VALID_PATHS) == []
+
+
+def test_retrieval_eval_path_drift_ignores_other_scripts(tmp_path):
+    md = tmp_path / "doc.md"
+    md.write_text("python eval/other.py --path hybrid\n", encoding="utf-8")
+    assert find_retrieval_eval_path_drift([md], VALID_PATHS) == []

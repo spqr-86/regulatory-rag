@@ -45,8 +45,30 @@ Retrieval eval (`eval/run_retrieval_eval.py`, held-out 133, 2026-09-08):
 ```bash
 python eval/run_v7_eval.py --skip-judge --output benchmarks/eval_v7_$(date +%F).jsonl  # pipeline only, ~$0
 python eval/run_v7_eval.py --output benchmarks/eval_v7_$(date +%F).jsonl               # full, gpt-4o judge, ~$0.25
-python eval/run_retrieval_eval.py --path hybrid                                        # retrieval IR metrics
 ```
+
+Retrieval IR metrics. `--path simple` is the production hybrid (vector + BM25 → RRF);
+`vector` and `bm25` are the single backbones; `complex` is vector → rerank → MMR.
+
+```bash
+# headline test set: 90 practitioner questions (docs/reference/FACTS.md)
+python eval/run_retrieval_eval.py --path simple --gt eval/data/golden_retrieval_labeled_ext.jsonl
+python eval/run_retrieval_eval.py --path vector --gt eval/data/golden_retrieval_labeled_ext.jsonl
+python eval/run_retrieval_eval.py --path bm25   --gt eval/data/golden_retrieval_labeled_ext.jsonl
+
+# development set (default --gt eval/data/retrieval_gt_reviewed.jsonl)
+python eval/run_retrieval_eval.py --path simple
+
+# smoke check before a full run
+python eval/run_retrieval_eval.py --path simple --gt eval/data/golden_retrieval_labeled_ext.jsonl --limit 3
+```
+
+Reproduction requires the indexed corpus: the source documents (`source_docs/`) and the
+ChromaDB index are not in git — see [getting started](../docs/getting-started.md) and the
+document list in [FACTS](../docs/reference/FACTS.md#corpus). Query embeddings call the
+configured provider (OpenAI by default, a fraction of a cent per run). Raw run outputs
+(`benchmarks/*.json`, `benchmarks/*.jsonl`) are gitignored; the tables above are copied
+from them manually.
 
 ## Updating the baseline
 

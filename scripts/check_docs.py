@@ -3,6 +3,9 @@
 CI scope (committed sources only): stale-term grep + prompt-version sync. Run via
 ``python scripts/check_docs.py --ci``.
 
+Also in CI: every ``run_retrieval_eval.py --path X`` in docs, benchmarks and READMEs
+names a path the CLI accepts.
+
 Local-only (needs .env / chroma): provider/model names, chunk count. Those are NOT
 checked in CI by design — .env is a gitignored secret and absent there. When .env is
 missing the script says so instead of pretending it verified everything.
@@ -68,6 +71,38 @@ def find_stale_terms(docs_dir: Path) -> list[StaleHit]:
     return hits
 
 
+RETRIEVAL_EVAL_PATH_RE = re.compile(r"run_retrieval_eval\.py\b.*?--path[ =]([\w|]+)")
+
+
+def find_retrieval_eval_path_drift(
+    md_files: list[Path], valid_paths: tuple[str, ...]
+) -> list[StaleHit]:
+    """Flag ``run_retrieval_eval.py --path X`` where X is not a CLI choice."""
+    hits: list[StaleHit] = []
+    for md in md_files:
+        for i, line in enumerate(md.read_text(encoding="utf-8").splitlines(), 1):
+            if IGNORE_MARKER in line:
+                continue
+            for m in RETRIEVAL_EVAL_PATH_RE.finditer(line):
+                for path in m.group(1).split("|"):
+                    if path not in valid_paths:
+                        hits.append(StaleHit(path=md, line=i, term=path))
+    return hits
+
+
+def _retrieval_eval_md_files(root: Path) -> list[Path]:
+    docs = [
+        md
+        for md in sorted((root / "docs").rglob("*.md"))
+        if not EXCLUDE_DIRS & set(md.relative_to(root / "docs").parts)
+    ]
+    return (
+        docs
+        + sorted((root / "benchmarks").glob("*.md"))
+        + sorted(root.glob("README*.md"))
+    )
+
+
 def _facts_prompt_versions(facts: Path) -> dict[str, str]:
     out: dict[str, str] = {}
     in_prompts = False
@@ -124,6 +159,16 @@ def main(argv: list[str] | None = None) -> int:
         print("PROMPT VERSION DRIFT:")
         for m in mism:
             print(f"  {m.name}: FACTS={m.facts_version} registry={m.registry_version}")
+
+    sys.path.insert(0, str(root.resolve()))
+    from eval.run_retrieval_eval import PATHS
+
+    drift = find_retrieval_eval_path_drift(_retrieval_eval_md_files(root), PATHS)
+    if drift:
+        failures += len(drift)
+        print(f"RETRIEVAL EVAL CLI DRIFT (--path must be one of {', '.join(PATHS)}):")
+        for h in drift:
+            print(f"  {h.path}:{h.line}  --path {h.term}")
 
     if not args.ci and not (root / ".env").exists():
         print("NOTE: .env absent — skipping provider/model/chunk checks (local-only).")
