@@ -28,6 +28,12 @@ documents:
     scope: company
     title: Инструкция по содержанию технических средств противопожарной защиты ООО «Пример»
 
+  - file: int_prikaz_poryadok_pb.md
+    document_id: int_prikaz_poryadok_pb
+    source_type: internal
+    scope: company
+    title: Приказ «О порядке обеспечения пожарной безопасности в ООО «Пример»» от 07.09.2026
+
   # Unit-level sheets below are synthetic (spec П2): filled with invented data to exercise
   # unit-dependent answers; they describe no real site.
   - file: int_unit_office_list.md
