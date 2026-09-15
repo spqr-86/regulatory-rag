@@ -8,15 +8,16 @@ A file without a manifest entry has unknown applicability and is excluded.
 # ANCHOR: corpus manifest
 # Role: attach snapshot metadata to indexed chunks; gate what enters the snapshot.
 # Input: manifest.yaml (snapshot_id, organization_id, documents[file, document_id,
-#   source_type, title, scope?, unit_id?]) and chunks with metadata["source"].
+#   source_type, title, scope?, unit_id?, role?]) and chunks with metadata["source"].
 # Output: chunks enriched with source_type/document_id/version_id/snapshot_id
 #   (+ organization_id/scope/unit_id for internal); unlisted files dropped.
+#   Object profile sheets are listed in Manifest.object_profiles and never indexed (spec object-profile §2.4).
 # Matching key: file basename, so the manifest does not depend on SOURCE_DOCS_PATH.
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
@@ -25,6 +26,7 @@ from langchain_core.documents import Document
 
 SOURCE_TYPES = {"external", "internal"}
 SCOPES = {"company", "unit"}
+ROLES = {"object_profile"}
 
 
 class ManifestError(ValueError):
@@ -37,6 +39,7 @@ class Manifest:
     organization_id: str
     checked_at: str | None
     documents: dict[str, dict]  # basename -> chunk metadata to merge
+    object_profiles: dict[str, str] = field(default_factory=dict)  # unit_id -> basename
 
 
 def _entry_metadata(entry: dict, snapshot_id: str, organization_id: str) -> dict:
@@ -71,6 +74,15 @@ def _entry_metadata(entry: dict, snapshot_id: str, organization_id: str) -> dict
                 raise ManifestError(f"{entry['file']}: scope=unit needs unit_id")
             meta["unit_id"] = entry["unit_id"]
             meta["audience"] = entry["unit_id"]
+
+    role = entry.get("role")
+    if role is not None:
+        if role not in ROLES:
+            raise ManifestError(f"{entry['file']}: role={role!r}")
+        if source_type != "internal" or entry.get("scope") != "unit":
+            raise ManifestError(
+                f"{entry['file']}: role=object_profile needs source_type=internal, scope=unit"
+            )
     return meta
 
 
@@ -82,12 +94,17 @@ def load_manifest(path: str | Path) -> Manifest:
         raise ManifestError("snapshot_id and organization_id are required")
 
     documents: dict[str, dict] = {}
+    object_profiles: dict[str, str] = {}
     seen_ids: set[str] = set()
     for entry in data.get("documents") or []:
         meta = _entry_metadata(entry, snapshot_id, organization_id)
         name = os.path.basename(entry["file"])
         if name in documents or meta["document_id"] in seen_ids:
             raise ManifestError(f"duplicate file or document_id: {entry['file']}")
+        if entry.get("role") == "object_profile":
+            if meta["unit_id"] in object_profiles:
+                raise ManifestError(f"second object_profile for {meta['unit_id']}")
+            object_profiles[meta["unit_id"]] = name
         documents[name] = meta
         seen_ids.add(meta["document_id"])
 
@@ -97,15 +114,18 @@ def load_manifest(path: str | Path) -> Manifest:
         organization_id=organization_id,
         checked_at=str(checked_at) if checked_at else None,
         documents=documents,
+        object_profiles=object_profiles,
     )
 
 
 def apply_manifest(chunks: List[Document], manifest: Manifest) -> List[Document]:
-    """Merge manifest metadata into chunks; drop chunks of unlisted files."""
+    """Merge manifest metadata into chunks; drop unlisted files and object profiles."""
+    profile_files = set(manifest.object_profiles.values())
     kept: List[Document] = []
     for ch in chunks:
-        meta = manifest.documents.get(os.path.basename(ch.metadata.get("source", "")))
-        if meta is None:
+        name = os.path.basename(ch.metadata.get("source", ""))
+        meta = manifest.documents.get(name)
+        if meta is None or name in profile_files:
             continue
         ch.metadata.update(meta)
         kept.append(ch)

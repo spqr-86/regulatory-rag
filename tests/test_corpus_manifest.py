@@ -111,3 +111,60 @@ def test_duplicate_file_or_document_id_rejected(tmp_path):
     )
     with pytest.raises(ManifestError):
         load_manifest(_write(tmp_path, text))
+
+
+PROFILE_ENTRY = """  - file: office_list.md
+    document_id: int_office_list
+    source_type: internal
+    scope: unit
+    unit_id: unit_1
+    role: object_profile
+    title: Лист особенностей объекта
+"""
+
+
+@pytest.mark.unit
+def test_object_profile_listed_and_kept_out_of_index(tmp_path):
+    manifest = load_manifest(_write(tmp_path, MANIFEST + PROFILE_ENTRY))
+    assert manifest.object_profiles == {"unit_1": "office_list.md"}
+    assert "role" not in manifest.documents["office_list.md"]
+    assert manifest.documents["office_list.md"]["document_id"] == "int_office_list"
+
+    chunks = [
+        Document(page_content="лист", metadata={"source": "office_list.md"}),
+        Document(page_content="закон", metadata={"source": "ppr_1479.pdf"}),
+    ]
+    kept = apply_manifest(chunks, manifest)
+    assert [c.metadata["source"] for c in kept] == ["ppr_1479.pdf"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "{file: x.md, document_id: d, source_type: external, role: object_profile, title: t}",
+        "{file: x.md, document_id: d, source_type: internal, scope: company, role: object_profile, title: t}",
+        "{file: x.md, document_id: d, source_type: internal, scope: unit, unit_id: u, role: sheet, title: t}",
+    ],
+    ids=["profile-external", "profile-company-scope", "unknown-role"],
+)
+def test_invalid_role_rejected(tmp_path, entry):
+    text = f"snapshot_id: s\norganization_id: o\ndocuments:\n  - {entry}\n"
+    with pytest.raises(ManifestError):
+        load_manifest(_write(tmp_path, text))
+
+
+@pytest.mark.unit
+def test_two_profiles_for_one_unit_rejected(tmp_path):
+    text = (
+        "snapshot_id: s\norganization_id: o\ndocuments:\n"
+        "  - {file: a.md, document_id: a, source_type: internal, scope: unit, unit_id: u, role: object_profile, title: t}\n"
+        "  - {file: b.md, document_id: b, source_type: internal, scope: unit, unit_id: u, role: object_profile, title: t}\n"
+    )
+    with pytest.raises(ManifestError):
+        load_manifest(_write(tmp_path, text))
+
+
+@pytest.mark.unit
+def test_manifest_without_profiles_has_empty_mapping(manifest):
+    assert manifest.object_profiles == {}
