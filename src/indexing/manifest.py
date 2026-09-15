@@ -5,6 +5,14 @@ also carry organization_id, scope (company|unit) and unit_id for scope=unit.
 A file without a manifest entry has unknown applicability and is excluded.
 """
 
+# ANCHOR: corpus manifest
+# Role: attach snapshot metadata to indexed chunks; gate what enters the snapshot.
+# Input: manifest.yaml (snapshot_id, organization_id, documents[file, document_id,
+#   source_type, title, scope?, unit_id?]) and chunks with metadata["source"].
+# Output: chunks enriched with source_type/document_id/version_id/snapshot_id
+#   (+ organization_id/scope/unit_id for internal); unlisted files dropped.
+# Matching key: file basename, so the manifest does not depend on SOURCE_DOCS_PATH.
+
 from __future__ import annotations
 
 import os

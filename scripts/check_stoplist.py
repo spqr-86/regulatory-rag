@@ -7,6 +7,13 @@ Usage: python scripts/check_stoplist.py <stoplist> <corpus_dir>
 Exit code 1 if any line of any text file matches.
 """
 
+# ANCHOR: anonymization gate
+# Role: block publishing corpus text that matches the private stop-list.
+# Input: stop-list path (regex per line), corpus directory (.md/.txt/.yaml).
+# Output: file:line: matches /pattern/ per hit; exit 1 on any hit, 2 on bad usage.
+# Scope: regex catches names and known tokens only; dates and order numbers
+#   still need manual review before commit.
+
 from __future__ import annotations
 
 import re
