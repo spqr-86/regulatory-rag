@@ -254,3 +254,7 @@ logs/
 # из dataset_heldout_ext + verdicts_ext; эталон — golden_retrieval_labeled_ext.jsonl)
 eval/data/pools_ext/
 eval/data/arbitration_ext/
+
+# Смоук-корпус подразделений: исходники и обезличенные ЛНА до ревью Петра
+source_docs_dept/
+chroma_db_dept/

@@ -21,6 +21,7 @@ from razdel import tokenize as razdel_tokenize
 from rank_bm25 import BM25Okapi
 
 from src.v7.config import v7_config
+from src.v7.scope_filter import matches_filter
 
 # ─── Singleton morph analyzer ──────────────────────────────────────────────
 
@@ -187,15 +188,8 @@ class BM25Index:
         candidates = []
         for i, score in enumerate(scores):
             p = self._passages[i]
-            if filters:
-                skip = False
-                meta = p.get("metadata") or {}
-                for k, v in filters.items():
-                    if meta.get(k) != v:
-                        skip = True
-                        break
-                if skip:
-                    continue
+            if filters and not matches_filter(p.get("metadata") or {}, filters):
+                continue
             candidates.append((i, score))
 
         candidates.sort(key=lambda x: x[1], reverse=True)

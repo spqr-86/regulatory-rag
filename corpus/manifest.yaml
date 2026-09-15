@@ -1,0 +1,58 @@
+# Department Q&A demo snapshot (spec §5, issue #36).
+# Internal documents are anonymized; `checked_at` is the date sources were reviewed,
+# not a guarantee that they are current on any later date.
+snapshot_id: pb_demo_2026_09
+checked_at: 2026-09-15
+organization_id: org_example
+
+documents:
+  - file: ext_ppr_1479.pdf
+    document_id: ext_ppr_1479
+    source_type: external
+    title: Правила противопожарного режима в РФ (ПП РФ № 1479)
+
+  - file: ext_mchs_1120.docx
+    document_id: ext_mchs_1120
+    source_type: external
+    title: Приказ МЧС России от 16.12.2024 № 1120 (обучение мерам пожарной безопасности)
+
+  - file: int_instr_mery_pb.md
+    document_id: int_instr_mery_pb
+    source_type: internal
+    scope: company
+    title: Инструкция о мерах пожарной безопасности ООО «Пример»
+
+  - file: int_instr_soderzhanie_tsppz.md
+    document_id: int_instr_soderzhanie_tsppz
+    source_type: internal
+    scope: company
+    title: Инструкция по содержанию технических средств противопожарной защиты ООО «Пример»
+
+  - file: int_prikaz_poryadok_pb.md
+    document_id: int_prikaz_poryadok_pb
+    source_type: internal
+    scope: company
+    title: Приказ «О порядке обеспечения пожарной безопасности в ООО «Пример»» от 07.09.2026
+
+  # Unit-level sheets below are synthetic (spec П2): filled with invented data to exercise
+  # unit-dependent answers; they describe no real site.
+  - file: int_unit_office_list.md
+    document_id: int_unit_office_list
+    source_type: internal
+    scope: unit
+    unit_id: unit_office
+    title: Лист особенностей объекта защиты — офис (демонстрационные данные)
+
+  - file: int_unit_dispatch_list.md
+    document_id: int_unit_dispatch_list
+    source_type: internal
+    scope: unit
+    unit_id: unit_dispatch
+    title: Лист особенностей объекта защиты — диспетчерский центр (демонстрационные данные)
+
+  - file: int_unit_depot_list.md
+    document_id: int_unit_depot_list
+    source_type: internal
+    scope: unit
+    unit_id: unit_depot
+    title: Лист особенностей объекта защиты — склад и мастерская (демонстрационные данные)
