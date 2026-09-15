@@ -36,6 +36,16 @@ class Basis(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
 
 
+class ObjectSection(BaseModel):
+    """One section of the unit object sheet, raw text as written (spec object-profile §2.1)."""
+
+    id: str  # obj_s1 … obj_s9
+    number: int
+    title: str
+    text: str = ""
+    presence: Literal["present", "empty", "missing"]
+
+
 class ModelAnswer(BaseModel):
     """Structured output requested from the model."""
 
