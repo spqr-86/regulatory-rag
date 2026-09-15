@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     MAX_TOTAL_SIZE: int = 200 * 1024 * 1024
     ALLOWED_TYPES: list[str] = [".txt", ".pdf", ".docx", ".md"]
     SOURCE_DOCS_PATH: str = "./source_docs"
+    # Department Q&A snapshot metadata (issue #36); empty keeps legacy indexing
+    CORPUS_MANIFEST_PATH: str = ""
     CHUNK_SIZE: int = 1200
     CACHE_DIR: str = "document_cache"
     CACHE_EXPIRE_DAYS: int = 7

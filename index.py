@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from config.settings import settings
 from src.backends.vector_store import get_vector_store_backend
 from src.indexing.file_handler import DocumentProcessor
+from src.indexing.manifest import ManifestError, apply_manifest, load_manifest
 from utils.logging import logger
 
 load_dotenv()
@@ -39,6 +40,13 @@ def main():
             "existing index left untouched."
         )
 
+    # Load the manifest before touching caches: a malformed one aborts early.
+    manifest = (
+        load_manifest(settings.CORPUS_MANIFEST_PATH)
+        if settings.CORPUS_MANIFEST_PATH
+        else None
+    )
+
     # Invalidate caches tied to index contents.
     # Without this, BM25/Docling caches survive a destructive reindex and
     # search operates on ghost chunks from the deleted collection.
@@ -54,6 +62,9 @@ def main():
 
     processor = DocumentProcessor()
     chunks = processor.process(file_paths)
+    if manifest is not None:
+        chunks = apply_manifest(chunks, manifest)
+        logger.info(f"Manifest {manifest.snapshot_id}: {len(chunks)} chunks kept")
     if not chunks:
         raise IndexingError(
             "No chunks produced. Check documents/conversion; "
@@ -74,6 +85,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except IndexingError as e:
+    except (IndexingError, ManifestError) as e:
         logger.error(str(e))
         sys.exit(1)
