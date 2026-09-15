@@ -1,0 +1,13 @@
+{
+  "chroma_db_path": "./chroma_db_dept_v2",
+  "collection": "department_demo_v2",
+  "chunks": 1115,
+  "sheets": [
+    "int_unit_depot_list.md",
+    "int_unit_dispatch_list.md",
+    "int_unit_office_list.md",
+    "int_unit_partial_list.md"
+  ],
+  "in_chroma": [],
+  "in_hybrid_search": []
+}
