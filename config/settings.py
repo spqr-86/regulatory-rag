@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +29,14 @@ class Settings(BaseSettings):
     SOURCE_DOCS_PATH: str = "./source_docs"
     # Department Q&A snapshot metadata (issue #36); empty keeps legacy indexing
     CORPUS_MANIFEST_PATH: str = ""
+    # Department Q&A object-profile mode (issue #44). One switch picks the whole bundle:
+    # Chroma path + collection, profiles, prompt version, output schema. Separate paths,
+    # because index.py drops the whole CHROMA_DB_PATH before writing.
+    DEPARTMENT_QA_MODE: Literal["v1", "v2"] = "v2"
+    DEPARTMENT_V1_CHROMA_DB_PATH: str = "./chroma_db_dept"
+    DEPARTMENT_V1_COLLECTION: str = "department_demo"
+    DEPARTMENT_V2_CHROMA_DB_PATH: str = "./chroma_db_dept_v2"
+    DEPARTMENT_V2_COLLECTION: str = "department_demo_v2"
     CHUNK_SIZE: int = 1200
     CACHE_DIR: str = "document_cache"
     CACHE_EXPIRE_DAYS: int = 7

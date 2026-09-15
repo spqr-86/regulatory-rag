@@ -12,8 +12,14 @@ All notable changes are documented here. Format: [Keep a Changelog](https://keep
   budgeted `final_context`.
 - Risk-aware threshold calibration for issue #9. The full 81-profile grid retained the
   current defaults: no candidate reduced unsafe generations.
+- Docs for department Q&A `DEPARTMENT_QA_MODE` (`v1`/`v2`) and the `answered` guarantee
+  ("citations checked", not content-verified) — spec
+  [2026-09-15-object-profile-design](docs/superpowers/specs/2026-09-15-object-profile-design.md),
+  facts in [FACTS.md](docs/reference/FACTS.md#department-qa) (issue #44).
 
 ### Changed
+- Department Q&A default `DEPARTMENT_QA_MODE` is now `v2` (object profile in the prompt),
+  with the `q1` threshold error accepted as known — decision 10 (issue #44).
 - Final 56-question quality gate (53 valid, `gpt-4o` judge): in-scope correctness 7.47,
   faithfulness 0.891, relevance 0.879, false-sufficiency 11.4%, complex-path 17%,
   $0.00387/query, p50/p95 4.51/15.70 s.

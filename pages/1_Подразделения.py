@@ -1,4 +1,4 @@
-"""Department Q&A screen: unit selector, law and LNA bases, checked sources (spec §4, §10)."""
+"""Department Q&A screen: unit selector, law, LNA and object facts, checked sources (spec §4, §10)."""
 
 import os
 
@@ -7,24 +7,16 @@ from dotenv import load_dotenv
 
 from config.settings import settings
 from src.department_qa.service import answer_question
-from src.department_qa.view import basis_lines, status_banner
-from src.department_qa.wiring import make_hybrid_search_fn, make_model_fn
-from src.indexing.manifest import load_manifest
+from src.department_qa.view import basis_lines, profile_caption, status_banner
+from src.department_qa.wiring import build_department_stack
 
 load_dotenv()
 st.set_page_config(page_title="Q&A подразделений", layout="wide")
 
 
 @st.cache_resource(show_spinner=False)
-def load_department_resources():
-    from src.backends.vector_store import get_vector_store_backend
-    from src.infra.llm_factory import get_simple_llm
-    from src.v7.bridge import init_v7_pipeline
-
-    manifest = load_manifest(settings.CORPUS_MANIFEST_PATH)
-    store = get_vector_store_backend(load_existing=True)
-    init_v7_pipeline(store)  # builds the BM25 index over the same collection
-    return manifest, make_hybrid_search_fn(store), make_model_fn(get_simple_llm())
+def load_department_stack():
+    return build_department_stack()
 
 
 if not settings.CORPUS_MANIFEST_PATH or not os.path.exists(
@@ -35,8 +27,14 @@ if not settings.CORPUS_MANIFEST_PATH or not os.path.exists(
     )
     st.stop()
 
-manifest, search_fn, model_fn = load_department_resources()
+stack = load_department_stack()
+manifest, config = stack.manifest, stack.config
 units = sorted({m["unit_id"] for m in manifest.documents.values() if m.get("unit_id")})
+
+
+def _bullets(lines: list[str], empty: str) -> str:
+    return "\n".join(f"- {line}" for line in lines) or empty
+
 
 with st.sidebar:
     unit = st.selectbox(
@@ -49,6 +47,7 @@ with st.sidebar:
     st.caption(
         f"Корпус: `{manifest.snapshot_id}` · проверен {manifest.checked_at or '—'}"
     )
+    st.caption(f"Режим: `{config.mode}` · коллекция `{config.collection}`")
     st.caption("Демонстрационный обезличенный корпус. Не юридическая консультация.")
 
 st.title("Вопрос по пожарной безопасности")
@@ -57,30 +56,62 @@ question = st.text_input("Вопрос", placeholder="Как часто осма
 if st.button("Ответить", type="primary", disabled=not question):
     with st.spinner("Ищу в законодательстве и ЛНА…"):
         response = answer_question(
-            question, unit, search_fn, model_fn, snapshot_id=manifest.snapshot_id
+            question,
+            unit,
+            stack.search_fn,
+            stack.model_fn,
+            snapshot_id=manifest.snapshot_id,
+            profile=config.profiles.get(unit) if unit else None,
+            prompt_version=config.prompt_version,
         )
 
     kind, text = status_banner(response)
     getattr(st, kind)(text)
-
-    if response.answer:
-        st.markdown(response.answer)
     for q in response.clarifying_questions:
         st.markdown(f"❓ {q}")
 
     law, lna = st.columns(2)
     with law:
         st.subheader("⚖️ Законодательство")
-        lines = basis_lines(response.external_basis, response.evidence)
         st.markdown(
-            "\n".join(f"- {line}" for line in lines) or "_Подтверждения не найдено._"
+            _bullets(
+                basis_lines(response.external_basis, response.evidence),
+                "_Подтверждения не найдено._",
+            )
         )
     with lna:
         st.subheader("🏢 ЛНА компании")
-        lines = basis_lines(response.internal_basis, response.evidence)
         st.markdown(
-            "\n".join(f"- {line}" for line in lines) or "_Подтверждения не найдено._"
+            _bullets(
+                basis_lines(response.internal_basis, response.evidence),
+                "_Подтверждения не найдено._",
+            )
         )
+
+    if config.mode == "v2":
+        facts, applied = st.columns(2)
+        with facts:
+            st.subheader("🏠 Сведения объекта")
+            st.markdown(
+                _bullets(
+                    basis_lines(response.object_facts, response.evidence),
+                    "_Сведения объекта не использованы._",
+                )
+            )
+            if caption := profile_caption(response):
+                st.caption(caption)
+        with applied:
+            st.subheader("🔗 Применение к объекту")
+            st.markdown(
+                _bullets(
+                    basis_lines(response.applied_conclusions, response.evidence),
+                    "_Выводов о применении нет._",
+                )
+            )
+
+    if response.answer:
+        st.caption("Краткий черновик")
+        st.markdown(response.answer)
 
     if response.next_step:
         st.caption(f"Следующий шаг: {response.next_step}")

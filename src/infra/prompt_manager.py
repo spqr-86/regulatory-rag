@@ -68,8 +68,8 @@ class PromptManager:
 
         return rel_path
 
-    def render(self, prompt_id: str, **kwargs) -> str:
-        version = self._resolve_version(prompt_id)
+    def render(self, prompt_id: str, version: str | None = None, **kwargs) -> str:
+        version = version or self._resolve_version(prompt_id)
         template_path = self._get_template_path(prompt_id, version)
 
         try:

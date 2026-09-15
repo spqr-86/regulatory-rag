@@ -1,0 +1,23 @@
+{
+  "chroma_db_path": "./chroma_db_dept",
+  "collection": "department_demo",
+  "chunks": 1167,
+  "sheets": [
+    "int_unit_depot_list.md",
+    "int_unit_dispatch_list.md",
+    "int_unit_office_list.md",
+    "int_unit_partial_list.md"
+  ],
+  "in_chroma": [
+    "int_unit_depot_list.md",
+    "int_unit_dispatch_list.md",
+    "int_unit_office_list.md",
+    "int_unit_partial_list.md"
+  ],
+  "in_hybrid_search": [
+    "int_unit_depot_list.md",
+    "int_unit_dispatch_list.md",
+    "int_unit_office_list.md",
+    "int_unit_partial_list.md"
+  ]
+}

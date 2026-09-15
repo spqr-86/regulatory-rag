@@ -1,0 +1,20 @@
+{
+  "mode": "v2",
+  "model": "gpt-4o-mini",
+  "provider": "openai",
+  "temperature": 0.0,
+  "top_k_per_level": 8,
+  "fusion": "rrf(vector, bm25)",
+  "chroma_db_path": "./chroma_db_dept_v2",
+  "collection": "department_demo_v2",
+  "chunks": 1115,
+  "prompt_version": "v2",
+  "expectations_sha256": "1895ec1de17ee076d792ad3b7c480ce75e2e2fc41da98511e1a35db2b0527281",
+  "profiles": {
+    "unit_office": "43082d4eabe990b4e886670d6ace77414929321bfe53818c1e83bd37792b89bb",
+    "unit_dispatch": "1576f16ee55cbb506c2b1b44222b872b5f3ee75a6677c0d959a435525e394566",
+    "unit_depot": "298a1bed817608f5ad38e0d5486fe81cb8f4240c227ad0b7fe45ad3afe886e31",
+    "unit_partial": "66dff30c5e2738b08a94cddee4e6955fcfb6bc1736d057be994c205e5517f703"
+  },
+  "questions": 9
+}

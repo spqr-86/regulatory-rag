@@ -234,6 +234,58 @@ interview shows it matters.
 
 ---
 
+## 10. Unit object sheet as a structured profile, not retrieved chunks
+
+**Context.** Department Q&A indexed each unit's "object features sheet" (headcount, fire
+protection systems, duty staff) as ordinary internal chunks. A 6-question smoke run on
+2026-09-15 showed facts about the unit crowded out of top-8 by company-wide documents, a
+unit fact being ignored even when retrieved, and a unit-dependent question answered "yes"
+with no unit selected.
+
+**Options.** (a) Keep retrieval, boost the unit's chunks. (b) Enrich the query with unit
+fields. (c) Parse the sheet into a profile and pass it whole to the prompt as a third
+evidence level.
+
+**Choice.** (c). The sheet is excluded from the index (`role: object_profile` in the
+manifest), parsed into template sections `obj_s1…obj_s9` with `presence`
+(`present|empty|missing`) and `as_of_date`. The answer contract gains `object_facts`
+(object ids only) and `applied_conclusions` (object fact + norm) inside the existing
+`ModelAnswer`; no second contract.
+
+**Why.** A unit fact is not a norm to be ranked: it is needed in full in every answer for
+that unit. Section-level granularity keeps the parser dumb (it cannot judge content, so no
+known/unknown fields); typed fields are deferred until eval shows a systematic fact-application
+error. Citation roles are checked deterministically: an applied conclusion without a norm goes
+to review, a missing section cited as fact fails. No staleness threshold in code — the fill-in
+date is shown, and a cited profile without a date goes to review.
+
+**Guarantee boundary.** `answered` means "citations checked": every cited id exists with the
+right role, no clarifying question is pending, both norm levels are present, and a lexical
+guard found no normative wording in object facts. It does not mean the cited text supports the
+claim or that every part of the question is answered — an external review (2026-09-15) built
+`answered` outputs with irrelevant but well-formed citations. Support and completeness are
+measured in eval (required sub-answers, forbidden conclusions), not enforced at runtime; the UI
+says so. Revisit with a groundedness check if eval shows `answered` hiding wrong conclusions.
+
+**Evidence.** Paired v1/v2 run, 2026-09-15 (`gpt-4o-mini`, temperature 0, 9 questions × 2
+modes, expectations committed before the run). v1 matched 7/9 expected status+reasons
+(7/17 required sub-answers credited, 2 forbidden conclusions found: `q4` answered "да" with
+no unit selected, and `q8` named a specific duty officer the sheet does not evidence for that
+unit). v2 matched 8/9 (11/17 sub-answers credited, 1 forbidden conclusion found in `q1`, where
+`applied_conclusions` drew a plan-required conclusion from an 8-person headcount that meets
+neither the building nor floor threshold). Full per-question breakdown and quotes:
+[`eval/runs/object_profile_pair_2026-09-15/summary.md`](../../eval/runs/object_profile_pair_2026-09-15/summary.md).
+Spec: [2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
+
+**Default mode.** `v2` (decided by Petr, 2026-09-15). v2 beat v1 on all three numbers and
+produced no answered-without-unit and no norm substituted for a missing fact. **Known error,
+accepted:** `q1` — `applied_conclusions` concluded an evacuation plan is required from an
+8-person headcount that meets neither the building nor the floor threshold; v2 also credits
+only 11/17 required sub-answers. Next task: fix threshold application and rerun the pair.
+Revisit (back to `v1`) if the rerun shows more forbidden conclusions in v2 than in v1.
+
+---
+
 ## Not separate decisions
 
 - **Pluggable backends** (LLM factory + `VectorStoreBackend` protocol) — an architecture
