@@ -234,6 +234,37 @@ interview shows it matters.
 
 ---
 
+## 10. Unit object sheet as a structured profile, not retrieved chunks
+
+**Context.** Department Q&A indexed each unit's "object features sheet" (headcount, fire
+protection systems, duty staff) as ordinary internal chunks. A 6-question smoke run on
+2026-09-15 showed facts about the unit crowded out of top-8 by company-wide documents, a
+unit fact being ignored even when retrieved, and a unit-dependent question answered "yes"
+with no unit selected.
+
+**Options.** (a) Keep retrieval, boost the unit's chunks. (b) Enrich the query with unit
+fields. (c) Parse the sheet into a profile and pass it whole to the prompt as a third
+evidence level.
+
+**Choice.** (c). The sheet is excluded from the index (`role: object_profile` in the
+manifest), parsed into template sections `obj_s1…obj_s9` with `presence`
+(`present|empty|missing`) and `as_of_date`. The answer contract gains `object_facts`
+(object ids only) and `applied_conclusions` (object fact + norm) inside the existing
+`ModelAnswer`; no second contract.
+
+**Why.** A unit fact is not a norm to be ranked: it is needed in full in every answer for
+that unit. Section-level granularity keeps the parser dumb (it cannot judge content, so no
+known/unknown fields); typed fields are deferred until eval shows a systematic fact-application
+error. Citation roles are checked deterministically: an applied conclusion without a norm goes
+to review, a missing section cited as fact fails. No staleness threshold in code — the fill-in
+date is shown, and a cited profile without a date goes to review.
+
+**Evidence.** Pending: paired v1/v2 run on the 6 smoke questions plus 2 boundary questions on a
+partial synthetic sheet, expectations committed before the run. Spec:
+[2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
+
+---
+
 ## Not separate decisions
 
 - **Pluggable backends** (LLM factory + `VectorStoreBackend` protocol) — an architecture
