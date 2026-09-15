@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from config.settings import settings
 from src.department_qa.service import answer_question
+from src.department_qa.object_profile import ObjectProfileError
 from src.department_qa.view import basis_lines, profile_caption, status_banner
 from src.department_qa.wiring import build_department_stack
 
@@ -27,7 +28,11 @@ if not settings.CORPUS_MANIFEST_PATH or not os.path.exists(
     )
     st.stop()
 
-stack = load_department_stack()
+try:
+    stack = load_department_stack()
+except (RuntimeError, ObjectProfileError) as exc:  # fail-fast config errors, shown, not a traceback
+    st.error(str(exc))
+    st.stop()
 manifest, config = stack.manifest, stack.config
 units = sorted({m["unit_id"] for m in manifest.documents.values() if m.get("unit_id")})
 

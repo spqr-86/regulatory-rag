@@ -79,6 +79,11 @@ Two Chroma paths exist because `index.py` deletes the whole `CHROMA_DB_PATH` fol
 writing (not just the collection) — building `department_demo_v2` into `chroma_db_dept` would
 wipe v1. Both stores are gitignored (`chroma_db*/`).
 
+Launch the page (v2; for v1 use the v1 path/collection and the v1 manifest copy from
+[run-evaluation](../how-to/run-evaluation.md)): `DEPARTMENT_QA_MODE=v2 CORPUS_MANIFEST_PATH=corpus/manifest.yaml
+SOURCE_DOCS_PATH=./source_docs_dept CHROMA_DB_PATH=./chroma_db_dept_v2 CHROMA_COLLECTION_NAME=department_demo_v2
+.venv/bin/streamlit run app.py`. A mismatched env is shown on the page as an error.
+
 `answered` = citations checked, not content verified: every cited id exists with the right
 role, no blocking clarifying question is pending, both norm levels are present (except
 `fact_only`), a cited profile carries a fill-in date, and the §2.3 lexical guard found no
