@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.documents import Document
+from langchain_core.messages import AIMessage
 
-from src.department_qa.contract import ModelAnswer
-from src.department_qa.wiring import make_hybrid_search_fn, make_model_fn
+from src.department_qa.contract import ModelAnswer, ModelAnswerV1
+from src.department_qa.wiring import (
+    build_mode_config,
+    ensure_store_matches,
+    make_hybrid_search_fn,
+    make_model_fn,
+)
 from src.v7.scope_filter import build_scope_filters
 
 
@@ -83,3 +90,98 @@ def test_model_fn_raises_after_second_invalid_output():
     llm, _ = _structured([{"parsed": None, "parsing_error": err, "raw": None}] * 2)
     with pytest.raises(ValueError):
         make_model_fn(llm)("prompt")
+
+
+CFG = SimpleNamespace(
+    DEPARTMENT_V1_CHROMA_DB_PATH="./chroma_db_dept",
+    DEPARTMENT_V1_COLLECTION="department_demo",
+    DEPARTMENT_V2_CHROMA_DB_PATH="./chroma_db_dept_v2",
+    DEPARTMENT_V2_COLLECTION="department_demo_v2",
+)
+
+
+@pytest.mark.unit
+def test_mode_v1_bundle_without_profiles():
+    with patch("src.department_qa.wiring.load_profiles") as loader:
+        config = build_mode_config(
+            "v1", manifest=MagicMock(), source_dir="docs", cfg=CFG
+        )
+    loader.assert_not_called()
+    assert (config.chroma_db_path, config.collection) == (
+        "./chroma_db_dept",
+        "department_demo",
+    )
+    assert config.prompt_version == "v1"
+    assert config.schema is ModelAnswerV1
+    assert config.profiles == {}
+
+
+@pytest.mark.unit
+def test_mode_v2_bundle_loads_profiles():
+    manifest = MagicMock()
+    with patch(
+        "src.department_qa.wiring.load_profiles", return_value={"u": "p"}
+    ) as loader:
+        config = build_mode_config("v2", manifest=manifest, source_dir="docs", cfg=CFG)
+    loader.assert_called_once_with(manifest, "docs")
+    assert (config.chroma_db_path, config.collection) == (
+        "./chroma_db_dept_v2",
+        "department_demo_v2",
+    )
+    assert config.prompt_version == "v2"
+    assert config.schema is ModelAnswer
+    assert config.profiles == {"u": "p"}
+
+
+@pytest.mark.unit
+def test_unknown_mode_rejected():
+    with pytest.raises(ValueError):
+        build_mode_config("v3", manifest=MagicMock(), source_dir="docs", cfg=CFG)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "path, collection",
+    [
+        ("./chroma_db_dept", "department_demo_v2"),
+        ("./chroma_db_dept_v2", "department_demo"),
+    ],
+    ids=["wrong-path", "wrong-collection"],
+)
+def test_store_must_match_mode(path, collection):
+    with patch("src.department_qa.wiring.load_profiles", return_value={}):
+        config = build_mode_config(
+            "v2", manifest=MagicMock(), source_dir="docs", cfg=CFG
+        )
+    with pytest.raises(RuntimeError, match="DEPARTMENT_QA_MODE=v2"):
+        ensure_store_matches(config, path, collection)
+
+
+@pytest.mark.unit
+def test_model_fn_uses_requested_schema():
+    llm, _ = _structured(
+        [{"parsed": ModelAnswerV1(answer="ok"), "parsing_error": None, "raw": None}]
+    )
+    make_model_fn(llm, schema=ModelAnswerV1)("prompt")
+    assert llm.with_structured_output.call_args.args[0] is ModelAnswerV1
+
+
+@pytest.mark.unit
+def test_model_fn_records_raw_output_of_every_attempt():
+    records = []
+    err = ValueError("bad")
+    llm, _ = _structured(
+        [
+            {"parsed": None, "parsing_error": err, "raw": AIMessage(content="{broken")},
+            {
+                "parsed": GOOD,
+                "parsing_error": None,
+                "raw": AIMessage(content='{"answer": "ok"}'),
+            },
+        ]
+    )
+    make_model_fn(llm, recorder=records.append)("prompt")
+    assert records == [
+        {"attempt": 1, "raw": "{broken", "parsing_error": "bad"},
+        {"attempt": 2, "raw": '{"answer": "ok"}', "parsing_error": None},
+    ]
