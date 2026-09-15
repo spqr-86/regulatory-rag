@@ -7,8 +7,20 @@ from types import SimpleNamespace
 
 import pytest
 
-from eval.run_object_profile_pair import load_questions, run_mode
+from eval.run_object_profile_pair import check_paid_run, load_questions, run_mode
 from src.department_qa.contract import ModelAnswer
+
+
+def _settings(**overrides):
+    base = dict(
+        SIMPLE_MODEL_NAME="gpt-4o-mini", TEMPERATURE=0.0, SIMPLE_LLM_PROVIDER="openai"
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def _questions(n=9):
+    return [{"n": i, "unit_id": None, "question": "q"} for i in range(n)]
 
 
 @pytest.mark.unit
@@ -58,3 +70,53 @@ def test_run_mode_writes_one_record_per_question(tmp_path):
     # out_of_scope from the model, so evidence_passed still records both empty calls
     # (real behaviour of src/department_qa/service.py, not asserted empty by the brief).
     assert [p["hits"] for p in saved["evidence_passed"]] == [[], []]
+
+
+@pytest.mark.unit
+def test_check_paid_run_passes_for_valid_config(tmp_path):
+    assert check_paid_run(_settings(), _questions(), tmp_path / "v1") is None
+
+
+@pytest.mark.unit
+def test_check_paid_run_rejects_wrong_model(tmp_path):
+    with pytest.raises(ValueError, match="gpt-4o-mini"):
+        check_paid_run(
+            _settings(SIMPLE_MODEL_NAME="gpt-4o"), _questions(), tmp_path / "v1"
+        )
+
+
+@pytest.mark.unit
+def test_check_paid_run_rejects_nonzero_temperature(tmp_path):
+    with pytest.raises(ValueError, match="temperature"):
+        check_paid_run(_settings(TEMPERATURE=0.7), _questions(), tmp_path / "v1")
+
+
+@pytest.mark.unit
+def test_check_paid_run_rejects_non_openai_provider(tmp_path):
+    with pytest.raises(ValueError, match="openai"):
+        check_paid_run(
+            _settings(SIMPLE_LLM_PROVIDER="anthropic"), _questions(), tmp_path / "v1"
+        )
+
+
+@pytest.mark.unit
+def test_check_paid_run_rejects_wrong_question_count(tmp_path):
+    with pytest.raises(ValueError, match="9"):
+        check_paid_run(_settings(), _questions(8), tmp_path / "v1")
+
+
+@pytest.mark.unit
+def test_check_paid_run_rejects_existing_results(tmp_path):
+    mode_dir = tmp_path / "v1"
+    mode_dir.mkdir()
+    (mode_dir / "q1.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="q1.json"):
+        check_paid_run(_settings(), _questions(), mode_dir)
+
+
+@pytest.mark.unit
+def test_check_paid_run_ignores_dry_run_config_only_dir(tmp_path):
+    mode_dir = tmp_path / "v1"
+    mode_dir.mkdir()
+    (mode_dir / "config.json").write_text("{}", encoding="utf-8")
+    assert check_paid_run(_settings(), _questions(), mode_dir) is None

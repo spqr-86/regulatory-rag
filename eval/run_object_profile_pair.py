@@ -43,6 +43,47 @@ if str(REPO_ROOT) not in sys.path:
 EXPECTATIONS = REPO_ROOT / "eval" / "data" / "object_profile_pair_expectations.yaml"
 
 
+PAID_QUESTION_COUNT = 9  # spec §5.2: 9 questions × 2 modes = 18 calls, budget < $0.05
+
+
+def check_paid_run(settings, questions: list[dict], mode_dir: Path) -> None:
+    """Refuse a non-dry paid run outside the agreed budget (spec §5.2, final-review #2).
+
+    Raises ``ValueError`` before any paid call when the model, temperature or
+    provider don't match the agreed run, the expectations file doesn't yield
+    exactly 9 questions, or ``mode_dir`` already holds ``q*.json`` results from
+    a prior run.
+    """
+    errors: list[str] = []
+    if settings.SIMPLE_MODEL_NAME != "gpt-4o-mini":
+        errors.append(
+            f"model must be gpt-4o-mini (spec §5.2), got {settings.SIMPLE_MODEL_NAME!r}"
+        )
+    if settings.TEMPERATURE != 0:
+        errors.append(
+            f"temperature must be 0 (spec §5.2), got {settings.TEMPERATURE!r}"
+        )
+    if settings.SIMPLE_LLM_PROVIDER != "openai":
+        errors.append(
+            f"provider must be openai (spec §5.2), got {settings.SIMPLE_LLM_PROVIDER!r}"
+        )
+    if len(questions) != PAID_QUESTION_COUNT:
+        errors.append(
+            f"expectations must yield exactly {PAID_QUESTION_COUNT} questions "
+            f"(spec §5.2, {PAID_QUESTION_COUNT}×2=18 calls), got {len(questions)}"
+        )
+    mode_dir = Path(mode_dir)
+    if mode_dir.exists():
+        existing = sorted(p.name for p in mode_dir.glob("q*.json"))
+        if existing:
+            errors.append(
+                f"{mode_dir} already has results ({', '.join(existing)}); "
+                "refusing to re-spend into an existing run"
+            )
+    if errors:
+        raise ValueError("; ".join(errors))
+
+
 def load_questions(path: Path) -> list[dict]:
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
     return [
@@ -124,6 +165,12 @@ def main() -> int:
     questions = load_questions(args.expectations)
     mode_dir = args.out / stack.config.mode
     mode_dir.mkdir(parents=True, exist_ok=True)
+    if not args.dry_run:
+        try:
+            check_paid_run(settings, questions, mode_dir)
+        except ValueError as exc:
+            print(exc, file=sys.stderr)
+            return 2
     config = {
         "mode": stack.config.mode,
         "model": settings.SIMPLE_MODEL_NAME,
@@ -147,9 +194,6 @@ def main() -> int:
     print(json.dumps(config, ensure_ascii=False, indent=2))
     if args.dry_run:
         return 0
-    if (settings.SIMPLE_MODEL_NAME, settings.TEMPERATURE) != ("gpt-4o-mini", 0.0):
-        print("model must be gpt-4o-mini at temperature 0 (spec §5.2)", file=sys.stderr)
-        return 2
 
     for r in run_mode(stack, questions, mode_dir, raw_log):
         print(r["n"], r["response"]["status"], r["response"]["reason_codes"])
