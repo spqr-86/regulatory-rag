@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # Department Q&A object-profile mode (issue #44). One switch picks the whole bundle:
     # Chroma path + collection, profiles, prompt version, output schema. Separate paths,
     # because index.py drops the whole CHROMA_DB_PATH before writing.
-    DEPARTMENT_QA_MODE: Literal["v1", "v2"] = "v1"
+    DEPARTMENT_QA_MODE: Literal["v1", "v2"] = "v2"
     DEPARTMENT_V1_CHROMA_DB_PATH: str = "./chroma_db_dept"
     DEPARTMENT_V1_COLLECTION: str = "department_demo"
     DEPARTMENT_V2_CHROMA_DB_PATH: str = "./chroma_db_dept_v2"

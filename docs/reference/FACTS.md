@@ -65,7 +65,7 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 [2026-09-14-department-qa-mvp-design](../superpowers/specs/2026-09-14-department-qa-mvp-design.md)
 + [2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
 
-- `DEPARTMENT_QA_MODE` (env, `config/settings.py`): `v1` (default) or `v2`. Selects one bundle
+- `DEPARTMENT_QA_MODE` (env, `config/settings.py`): `v1` or `v2` (default, decision 10). Selects one bundle
   atomically — Chroma path/collection, whether unit object sheets are loaded as profiles, and
   the `department_answer` prompt version. `wiring.ensure_store_matches` fails fast if
   `CHROMA_DB_PATH`/`CHROMA_COLLECTION_NAME` don't match the selected mode.

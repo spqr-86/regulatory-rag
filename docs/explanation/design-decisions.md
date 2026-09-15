@@ -277,11 +277,12 @@ neither the building nor floor threshold). Full per-question breakdown and quote
 [`eval/runs/object_profile_pair_2026-09-15/summary.md`](../../eval/runs/object_profile_pair_2026-09-15/summary.md).
 Spec: [2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
 
-**Default mode.** Решение ожидает (Пётр решает: оставить `v1` по умолчанию или переключить на
-`v2`). Условие пересмотра: v2 обошло v1 по всем трём числам и не допустило answered-без-объекта
-или подмены отсутствующего факта общей нормой, но само дало 1 запрещённый вывод (applied
-conclusion от факта ниже нормативного порога) и закрыло меньше половины подответов — решение
-не откладывается дальше без разбора этого конкретного случая человеком.
+**Default mode.** `v2` (decided by Petr, 2026-09-15). v2 beat v1 on all three numbers and
+produced no answered-without-unit and no norm substituted for a missing fact. **Known error,
+accepted:** `q1` — `applied_conclusions` concluded an evacuation plan is required from an
+8-person headcount that meets neither the building nor the floor threshold; v2 also credits
+only 11/17 required sub-answers. Next task: fix threshold application and rerun the pair.
+Revisit (back to `v1`) if the rerun shows more forbidden conclusions in v2 than in v1.
 
 ---
 
