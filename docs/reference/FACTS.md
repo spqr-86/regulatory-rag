@@ -48,6 +48,9 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 - applicability_retriever: v2
 - department_answer: v1
 
+`department_answer` v2 exists in the registry (not `active_version`) and is selected by
+`DEPARTMENT_QA_MODE=v2` at runtime, not by the registry — see "Q&A подразделений" below.
+
 ## corpus
 - documents: 12 НТД
 - chunks: 7792  (reindex 2026-09-02; chunk_id 100%, per-source int)
@@ -56,6 +59,32 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
   embeddings go over the API). The run wipes `chroma_db/` and the docling cache first,
   so a crashed run restarts from zero.
 - previous: 7718 chunks (reindex 2026-05-30, session 61)
+
+## department qa
+`src/department_qa/` — separate Q&A stack for units (подразделения), spec
+[2026-09-14-department-qa-mvp-design](../superpowers/specs/2026-09-14-department-qa-mvp-design.md)
++ [2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
+
+- `DEPARTMENT_QA_MODE` (env, `config/settings.py`): `v1` (default) or `v2`. Selects one bundle
+  atomically — Chroma path/collection, whether unit object sheets are loaded as profiles, and
+  the `department_answer` prompt version. `wiring.ensure_store_matches` fails fast if
+  `CHROMA_DB_PATH`/`CHROMA_COLLECTION_NAME` don't match the selected mode.
+
+| mode | Chroma path | collection | profiles | prompt | structured-output schema |
+|---|---|---|---|---|---|
+| `v1` | `./chroma_db_dept` | `department_demo` (sheets in the index) | not loaded, `profile=None` | `department_answer` v1 | `ModelAnswerV1` |
+| `v2` | `./chroma_db_dept_v2` | `department_demo_v2` (sheets excluded, `role: object_profile`) | `load_profiles` | `department_answer` v2 | `ModelAnswer` |
+
+Two Chroma paths exist because `index.py` deletes the whole `CHROMA_DB_PATH` folder before
+writing (not just the collection) — building `department_demo_v2` into `chroma_db_dept` would
+wipe v1. Both stores are gitignored (`chroma_db*/`).
+
+`answered` = citations checked, not content verified: every cited id exists with the right
+role, no blocking clarifying question is pending, both norm levels are present (except
+`fact_only`), a cited profile carries a fill-in date, and the §2.3 lexical guard found no
+normative wording in object facts. It does not mean the citation supports the claim or that
+the answer is complete — see design-decisions §10. UI banner: "Ссылки сверены: законодательство
+и ЛНА. Смысл ответа не проверен специалистом."
 
 ## nodes
 Graph nodes (`src/v7/graph.py`), entry = `intent_gate`:

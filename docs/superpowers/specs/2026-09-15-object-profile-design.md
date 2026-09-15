@@ -270,10 +270,13 @@ return ("needs_review" if reasons else "answered"), reasons
    - `citation_invalid` → основания и факты скрыты, как в v1.
 7. **Режим — один комплект, переключается атомарно.** Настройка `DEPARTMENT_QA_MODE`:
 
-   | Режим | Коллекция | Профили | Промпт | Схема structured output |
-   |---|---|---|---|---|
-   | `v1` | `department_demo` (листы в индексе) | не загружаются, `profile=None` | `department_answer` v1 | `ModelAnswerV1` |
-   | `v2` | `department_demo_v2` (без листов) | `load_profiles` | `department_answer` v2 | `ModelAnswer` |
+   | Режим | Путь Chroma | Коллекция | Профили | Промпт | Схема structured output |
+   |---|---|---|---|---|---|
+   | `v1` | `./chroma_db_dept` | `department_demo` (листы в индексе) | не загружаются, `profile=None` | `department_answer` v1 | `ModelAnswerV1` |
+   | `v2` | `./chroma_db_dept_v2` | `department_demo_v2` (без листов) | `load_profiles` | `department_answer` v2 | `ModelAnswer` |
+
+   Пути разные, потому что `index.py` удаляет всю папку `CHROMA_DB_PATH` перед записью (найдено при
+   планировании 15.09). `wiring.ensure_store_matches` падает при несовпадении пары с режимом.
 
    `wiring.py` собирает комплект по режиму; версия промпта задаётся режимом, а не отдельным
    `active_version`. По умолчанию `v1` до разбора парного прогона.

@@ -36,3 +36,46 @@ For deterministic triage calibration (no judge), use the reviewed annotations an
 immutable retrieval snapshot as described in
 [`2026-09-11-triage-threshold-calibration.md`](../superpowers/plans/2026-09-11-triage-threshold-calibration.md).
 The completed 81-profile run retained the current defaults.
+
+## Парный прогон ObjectProfile (department Q&A, v1 vs v2)
+
+Сравнивает режимы `DEPARTMENT_QA_MODE` (см. [FACTS](../reference/FACTS.md#department-qa)) на
+одном наборе вопросов: `v1` — листы объекта в индексе, `v2` — листы исключены и передаются как
+`ObjectProfile`. Спека:
+[2026-09-15-object-profile-design §5.2](../superpowers/specs/2026-09-15-object-profile-design.md).
+
+Сборка двух баз (`index.py` удаляет всю папку `CHROMA_DB_PATH`, поэтому у режимов разные пути):
+
+```bash
+export CORPUS_MANIFEST_PATH=corpus/manifest.yaml SOURCE_DOCS_PATH=./source_docs_dept
+RUN=eval/runs/object_profile_pair_$(date +%F) && mkdir -p $RUN
+
+# v1 — листы в индексе
+CHROMA_DB_PATH=./chroma_db_dept CHROMA_COLLECTION_NAME=department_demo .venv/bin/python index.py
+CHROMA_DB_PATH=./chroma_db_dept CHROMA_COLLECTION_NAME=department_demo \
+  .venv/bin/python eval/object_profile_collections.py --expect present | tee $RUN/collection_v1.json
+
+# v2 — листы исключены (role: object_profile в manifest), отдельная папка Chroma
+CHROMA_DB_PATH=./chroma_db_dept_v2 CHROMA_COLLECTION_NAME=department_demo_v2 .venv/bin/python index.py
+CHROMA_DB_PATH=./chroma_db_dept_v2 CHROMA_COLLECTION_NAME=department_demo_v2 \
+  .venv/bin/python eval/object_profile_collections.py --expect absent | tee $RUN/collection_v2.json
+```
+
+Сам парный прогон (`eval/run_object_profile_pair.py`, один процесс на режим — Chroma-стор
+процесс-синглтон):
+
+```bash
+DEPARTMENT_QA_MODE=v1 CHROMA_DB_PATH=./chroma_db_dept CHROMA_COLLECTION_NAME=department_demo \
+  CORPUS_MANIFEST_PATH=corpus/manifest.yaml SOURCE_DOCS_PATH=./source_docs_dept \
+  .venv/bin/python eval/run_object_profile_pair.py --out $RUN
+DEPARTMENT_QA_MODE=v2 CHROMA_DB_PATH=./chroma_db_dept_v2 CHROMA_COLLECTION_NAME=department_demo_v2 \
+  CORPUS_MANIFEST_PATH=corpus/manifest.yaml SOURCE_DOCS_PATH=./source_docs_dept \
+  .venv/bin/python eval/run_object_profile_pair.py --out $RUN
+```
+
+Пишет `$RUN/<mode>/config.json` + `$RUN/<mode>/q<N>.json` (prompt, сырой ответ модели со всеми
+попытками, evidence, `DepartmentResponse`). **Платно:** `gpt-4o-mini`, temperature 0, 9 вопросов
+× 2 режима = 18 вызовов (+ретраи схемы), согласованный бюджет < $0.05 (согласовано 15.09) —
+запускать по прямому согласию, не автоматически. `--dry-run` печатает `config.json` (режим,
+число чанков, профили, вопросы) без единого вызова модели — им можно проверить обвязку без
+затрат.
