@@ -65,10 +65,12 @@ def _entry_metadata(entry: dict, snapshot_id: str, organization_id: str) -> dict
             raise ManifestError(f"{entry['file']}: internal needs scope, got {scope!r}")
         meta["organization_id"] = organization_id
         meta["scope"] = scope
+        meta["audience"] = "company"
         if scope == "unit":
             if not entry.get("unit_id"):
                 raise ManifestError(f"{entry['file']}: scope=unit needs unit_id")
             meta["unit_id"] = entry["unit_id"]
+            meta["audience"] = entry["unit_id"]
     return meta
 
 

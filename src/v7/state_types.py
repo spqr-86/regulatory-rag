@@ -43,7 +43,9 @@ NextAfterEvalComplex = Literal["generate", "abstain"]
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
-ALLOWED_FILTER_KEYS = frozenset({"doc_type", "doc_id", "section", "category", "year"})
+ALLOWED_FILTER_KEYS = frozenset(
+    {"doc_type", "doc_id", "section", "category", "year", "source_type", "audience"}
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

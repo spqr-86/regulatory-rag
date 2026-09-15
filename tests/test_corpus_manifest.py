@@ -61,6 +61,15 @@ def test_chunks_get_document_metadata(manifest):
     assert unit.metadata["scope"] == "unit"
     assert unit.metadata["unit_id"] == "unit_1"
     assert unit.metadata["snapshot_id"] == "pb_demo_2026_09"
+    # Scalar scope key: Chroma metadata cannot hold lists, $in filters on it.
+    assert unit.metadata["audience"] == "unit_1"
+    assert "audience" not in ext.metadata
+
+
+@pytest.mark.unit
+def test_company_scope_audience(manifest):
+    chunk = Document(page_content="c", metadata={"source": "prikaz_instruktazhi.md"})
+    assert apply_manifest([chunk], manifest)[0].metadata["audience"] == "company"
 
 
 @pytest.mark.unit

@@ -88,6 +88,7 @@ def expand_cross_references(
     passages: list[dict],
     backend,
     query: str = "",
+    filters: dict | None = None,
 ) -> list[dict]:
     """Fetch chunks linked to the found passages via cross-references.
 
@@ -115,7 +116,8 @@ def expand_cross_references(
         if source not in _source_docs_cache:
             try:
                 _source_docs_cache[source] = backend.get_by_filter(
-                    where={"source": source},
+                    # Scope filter too: a same-named source must not bypass it.
+                    where={**(filters or {}), "source": source},
                     limit=500,
                 )
             except Exception as exc:
@@ -190,7 +192,7 @@ def expand_cross_references(
             unique_sources = {
                 p.get("metadata", {}).get("source", "") for p in passages
             } - {""}
-            bm25_results = bm25_search(query, top_k=30)
+            bm25_results = bm25_search(query, filters=filters, top_k=30)
             for r in bm25_results:
                 if r.get("metadata", {}).get("source") in unique_sources:
                     text = r.get("text", "")
