@@ -83,3 +83,18 @@ def test_cross_ref_applies_scope_to_backend_and_bm25():
     assert where["audience"] == {"$in": ["company", "unit_1"]}
     assert bm25.call_args.kwargs["filters"] == internal
     assert all(p["metadata"].get("audience") != "unit_2" for p in out)
+
+
+@pytest.mark.unit
+def test_chroma_where_wraps_multiple_conditions():
+    from src.v7.scope_filter import to_chroma_where
+
+    _, internal = build_scope_filters("unit_1")
+    assert to_chroma_where(internal) == {
+        "$and": [
+            {"source_type": "internal"},
+            {"audience": {"$in": ["company", "unit_1"]}},
+        ]
+    }
+    assert to_chroma_where({"source_type": "external"}) == {"source_type": "external"}
+    assert to_chroma_where(None) is None

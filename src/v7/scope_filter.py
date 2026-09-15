@@ -34,3 +34,11 @@ def matches_filter(metadata: dict, filters: Optional[dict]) -> bool:
         elif value != expected:
             return False
     return True
+
+
+def to_chroma_where(filters: Optional[dict]) -> Optional[dict]:
+    """Chroma query `where` needs an explicit $and for more than one condition."""
+    if not filters:
+        return None
+    conditions = [{key: value} for key, value in filters.items()]
+    return conditions[0] if len(conditions) == 1 else {"$and": conditions}
