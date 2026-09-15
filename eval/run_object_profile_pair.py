@@ -1,0 +1,160 @@
+"""Paired v1/v2 object profile run: one mode per process (spec object-profile §5.2).
+
+# ANCHOR: paired object profile run
+# Role: run the department Q&A stack over eval/data/object_profile_pair_expectations.yaml
+#   in one mode (v1 or v2, picked by DEPARTMENT_QA_MODE), logging every call in full for
+#   later comparison against the hand-written expectations.
+# Input: expectations file (n, unit_id, question); DepartmentStack from
+#   build_department_stack(recorder=...).
+# Output: eval/runs/<out>/<mode>/q<N>.json per question (prompt, raw model output incl.
+#   schema retries, evidence passed to search, DepartmentResponse) and
+#   eval/runs/<out>/<mode>/config.json (run configuration, no secrets).
+#
+# The Chroma store and BM25 index are process-wide singletons taken from settings,
+# so each mode runs in its own process with its own CHROMA_DB_PATH/collection.
+# Every call is logged in full: prompt, raw model output (all attempts), evidence
+# passed to the prompt, DepartmentResponse; plus the run configuration.
+
+Usage::
+
+    RUN=eval/runs/object_profile_pair_2026-09-DD
+    DEPARTMENT_QA_MODE=v1 CHROMA_DB_PATH=./chroma_db_dept CHROMA_COLLECTION_NAME=department_demo \\
+      .venv/bin/python eval/run_object_profile_pair.py --out $RUN
+    DEPARTMENT_QA_MODE=v2 CHROMA_DB_PATH=./chroma_db_dept_v2 CHROMA_COLLECTION_NAME=department_demo_v2 \\
+      .venv/bin/python eval/run_object_profile_pair.py --out $RUN
+
+Paid: 9 calls per mode (+ at most 9 schema retries). Budget agreed 15.09: < $0.05 for 18 calls.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
+
+EXPECTATIONS = REPO_ROOT / "eval" / "data" / "object_profile_pair_expectations.yaml"
+
+
+def load_questions(path: Path) -> list[dict]:
+    data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    return [
+        {"n": q["n"], "unit_id": q.get("unit_id"), "question": q["question"]}
+        for q in data.get("questions") or []
+    ]
+
+
+def run_mode(
+    stack, questions: list[dict], out_dir: Path, raw_log: list[dict]
+) -> list[dict]:
+    from src.department_qa.service import answer_question
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    for q in questions:
+        prompts: list[str] = []
+        raw_log.clear()
+
+        def model_fn(prompt: str, _prompts=prompts):
+            _prompts.append(prompt)
+            return stack.model_fn(prompt)
+
+        profile = stack.config.profiles.get(q["unit_id"]) if q["unit_id"] else None
+        passed: list[dict] = []
+
+        def search_fn(query, filters=None, top_k=8, _passed=passed):
+            hits = stack.search_fn(query, filters=filters, top_k=top_k)
+            _passed.append({"filters": filters, "hits": hits})
+            return hits
+
+        response = answer_question(
+            q["question"],
+            q["unit_id"],
+            search_fn,
+            model_fn,
+            snapshot_id=stack.manifest.snapshot_id,
+            profile=profile,
+            prompt_version=stack.config.prompt_version,
+        )
+        record = {
+            "n": q["n"],
+            "mode": stack.config.mode,
+            "unit_id": q["unit_id"],
+            "question": q["question"],
+            "prompt": prompts[0] if prompts else "",
+            "prompt_sha256": (
+                hashlib.sha256(prompts[0].encode()).hexdigest() if prompts else None
+            ),
+            "raw_model_output": list(raw_log),
+            "evidence_passed": passed,
+            "profile_sha256": profile.content_sha256 if profile else None,
+            "response": json.loads(response.model_dump_json()),
+        }
+        (out_dir / f"q{q['n']}.json").write_text(
+            json.dumps(record, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        records.append(record)
+    return records
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--expectations", type=Path, default=EXPECTATIONS)
+    parser.add_argument(
+        "--dry-run", action="store_true", help="configuration only, no model calls"
+    )
+    args = parser.parse_args()
+
+    from config.settings import settings
+    from src.department_qa.service import TOP_K_PER_LEVEL
+    from src.department_qa.wiring import build_department_stack
+
+    raw_log: list[dict] = []
+    stack = build_department_stack(recorder=raw_log.append)
+    questions = load_questions(args.expectations)
+    mode_dir = args.out / stack.config.mode
+    mode_dir.mkdir(parents=True, exist_ok=True)
+    config = {
+        "mode": stack.config.mode,
+        "model": settings.SIMPLE_MODEL_NAME,
+        "provider": settings.SIMPLE_LLM_PROVIDER,
+        "temperature": settings.TEMPERATURE,
+        "top_k_per_level": TOP_K_PER_LEVEL,
+        "fusion": "rrf(vector, bm25)",
+        "chroma_db_path": settings.CHROMA_DB_PATH,
+        "collection": settings.CHROMA_COLLECTION_NAME,
+        "chunks": sum(1 for _ in stack.store.iter_all_documents()),
+        "prompt_version": stack.config.prompt_version,
+        "expectations_sha256": hashlib.sha256(
+            args.expectations.read_bytes()
+        ).hexdigest(),
+        "profiles": {u: p.content_sha256 for u, p in stack.config.profiles.items()},
+        "questions": len(questions),
+    }
+    (mode_dir / "config.json").write_text(
+        json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(json.dumps(config, ensure_ascii=False, indent=2))
+    if args.dry_run:
+        return 0
+    if (settings.SIMPLE_MODEL_NAME, settings.TEMPERATURE) != ("gpt-4o-mini", 0.0):
+        print("model must be gpt-4o-mini at temperature 0 (spec §5.2)", file=sys.stderr)
+        return 2
+
+    for r in run_mode(stack, questions, mode_dir, raw_log):
+        print(r["n"], r["response"]["status"], r["response"]["reason_codes"])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
