@@ -15,6 +15,7 @@ from src.department_qa.contract import (
     ModelAnswerV1,
     ObjectFact,
     check_citations,
+    cited_ids,
     decide,
 )
 
@@ -274,6 +275,17 @@ def test_v1_answer_without_object_citations_ignores_profile_date():
 def test_one_applied_with_both_levels_closes_both_levels():
     answer = _v2(facts=[FACT], applied=[APPLIED])
     assert decide(answer, EVIDENCE, profile_as_of=DATED) == ("answered", [])
+
+
+@pytest.mark.unit
+def test_cited_ids_collects_all_four_lists():
+    answer = _v2(facts=[FACT], applied=[APPLIED])
+    assert cited_ids(answer) == {"ext_001", "int_001", "obj_s3"}
+
+
+@pytest.mark.unit
+def test_cited_ids_empty_for_v1_answer_without_citations():
+    assert cited_ids(ModelAnswerV1(answer="x")) == set()
 
 
 # --- intersections (spec §5.1 table) -------------------------------------------

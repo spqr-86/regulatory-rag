@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
-from src.department_qa.contract import Basis, ModelAnswer
+from src.department_qa.contract import (
+    AppliedConclusion,
+    Basis,
+    ModelAnswer,
+    ObjectFact,
+    ObjectSection,
+)
+from src.department_qa.object_profile import ObjectProfile
 from src.department_qa.service import answer_question
 from src.v7.scope_filter import build_scope_filters
 
@@ -89,3 +98,178 @@ def test_citation_invalid_hides_basis():
     result = answer_question("q", "unit_1", FakeSearch(), _model(bad))
     assert (result.status, result.reason_codes) == ("failed", ["citation_invalid"])
     assert result.external_basis == [] and result.internal_basis == []
+
+
+def _profile(unit_id="unit_1", as_of=date(2026, 9, 1)) -> ObjectProfile:
+    def section(n, title, text="", presence="present"):
+        return ObjectSection(
+            id=f"obj_s{n}", number=n, title=title, text=text, presence=presence
+        )
+
+    sections = {
+        "obj_s3": section(
+            3,
+            "Системы противопожарной защиты объекта",
+            "АПС есть, сигнал принимает пост охраны.",
+        ),
+        "obj_s4": section(4, "Первичные средства пожаротушения", presence="empty"),
+        "obj_s5": section(5, "Дежурный персонал", presence="missing"),
+        "obj_s6": section(
+            6, "Контактные телефоны объекта", "маркер-телефонов-раздела-6"
+        ),
+    }
+    return ObjectProfile(
+        unit_id=unit_id,
+        document_id="int_unit_1_list",
+        source="unit_1_list.md",
+        content_sha256="sha-abc",
+        title="Лист особенностей объекта защиты: тест",
+        as_of_date=as_of,
+        sections=sections,
+    )
+
+
+V2_GOOD = ModelAnswer(
+    answer="Сигнал принимает пост охраны.",
+    object_facts=[
+        ObjectFact(
+            statement="Сигнал АПС принимает пост охраны", evidence_ids=["obj_s3"]
+        )
+    ],
+)
+
+
+@pytest.mark.unit
+def test_profile_sections_become_object_evidence_and_prompt_block():
+    search, model = FakeSearch(), _model(V2_GOOD)
+    result = answer_question(
+        "Кто принимает сигнал?",
+        "unit_1",
+        search,
+        model,
+        profile=_profile(),
+        prompt_version="v2",
+    )
+
+    prompt = model.prompts[0]
+    assert "[obj_s3] 3 Системы противопожарной защиты объекта" in prompt
+    assert "(не заполнено) — ссылаться нельзя" in prompt
+    assert "(раздела нет в листе) — ссылаться нельзя" in prompt
+    assert "маркер-телефонов-раздела-6" not in prompt
+    assert "Дата заполнения: 01.09.2026" in prompt
+
+    assert (result.status, result.reason_codes) == ("answered", [])
+    assert [e.id for e in result.evidence] == ["obj_s3"]
+    obj = result.evidence[0]
+    assert (obj.level, obj.source, obj.document_id) == (
+        "object",
+        "unit_1_list.md",
+        "int_unit_1_list",
+    )
+    assert obj.locator == "3 Системы противопожарной защиты объекта"
+    assert result.object_facts == V2_GOOD.object_facts
+    assert result.profile_as_of_date == date(2026, 9, 1)
+    assert result.profile_sha256 == "sha-abc"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("section_id", ["obj_s4", "obj_s5", "obj_s6"])
+def test_empty_missing_and_contacts_sections_are_not_citable(section_id):
+    bad = ModelAnswer(
+        answer="x",
+        object_facts=[ObjectFact(statement="факт", evidence_ids=[section_id])],
+    )
+    result = answer_question(
+        "q",
+        "unit_1",
+        FakeSearch(),
+        _model(bad),
+        profile=_profile(),
+        prompt_version="v2",
+    )
+    assert (result.status, result.reason_codes) == ("failed", ["citation_invalid"])
+    assert result.object_facts == [] and result.evidence == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("unit_id", ["unit_2", None], ids=["other-unit", "no-unit"])
+def test_profile_mismatch_fails_before_search_and_model(unit_id):
+    search, model = FakeSearch(), _model(V2_GOOD)
+    result = answer_question(
+        "q", unit_id, search, model, profile=_profile("unit_1"), prompt_version="v2"
+    )
+    assert (result.status, result.reason_codes) == ("failed", ["profile_mismatch"])
+    assert search.calls == [] and model.prompts == []
+
+
+@pytest.mark.unit
+def test_undated_profile_citation_needs_review():
+    result = answer_question(
+        "q",
+        "unit_1",
+        FakeSearch(),
+        _model(V2_GOOD),
+        profile=_profile(as_of=None),
+        prompt_version="v2",
+    )
+    assert (result.status, result.reason_codes) == (
+        "needs_review",
+        ["object_profile_undated"],
+    )
+    assert result.profile_as_of_date is None
+
+
+@pytest.mark.unit
+def test_nothing_cited_means_no_evidence():
+    silent = ModelAnswer(answer="Не найдено.")
+    result = answer_question("q", "unit_1", FakeSearch(), _model(silent))
+    assert result.status == "needs_review"
+    assert result.evidence == []
+
+
+@pytest.mark.unit
+def test_out_of_scope_hides_model_content():
+    answer = GOOD.model_copy(
+        update={"out_of_scope": True, "clarifying_questions": ["?"]}
+    )
+    result = answer_question(
+        "Как оформить отпуск?", "unit_1", FakeSearch(), _model(answer)
+    )
+    assert (result.status, result.reason_codes) == ("out_of_scope", [])
+    assert result.answer == ""
+    assert result.external_basis == [] and result.internal_basis == []
+    assert result.clarifying_questions == [] and result.evidence == []
+    assert result.next_step
+
+
+@pytest.mark.unit
+def test_applied_conclusion_evidence_is_resolved():
+    applied = ModelAnswer(
+        answer="x",
+        applied_conclusions=[
+            AppliedConclusion(
+                statement="вывод", evidence_ids=["obj_s3", "ext_001", "int_001"]
+            )
+        ],
+    )
+    result = answer_question(
+        "q",
+        "unit_1",
+        FakeSearch(),
+        _model(applied),
+        profile=_profile(),
+        prompt_version="v2",
+    )
+    assert result.status == "answered"
+    assert [e.id for e in result.evidence] == ["ext_001", "int_001", "obj_s3"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "unit_id, phrase",
+    [(None, "Объект не выбран"), ("unit_1", "Лист не предоставлен")],
+)
+def test_prompt_without_profile_says_why(unit_id, phrase):
+    model = _model(GOOD)
+    answer_question("q", unit_id, FakeSearch(), model, prompt_version="v2")
+    assert phrase in model.prompts[0]

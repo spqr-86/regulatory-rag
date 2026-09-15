@@ -21,7 +21,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from src.department_qa.contract import ObjectSection
+from src.department_qa.contract import Evidence, ObjectSection
 from src.indexing.manifest import Manifest
 
 SECTION_TITLES: dict[int, str] = {
@@ -137,6 +137,40 @@ def parse_profile(
         as_of_date=as_of_date,
         sections=sections,
     )
+
+
+def profile_evidence(profile: ObjectProfile) -> list[Evidence]:
+    """Citable sections only: present and not contacts (spec object-profile §2.4 п. 4)."""
+    return [
+        Evidence(
+            id=s.id,
+            level="object",
+            text=s.text,
+            source=profile.source,
+            title=profile.title,
+            locator=f"{s.number} {s.title}",
+            document_id=profile.document_id,
+        )
+        for s in profile.sections.values()
+        if s.presence == "present" and s.number != CONTACTS_SECTION
+    ]
+
+
+def profile_prompt_block(
+    unit_id: Optional[str], profile: Optional[ObjectProfile]
+) -> tuple[str, list[ObjectSection]]:
+    if unit_id is None:
+        return "Объект не выбран: сведений об объекте нет.", []
+    if profile is None:
+        return (
+            "Лист не предоставлен: сведений об объекте нет, факты объекта не придумывай.",
+            [],
+        )
+    filled = (
+        profile.as_of_date.strftime("%d.%m.%Y") if profile.as_of_date else "не указана"
+    )
+    sections = [s for s in profile.sections.values() if s.number != CONTACTS_SECTION]
+    return f"{profile.title}. Дата заполнения: {filled}.", sections
 
 
 def load_profiles(
