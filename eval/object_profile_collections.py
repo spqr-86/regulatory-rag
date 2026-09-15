@@ -31,6 +31,23 @@ QUERIES = (
 )
 
 
+# The v1 manifest has no `role`, so sheets are found by file name; a fixed list stops a
+# renamed sheet from making `--expect absent` pass vacuously.
+EXPECTED_SHEETS = (
+    "int_unit_depot_list.md",
+    "int_unit_dispatch_list.md",
+    "int_unit_office_list.md",
+    "int_unit_partial_list.md",
+)
+
+
+def check_sheet_list(sheets: set[str]) -> None:
+    if sheets != set(EXPECTED_SHEETS):
+        raise ValueError(
+            f"manifest sheets {sorted(sheets)} != expected {sorted(EXPECTED_SHEETS)}"
+        )
+
+
 def sheet_sources(passages: Iterable[dict], sheet_files: set[str]) -> set[str]:
     found = set()
     for p in passages:
@@ -58,6 +75,7 @@ def main() -> int:
         for name, meta in manifest.documents.items()
         if name.startswith("int_unit_") and name.endswith("_list.md")
     }
+    check_sheet_list(set(sheets))
     store = get_vector_store_backend(load_existing=True)
     stored = list(store.iter_all_documents())
     in_chroma = sheet_sources(stored, set(sheets))

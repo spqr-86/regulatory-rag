@@ -88,7 +88,8 @@ DEPARTMENT_QA_MODE=v2 CHROMA_DB_PATH=./chroma_db_dept_v2 CHROMA_COLLECTION_NAME=
 ```
 
 Пишет `$RUN/<mode>/config.json` + `$RUN/<mode>/q<N>.json` (prompt, сырой ответ модели со всеми
-попытками, evidence, `DepartmentResponse`). **Платно:** `gpt-4o-mini`, temperature 0, 9 вопросов
+попытками, `search_calls` — сырые вызовы поиска, `evidence_ids` — id evidence в порядке промпта,
+`DepartmentResponse`). В прогоне 15.09 сырые вызовы поиска лежат под старым ключом `evidence_passed`. **Платно:** `gpt-4o-mini`, temperature 0, 9 вопросов
 × 2 режима = 18 вызовов (+ретраи схемы), согласованный бюджет < $0.05 (согласовано 15.09) —
 запускать по прямому согласию, не автоматически. `--dry-run` печатает `config.json` (режим,
 число чанков, профили, вопросы) без единого вызова модели — им можно проверить обвязку без

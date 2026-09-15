@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from eval.object_profile_collections import sheet_sources
+from eval.object_profile_collections import (
+    EXPECTED_SHEETS,
+    check_sheet_list,
+    sheet_sources,
+)
 
 
 @pytest.mark.unit
@@ -17,3 +21,19 @@ def test_sheet_sources_matches_by_basename():
     assert sheet_sources(
         passages, {"int_unit_office_list.md", "int_unit_depot_list.md"}
     ) == {"int_unit_office_list.md"}
+
+
+@pytest.mark.unit
+def test_check_sheet_list_accepts_the_four_expected_sheets():
+    check_sheet_list(set(EXPECTED_SHEETS))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "sheets",
+    [set(), {"int_unit_office_list.md", "int_unit_depot_list.md"}],
+    ids=["empty", "renamed-or-missing"],
+)
+def test_check_sheet_list_rejects_vacuous_or_partial_list(sheets):
+    with pytest.raises(ValueError, match="int_unit_"):
+        check_sheet_list(sheets)

@@ -7,7 +7,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from eval.run_object_profile_pair import check_paid_run, load_questions, run_mode
+from eval.run_object_profile_pair import (
+    check_paid_run,
+    load_questions,
+    prompt_evidence_ids,
+    run_mode,
+)
 from src.department_qa.contract import ModelAnswer
 
 
@@ -67,9 +72,10 @@ def test_run_mode_writes_one_record_per_question(tmp_path):
     ]
     assert saved["response"]["status"] == "out_of_scope"
     # answer_question searches external+internal before it learns the answer is
-    # out_of_scope from the model, so evidence_passed still records both empty calls
+    # out_of_scope from the model, so search_calls still records both empty calls
     # (real behaviour of src/department_qa/service.py, not asserted empty by the brief).
-    assert [p["hits"] for p in saved["evidence_passed"]] == [[], []]
+    assert [p["hits"] for p in saved["search_calls"]] == [[], []]
+    assert saved["evidence_ids"] == []
 
 
 @pytest.mark.unit
@@ -120,3 +126,14 @@ def test_check_paid_run_ignores_dry_run_config_only_dir(tmp_path):
     mode_dir.mkdir()
     (mode_dir / "config.json").write_text("{}", encoding="utf-8")
     assert check_paid_run(_settings(), _questions(), mode_dir) is None
+
+
+@pytest.mark.unit
+def test_prompt_evidence_ids_keeps_prompt_order():
+    prompt = (
+        "- ВНЕШНИЕ (id начинается с ext_) — законодательство\n"
+        "[obj_s4] 4 Первичные средства\nтекст\n\n"
+        "[ext_001] ПП РФ № 1479, XIX\nтекст [ext_009] внутри строки\n\n"
+        "[int_001] Инструкция, 5\nтекст\n"
+    )
+    assert prompt_evidence_ids(prompt) == ["obj_s4", "ext_001", "int_001"]

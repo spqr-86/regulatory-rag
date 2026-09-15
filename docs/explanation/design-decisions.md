@@ -260,8 +260,10 @@ to review, a missing section cited as fact fails. No staleness threshold in code
 date is shown, and a cited profile without a date goes to review.
 
 **Guarantee boundary.** `answered` means "citations checked": every cited id exists with the
-right role, no clarifying question is pending, both norm levels are present, and a lexical
-guard found no normative wording in object facts. It does not mean the cited text supports the
+right role, no clarifying question is pending, both norm levels are present (except
+`fact_only`), a cited profile carries a fill-in date, and a lexical guard found no normative
+wording in object facts. The guard is a closed list of word stems (spec §2.3) and misses
+forms such as «недостаточно», «требуются», «нужно»; the list grows only by a spec change. It does not mean the cited text supports the
 claim or that every part of the question is answered — an external review (2026-09-15) built
 `answered` outputs with irrelevant but well-formed citations. Support and completeness are
 measured in eval (required sub-answers, forbidden conclusions), not enforced at runtime; the UI

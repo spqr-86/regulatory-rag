@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -185,3 +186,17 @@ def test_model_fn_records_raw_output_of_every_attempt():
         {"attempt": 1, "raw": "{broken", "parsing_error": "bad"},
         {"attempt": 2, "raw": '{"answer": "ok"}', "parsing_error": None},
     ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "path",
+    ["chroma_db_dept_v2", "./chroma_db_dept_v2/", os.path.abspath("chroma_db_dept_v2")],
+    ids=["no-dot", "trailing-slash", "absolute"],
+)
+def test_store_path_spelling_does_not_matter(path):
+    with patch("src.department_qa.wiring.load_profiles", return_value={}):
+        config = build_mode_config(
+            "v2", manifest=MagicMock(), source_dir="docs", cfg=CFG
+        )
+    ensure_store_matches(config, path, "department_demo_v2")
