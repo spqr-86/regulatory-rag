@@ -46,6 +46,7 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 - generate_answer: v8
 - query_expand: v1
 - applicability_retriever: v2
+- department_answer: v1
 
 ## corpus
 - documents: 12 НТД
