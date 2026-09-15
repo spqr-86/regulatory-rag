@@ -27,3 +27,26 @@ documents:
     source_type: internal
     scope: company
     title: Инструкция по содержанию технических средств противопожарной защиты ООО «Пример»
+
+  # Unit-level sheets below are synthetic (spec П2): filled with invented data to exercise
+  # unit-dependent answers; they describe no real site.
+  - file: int_unit_office_list.md
+    document_id: int_unit_office_list
+    source_type: internal
+    scope: unit
+    unit_id: unit_office
+    title: Лист особенностей объекта защиты — офис (демонстрационные данные)
+
+  - file: int_unit_dispatch_list.md
+    document_id: int_unit_dispatch_list
+    source_type: internal
+    scope: unit
+    unit_id: unit_dispatch
+    title: Лист особенностей объекта защиты — диспетчерский центр (демонстрационные данные)
+
+  - file: int_unit_depot_list.md
+    document_id: int_unit_depot_list
+    source_type: internal
+    scope: unit
+    unit_id: unit_depot
+    title: Лист особенностей объекта защиты — склад и мастерская (демонстрационные данные)
