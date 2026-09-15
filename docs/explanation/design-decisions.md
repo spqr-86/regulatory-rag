@@ -259,6 +259,14 @@ error. Citation roles are checked deterministically: an applied conclusion witho
 to review, a missing section cited as fact fails. No staleness threshold in code — the fill-in
 date is shown, and a cited profile without a date goes to review.
 
+**Guarantee boundary.** `answered` means "citations checked": every cited id exists with the
+right role, no clarifying question is pending, both norm levels are present, and a lexical
+guard found no normative wording in object facts. It does not mean the cited text supports the
+claim or that every part of the question is answered — an external review (2026-09-15) built
+`answered` outputs with irrelevant but well-formed citations. Support and completeness are
+measured in eval (required sub-answers, forbidden conclusions), not enforced at runtime; the UI
+says so. Revisit with a groundedness check if eval shows `answered` hiding wrong conclusions.
+
 **Evidence.** Pending: paired v1/v2 run on the 6 smoke questions plus 2 boundary questions on a
 partial synthetic sheet, expectations committed before the run. Spec:
 [2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
