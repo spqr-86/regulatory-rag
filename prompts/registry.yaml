@@ -14,3 +14,8 @@ generate_answer:
   versions:
     v7: "agents/generate_answer_v7.j2"
     v8: "agents/generate_answer_v8.j2"
+
+department_answer:
+  active_version: "v1"
+  versions:
+    v1: "agents/department_answer_v1.j2"
