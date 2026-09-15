@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from src.department_qa.contract import (
+    NORMATIVE_MARKERS,
+    AppliedConclusion,
     Basis,
     Evidence,
     ModelAnswer,
+    ModelAnswerV1,
+    ObjectFact,
     check_citations,
     decide,
 )
@@ -19,7 +25,9 @@ EVIDENCE = {
     "int_001": Evidence(
         id="int_001", level="internal", text="осмотр раз в квартал", source="pril3.md"
     ),
+    "obj_s3": Evidence(id="obj_s3", level="object", text="АПС есть", source="list.md"),
 }
+DATED = date(2026, 9, 1)
 
 
 def _answer(ext=("ext_001",), internal=("int_001",), **kw) -> ModelAnswer:
@@ -120,3 +128,242 @@ def test_out_of_scope_wins():
         "out_of_scope",
         [],
     )
+
+
+def _v2(facts=(), applied=(), ext=(), internal=(), **kw) -> ModelAnswer:
+    return ModelAnswer(
+        answer="черновик",
+        external_basis=(
+            [Basis(statement="закон", evidence_ids=list(ext))] if ext else []
+        ),
+        internal_basis=(
+            [Basis(statement="ЛНА", evidence_ids=list(internal))] if internal else []
+        ),
+        object_facts=[
+            ObjectFact(statement=s, evidence_ids=list(ids)) for s, ids in facts
+        ],
+        applied_conclusions=[
+            AppliedConclusion(statement=s, evidence_ids=list(ids)) for s, ids in applied
+        ],
+        **kw,
+    )
+
+
+FACT = ("На объекте есть АПС", ("obj_s3",))
+APPLIED = ("АПС объекта обслуживается по ППР и ЛНА", ("obj_s3", "ext_001", "int_001"))
+
+
+@pytest.mark.unit
+def test_v1_schema_has_no_object_fields():
+    assert "object_facts" not in ModelAnswerV1.model_fields
+    assert {"object_facts", "applied_conclusions"} <= set(ModelAnswer.model_fields)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "statement, hit",
+    [
+        ("План эвакуации для офиса не требуется", True),
+        ("Огнетушители должны быть на каждом этаже", True),
+        ("Количество огнетушителей не снижается", True),
+        ("Хранение допускается", True),
+        ("Не менее двух выходов", True),
+        ("Должна проводиться проверка", True),
+        ("Ответственный — офис-менеджер, должность в штате", False),
+        ("В зоне офиса 2 огнетушителя ОП-4", False),
+        ("Сведений о численности нет", False),
+    ],
+)
+def test_normative_markers(statement, hit):
+    assert bool(NORMATIVE_MARKERS.search(statement)) is hit
+
+
+# --- citation group: any row -> failed / ["citation_invalid"] -----------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "answer",
+    [
+        _v2(facts=[("факт", ())]),
+        _v2(applied=[("вывод", ())]),
+        _v2(facts=[("факт", ("obj_s9",))]),
+        _v2(facts=[("факт", ("obj_s2",))]),
+        _v2(facts=[("факт", ("ext_001",))]),
+        _v2(ext=("obj_s3",)),
+        _v2(internal=("obj_s3",)),
+        _v2(applied=[("вывод", ("ext_001", "int_001"))]),
+    ],
+    ids=[
+        "fact-without-ids",
+        "applied-without-ids",
+        "unknown-object-id",
+        "empty-section-id",
+        "law-cited-as-fact",
+        "object-cited-as-law",
+        "object-cited-as-lna",
+        "applied-without-object",
+    ],
+)
+def test_citation_group_fails(answer):
+    assert check_citations(answer, EVIDENCE)
+    assert decide(answer, EVIDENCE, profile_as_of=DATED) == (
+        "failed",
+        ["citation_invalid"],
+    )
+
+
+@pytest.mark.unit
+def test_object_citation_without_profile_is_unknown_id():
+    no_profile = {k: v for k, v in EVIDENCE.items() if not k.startswith("obj_")}
+    assert decide(
+        _v2(facts=[FACT], ext=("ext_001",), internal=("int_001",)), no_profile
+    ) == (
+        "failed",
+        ["citation_invalid"],
+    )
+
+
+# --- status rows ---------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_clarifying_questions_block_even_with_both_levels():
+    answer = _answer(clarifying_questions=["Какой объект?"])
+    assert decide(answer, EVIDENCE) == ("needs_context", ["applicability_unclear"])
+
+
+@pytest.mark.unit
+def test_applied_with_both_levels_answered_when_dated():
+    assert decide(_v2(applied=[APPLIED]), EVIDENCE, profile_as_of=DATED) == (
+        "answered",
+        [],
+    )
+
+
+@pytest.mark.unit
+def test_applied_without_norm():
+    answer = _v2(
+        applied=[("вывод", ("obj_s3",))], ext=("ext_001",), internal=("int_001",)
+    )
+    assert decide(answer, EVIDENCE, profile_as_of=DATED) == (
+        "needs_review",
+        ["applied_without_norm"],
+    )
+
+
+@pytest.mark.unit
+def test_fact_only_answered():
+    assert decide(_v2(facts=[FACT]), EVIDENCE, profile_as_of=DATED) == ("answered", [])
+
+
+@pytest.mark.unit
+def test_fact_only_undated_profile():
+    assert decide(_v2(facts=[FACT]), EVIDENCE, profile_as_of=None) == (
+        "needs_review",
+        ["object_profile_undated"],
+    )
+
+
+@pytest.mark.unit
+def test_v1_answer_without_object_citations_ignores_profile_date():
+    assert decide(_answer(), EVIDENCE, profile_as_of=None) == ("answered", [])
+
+
+@pytest.mark.unit
+def test_one_applied_with_both_levels_closes_both_levels():
+    answer = _v2(facts=[FACT], applied=[APPLIED])
+    assert decide(answer, EVIDENCE, profile_as_of=DATED) == ("answered", [])
+
+
+# --- intersections (spec §5.1 table) -------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "answer, as_of, expected",
+    [
+        (
+            _answer(clarifying_questions=["Какой объект?"]),
+            DATED,
+            ("needs_context", ["applicability_unclear"]),
+        ),
+        (
+            _answer(ext=("ext_404",), clarifying_questions=["Какой объект?"]),
+            DATED,
+            ("failed", ["citation_invalid"]),
+        ),
+        (
+            _answer(ext=("ext_404",), out_of_scope=True),
+            DATED,
+            ("out_of_scope", []),
+        ),
+        (
+            _v2(applied=[("вывод", ("obj_s3",))]),
+            None,
+            (
+                "needs_review",
+                [
+                    "applied_without_norm",
+                    "external_evidence_missing",
+                    "internal_evidence_missing",
+                    "object_profile_undated",
+                ],
+            ),
+        ),
+        (
+            _v2(facts=[FACT], ext=("ext_001",)),
+            DATED,
+            ("needs_review", ["internal_evidence_missing"]),
+        ),
+        (
+            _v2(),
+            DATED,
+            (
+                "needs_review",
+                ["external_evidence_missing", "internal_evidence_missing"],
+            ),
+        ),
+        (
+            _v2(
+                facts=[("План эвакуации для офиса не требуется", ("obj_s3",))],
+                ext=("ext_001",),
+                internal=("int_001",),
+            ),
+            DATED,
+            ("needs_review", ["object_fact_normative"]),
+        ),
+        (
+            _v2(facts=[("Дежурного персонала нет", ("obj_s2",))]),
+            DATED,
+            ("failed", ["citation_invalid"]),
+        ),
+    ],
+    ids=[
+        "clarify+both-norms",
+        "clarify+bad-citation",
+        "out_of_scope+bad-citation",
+        "applied-no-norm+undated",
+        "fact+ext-no-applied",
+        "empty-answer",
+        "normative-fact+both+dated",
+        "cites-empty-section",
+    ],
+)
+def test_intersections(answer, as_of, expected):
+    assert decide(answer, EVIDENCE, profile_as_of=as_of) == expected
+
+
+@pytest.mark.unit
+def test_known_limit_irrelevant_but_existing_citations_pass():
+    # Documents the guarantee boundary (spec §2.0 п. 1), not desired behaviour:
+    # the runtime does not check that a cited fragment supports the statement.
+    answer = _v2(
+        applied=[
+            (
+                "Огнетушители офиса проверяются раз в 10 лет",
+                ("obj_s3", "ext_001", "int_001"),
+            )
+        ]
+    )
+    assert decide(answer, EVIDENCE, profile_as_of=DATED) == ("answered", [])
