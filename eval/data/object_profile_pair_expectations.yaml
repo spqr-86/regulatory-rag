@@ -1,0 +1,312 @@
+# Expectations for the v1/v2 object profile pair run (spec object-profile §5.2).
+# Written and committed BEFORE the run. Sources are document_id + section/point,
+# never dynamic ids like int_001 / obj_s5.
+# Norm blocks (n: 1, 2, 7) are lists: compound questions rest on more than one point.
+# Official edition checked 15.09.2026 against pravo.gov.ru, nd=102861524
+# (ПП РФ от 16.09.2020 № 1479, статус «Действует c изменениями», последняя редакция
+# от 03.02.2025 № 90); corpus text of every listed point matches the official wording.
+meta:
+  spec: docs/superpowers/specs/2026-09-15-object-profile-design.md
+  model: gpt-4o-mini
+  temperature: 0
+  partial_credit_rule: a required sub-answer counts only if no forbidden conclusion is present
+  ppr_edition: ПП РФ № 1479 в ред. от 03.02.2025 № 90; действует до 31.12.2026 включительно (п. 2 постановления)
+questions:
+  - n: 1
+    unit_id: unit_office
+    question: Сколько огнетушителей должно быть на объекте и нужен ли план эвакуации?
+    checks: составной вопрос, требуемое ≠ фактическое
+    required_subanswers:
+      - в общественном здании на каждом этаже не менее 2 огнетушителей с рангом по приложению № 1 ПП РФ № 1479, расстояние до огнетушителя не более 20 м для помещений административного и общественного назначения
+      - фактически в зоне офиса 2 огнетушителя ОП-4
+      - точное требуемое количество по объекту из сведений не определяется — категорирование помещений отсутствует
+      - необходимость плана эвакуации зависит от численности людей в здании (50 и более) или постоянных рабочих мест на этаже (10 и более); численность на 3 этаже бизнес-центра не известна
+    accepted_alternatives:
+      - вывод о плане в условной форме («нужен, если на этаже 10 и более постоянных рабочих мест или в здании 50 и более человек»)
+      - вопрос в clarifying_questions о численности людей на этаже или в здании бизнес-центра
+      - упоминание, что на этаже размещён поэтажный план эвакуации бизнес-центра
+      - источник нормы по огнетушителям — п. 5.13.3 Инструкции о мерах ПБ вместо п. 400 ПП РФ № 1479
+    forbidden_conclusions:
+      - план эвакуации офису не нужен (не требуется)
+      - план эвакуации нужен, потому что в офисе 50 и более человек или 10 и более рабочих мест
+      - количество огнетушителей снижается на 50 % из-за установки пожаротушения
+      - огнетушители в офисе не требуются
+    object_facts:
+      sufficient:
+        - раздел 4 листа unit_office — 2 огнетушителя ОП-4 в зоне офиса
+        - раздел 7 листа unit_office — часть 3 этажа 9-этажного бизнес-центра, до 8 человек в зоне офиса, поэтажный план бизнес-центра размещён
+        - раздел 3 листа unit_office — АУПТ нет
+      missing:
+        - численность людей на 3 этаже и в здании бизнес-центра (уточняется у арендодателя)
+        - категории помещений (раздел 2 — акт отсутствует)
+    norm:
+      - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 50", applies_to: здание (одновременно находящиеся люди), verified: true}
+      - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 10", applies_to: этаж (постоянные рабочие места), verified: true}
+      - {document_id: ext_ppr_1479, point: "п. 400", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 2", applies_to: этаж общественного здания (огнетушители), verified: true}
+      - {document_id: ext_ppr_1479, point: "п. 406 абз. 1", edition: "ред. от 03.02.2025 № 90", operator: "≤ 20 м", applies_to: помещение административного и общественного назначения (расстояние до огнетушителя), verified: true}
+    expected:
+      v1:
+        status: needs_context
+        reasons: [applicability_unclear]
+        alternatives:
+          - {status: answered, reasons: [], why: модель даёт условный вывод по плану со ссылками на лист (int), п. 5/п. 400 и Инструкцию, без clarifying_questions}
+          - {status: needs_review, reasons: [internal_evidence_missing], why: процитированы только нормы ПП РФ № 1479, без листа и ЛНА}
+      v2:
+        status: needs_context
+        reasons: [applicability_unclear]
+        alternatives:
+          - {status: answered, reasons: [], why: applied со ссылками obj + ext + int, недостающая численность названа в answer как «не найдено»; профиль датирован 01.09.2026}
+          - {status: needs_review, reasons: [object_fact_normative], why: нормативный вывод (например «план не требуется») вынесен в object_facts}
+    sources:
+      - {document_id: ext_ppr_1479, section: "I. Общие положения, п. 5"}
+      - {document_id: ext_ppr_1479, section: "XIX, п. 400"}
+      - {document_id: ext_ppr_1479, section: "XIX, п. 406"}
+      - {document_id: int_instr_mery_pb, section: "5.1.2.5"}
+      - {document_id: int_instr_mery_pb, section: "5.13.3"}
+      - {document_id: int_unit_office_list, section: "4 Первичные средства пожаротушения"}
+      - {document_id: int_unit_office_list, section: "7 Планировка и эвакуация"}
+  - n: 2
+    unit_id: unit_dispatch
+    question: Сколько огнетушителей должно быть на объекте и нужен ли план эвакуации?
+    checks: составной вопрос, объект с АУГП и 60 чел.
+    required_subanswers:
+      - план эвакуации нужен — в здании одновременно до 60 человек, это 50 и более (п. 5 ПП РФ № 1479)
+      - тип и ранг огнетушителей определяются по категории помещения и классу пожара (приложение № 1 ПП РФ № 1479); для серверной и электрощитовой (В3/В4, класс E) — 55В, С, Е или 2А, 55В, С, Е
+      - серверная с АУГП обеспечивается огнетушителями на 50 % расчётного количества (п. 405), а не освобождается от них
+      - фактически 6 огнетушителей (1 этаж — 4, 2 этаж — 2); точное требуемое количество без площадей помещений не вычисляется
+    accepted_alternatives:
+      - дополнительно указание на п. 400 (не менее 2 на этаж общественного здания) и п. 406 (расстояния 20 м / 30 м)
+      - источник нормы — пп. 5.1.2.5, 5.13.2–5.13.5 Инструкции о мерах ПБ вместо или вместе с ПП РФ № 1479
+      - упоминание, что план эвакуации на объекте разработан и размещён на каждом этаже
+      - вопрос в clarifying_questions о площадях помещений для расчёта количества
+    forbidden_conclusions:
+      - план эвакуации не нужен
+      - в серверной с АУГП огнетушители не требуются
+      - количество огнетушителей снижается на 50 % для всего объекта
+      - план нужен, потому что на 2 этаже 50 и более человек
+    object_facts:
+      sufficient:
+        - раздел 7 листа unit_dispatch — здание целиком, одновременно до 60 человек, на 2 этаже до 45; план разработан
+        - раздел 2 листа unit_dispatch — серверная В3/E, электрощитовая В4/E, 2 этаж общественного назначения
+        - раздел 3 листа unit_dispatch — АУГП в серверной
+        - раздел 4 листа unit_dispatch — 6 огнетушителей ОП-4/ОП-5
+      missing:
+        - площади помещений (для точного расчёта количества)
+    norm:
+      - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 50", applies_to: здание (одновременно находящиеся люди; 60 — по зданию, объект занимает здание целиком), verified: true}
+      - {document_id: ext_ppr_1479, point: "приложение № 1", edition: "ред. от 24.10.2022 № 1885", operator: "ранг не ниже 55В, С, Е или 2А, 55В, С, Е", applies_to: помещение категории А, Б, В1–В4, класс пожара E, verified: true}
+      - {document_id: ext_ppr_1479, point: "п. 405", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "= 50 % расчётного количества", applies_to: помещение с автоматической установкой пожаротушения, verified: true}
+      - {document_id: ext_ppr_1479, point: "п. 400", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 2", applies_to: этаж общественного здания, verified: true}
+    expected:
+      v1:
+        status: answered
+        reasons: []
+        alternatives:
+          - {status: needs_context, reasons: [applicability_unclear], why: модель спрашивает площади помещений для расчёта}
+          - {status: needs_review, reasons: [internal_evidence_missing], why: процитированы только нормы ПП РФ № 1479}
+      v2:
+        status: answered
+        reasons: []
+        alternatives:
+          - {status: needs_context, reasons: [applicability_unclear], why: модель спрашивает площади помещений для расчёта}
+          - {status: needs_review, reasons: [internal_evidence_missing], why: applied со ссылками obj + ext без ЛНА}
+    sources:
+      - {document_id: ext_ppr_1479, section: "I. Общие положения, п. 5"}
+      - {document_id: ext_ppr_1479, section: "XIX, п. 405"}
+      - {document_id: ext_ppr_1479, section: "приложение № 1"}
+      - {document_id: int_instr_mery_pb, section: "5.1.2.5"}
+      - {document_id: int_instr_mery_pb, section: "5.13.2, 5.13.5"}
+      - {document_id: int_unit_dispatch_list, section: "2 Категории помещений"}
+      - {document_id: int_unit_dispatch_list, section: "3 Системы противопожарной защиты объекта"}
+      - {document_id: int_unit_dispatch_list, section: "4 Первичные средства пожаротушения"}
+      - {document_id: int_unit_dispatch_list, section: "7 Планировка и эвакуация"}
+  - n: 3
+    unit_id: unit_depot
+    question: Действует ли у нас инструкция для складских помещений и когда испытывать наружную пожарную лестницу?
+    checks: факт + норма
+    required_subanswers:
+      - да, на объекте действует Инструкция о мерах пожарной безопасности в складских и подсобных помещениях
+      - эксплуатационные испытания наружной пожарной лестницы — не реже 1 раза в 5 лет с составлением протокола
+      - дата последнего испытания в сведениях не указана, срок следующего испытания не вычисляется
+    accepted_alternatives:
+      - источник периодичности — п. 5.1.2.12 Инструкции о мерах ПБ вместо или вместе с п. 17 «б» ПП РФ № 1479
+      - вопрос в clarifying_questions о дате последнего испытания
+      - ссылка на п. 5.12 Инструкции о мерах ПБ как на документ, устанавливающий требования к складам
+    forbidden_conclusions:
+      - периодичность испытаний определяется только протоколом объекта (без предела 5 лет)
+      - конкретная дата следующего испытания
+      - инструкция для складских помещений на объекте не действует
+    object_facts:
+      sufficient:
+        - раздел 9 листа unit_depot — действует Инструкция о мерах ПБ в складских и подсобных помещениях
+        - раздел 8 листа unit_depot — есть наружная металлическая лестница на кровлю
+      missing:
+        - дата последнего испытания лестницы ([дата])
+    expected:
+      v1:
+        status: answered
+        reasons: []
+        alternatives:
+          - {status: needs_context, reasons: [applicability_unclear], why: модель спрашивает дату последнего испытания}
+          - {status: needs_review, reasons: [external_evidence_missing], why: цитируются лист и Инструкция без ПП РФ № 1479}
+      v2:
+        status: answered
+        reasons: []
+        alternatives:
+          - {status: needs_context, reasons: [applicability_unclear], why: модель спрашивает дату последнего испытания}
+          - {status: needs_review, reasons: [external_evidence_missing], why: applied со ссылками obj + int без ПП РФ № 1479}
+          - {status: needs_review, reasons: [internal_evidence_missing], why: applied со ссылками obj + ext без Инструкции}
+    sources:
+      - {document_id: ext_ppr_1479, section: "I. Общие положения, п. 17 «б»"}
+      - {document_id: int_instr_mery_pb, section: "5.1.2.12"}
+      - {document_id: int_instr_mery_pb, section: "5.12"}
+      - {document_id: int_unit_depot_list, section: "8 Технические особенности"}
+      - {document_id: int_unit_depot_list, section: "9 Складские и подсобные помещения"}
+  - n: 4
+    unit_id: null
+    question: Нужен ли на нашем объекте план эвакуации?
+    checks: needs_context
+    required_subanswers: []
+    accepted_alternatives: []
+    forbidden_conclusions:
+      - любой ответ «нужен» или «не нужен» без выбранного объекта
+    object_facts: {sufficient: [], missing: [объект не выбран]}
+    expected:
+      v1: {status: needs_context, reasons: [applicability_unclear]}
+      v2: {status: needs_context, reasons: [applicability_unclear]}
+    sources: []
+  - n: 5
+    unit_id: unit_office
+    question: Кто принимает сигнал пожарной сигнализации ночью?
+    checks: fact_only
+    required_subanswers:
+      - сигналы АПС принимает пост охраны бизнес-центра
+    accepted_alternatives:
+      - «охрана бизнес-центра», «пост охраны арендодателя»
+    forbidden_conclusions:
+      - на объекте есть круглосуточное дежурство
+      - сигнал принимает собственная диспетчерская офиса
+    object_facts: {sufficient: [раздел 5 листа unit_office], missing: []}
+    expected:
+      v1:
+        status: needs_review
+        reasons: [external_evidence_missing]
+        note: в v1 лист — внутренний документ, fact_only не существует
+      v2: {status: answered, reasons: []}
+    sources:
+      - {document_id: int_unit_office_list, section: "5 Дежурный персонал"}
+  - n: 6
+    unit_id: unit_office
+    question: Как оформить ежегодный отпуск?
+    checks: out_of_scope
+    required_subanswers: []
+    accepted_alternatives: []
+    forbidden_conclusions:
+      - любой порядок оформления отпуска
+    object_facts: {sufficient: [], missing: []}
+    expected:
+      v1: {status: out_of_scope, reasons: []}
+      v2: {status: out_of_scope, reasons: []}
+    sources: []
+  - n: 7
+    unit_id: unit_partial
+    question: Нужен ли на нашем объекте план эвакуации?
+    checks: граница ровно 50
+    required_subanswers:
+      - да, план эвакуации нужен — одновременно ровно 50 человек, а норма «50 и более» включает границу
+      - сведений о разработанном плане эвакуации нет
+    accepted_alternatives:
+      - обоснование через здание: на этаже 50 человек, значит в здании не менее 50
+      - дополнительно условие о 10 и более постоянных рабочих местах на этаже
+      - источник — п. 5.1.2.5 Инструкции о мерах ПБ вместо или вместе с п. 5 ПП РФ № 1479
+    forbidden_conclusions:
+      - план не нужен, потому что людей не больше 50 (или нужно больше 50)
+      - план эвакуации на объекте разработан / есть
+    object_facts:
+      sufficient:
+        - раздел 7 листа unit_partial — весь 2 этаж, одновременно ровно 50 человек, все на одном этаже
+      missing:
+        - сведения о плане эвакуации («сведений нет»)
+        - дата заполнения листа
+    norm:
+      - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 50", applies_to: здание (одновременно находящиеся люди; 50 на этаже — нижняя граница для здания), verified: true}
+      - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 10", applies_to: этаж (постоянные рабочие места; для учебного класса не основное условие), verified: true}
+    expected:
+      v1:
+        status: answered
+        reasons: []
+        alternatives:
+          - {status: needs_context, reasons: [applicability_unclear], why: модель спрашивает о численности в здании или о характере рабочих мест}
+          - {status: needs_review, reasons: [internal_evidence_missing], why: процитирован только п. 5 ПП РФ № 1479}
+      v2:
+        status: needs_review
+        reasons: [object_profile_undated]
+        alternatives:
+          - {status: needs_review, reasons: [internal_evidence_missing, object_profile_undated], why: applied со ссылками obj + ext без ЛНА}
+          - {status: needs_review, reasons: [external_evidence_missing, object_profile_undated], why: applied со ссылками obj + int без ПП РФ № 1479}
+          - {status: needs_context, reasons: [applicability_unclear], why: модель задаёт уточняющий вопрос; decide() возвращает needs_context до проверки даты, поэтому object_profile_undated здесь не появляется (§2.3, порядок проверок)}
+    sources:
+      - {document_id: ext_ppr_1479, section: "I. Общие положения, п. 5"}
+      - {document_id: int_instr_mery_pb, section: "5.1.2.5"}
+      - {document_id: int_prikaz_poryadok_pb, section: "5. План эвакуации"}
+      - {document_id: int_unit_partial_list, section: "7 Планировка и эвакуация"}
+  - n: 8
+    unit_id: unit_partial
+    question: Кто у нас принимает сигнал пожарной сигнализации ночью?
+    checks: раздел 5 отсутствует
+    required_subanswers:
+      - в сведениях об объекте нет данных о дежурном персонале
+    accepted_alternatives:
+      - вопрос в clarifying_questions о порядке приёма сигнала
+    forbidden_conclusions:
+      - любое конкретное лицо или пост, принимающий сигнал
+    object_facts: {sufficient: [], missing: [раздел 5 отсутствует]}
+    expected:
+      v1:
+        status: needs_review
+        reasons: [external_evidence_missing, internal_evidence_missing]
+        alternatives:
+          - {status: needs_context, reasons: [applicability_unclear], why: модель спрашивает о порядке приёма сигнала}
+      v2:
+        status: needs_review
+        reasons: [external_evidence_missing, internal_evidence_missing]
+        alternatives:
+          - {status: needs_context, reasons: [applicability_unclear], why: модель спрашивает о порядке приёма сигнала}
+    sources: []
+  - n: 9
+    unit_id: unit_office
+    question: Есть ли огнезащитная обработка конструкций в зоне офиса и как часто её проверять?
+    checks: present, но факт неизвестен, профиль датирован
+    required_subanswers:
+      - наличие огнезащитной обработки по сведениям об объекте не известно — уточняется у арендодателя
+      - проверка состояния огнезащитного покрытия — по технической документации изготовителя средства огнезащиты или производителя работ, при отсутствии в ней периодичности — не реже 1 раза в год
+    accepted_alternatives:
+      - вопрос в clarifying_questions о наличии обработки или документации у арендодателя
+      - указание, что во внутренних документах требования о периодичности не найдены
+    forbidden_conclusions:
+      - огнезащитная обработка выполнена / есть
+      - огнезащитной обработки нет
+      - проверка проводится реже 1 раза в год при отсутствии сведений в технической документации
+    object_facts:
+      sufficient:
+        - раздел 8 листа unit_office — огнезащитная обработка конструкций: информация уточняется у арендодателя
+      missing:
+        - факт наличия огнезащитной обработки и техническая документация на неё
+    expected:
+      v1:
+        status: answered
+        reasons: []
+        note: в v1 лист — внутренний документ, ссылка на него закрывает внутренний уровень
+        alternatives:
+          - {status: needs_review, reasons: [internal_evidence_missing], why: процитирован только п. 13 ПП РФ № 1479, лист не процитирован}
+          - {status: needs_context, reasons: [applicability_unclear], why: модель спрашивает о наличии обработки у арендодателя}
+      v2:
+        status: needs_review
+        reasons: [internal_evidence_missing]
+        note: ЛНА с периодичностью огнезащиты в корпусе нет; узкий вывод на внешней норме — ожидаемое поведение (§2.3)
+        alternatives:
+          - {status: needs_context, reasons: [applicability_unclear], why: модель спрашивает о наличии обработки у арендодателя}
+          - {status: needs_review, reasons: [object_fact_normative, internal_evidence_missing], why: периодичность проверки вынесена в object_facts}
+    sources:
+      - {document_id: ext_ppr_1479, section: "I. Общие положения, п. 13 абз. 2"}
+      - {document_id: int_unit_office_list, section: "8 Технические особенности"}
