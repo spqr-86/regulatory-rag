@@ -91,12 +91,14 @@ class ModelAnswer(ModelAnswerV1):
 
 
 class PromptVars(BaseModel):
-    """Only way to render prompts/agents/department_answer_v1.j2."""
+    """Only way to render prompts/agents/department_answer_v{1,2}.j2; v1 ignores object fields."""
 
     question: str
     unit_label: str
     external_evidence: list[Evidence]
     internal_evidence: list[Evidence]
+    object_label: str = ""
+    object_sections: list[ObjectSection] = Field(default_factory=list)
 
 
 def _facts(answer: ModelAnswerV1) -> list[ObjectFact]:

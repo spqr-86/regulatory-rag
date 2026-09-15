@@ -19,3 +19,4 @@ department_answer:
   active_version: "v1"
   versions:
     v1: "agents/department_answer_v1.j2"
+    v2: "agents/department_answer_v2.j2"
