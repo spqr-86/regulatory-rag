@@ -267,9 +267,21 @@ claim or that every part of the question is answered — an external review (202
 measured in eval (required sub-answers, forbidden conclusions), not enforced at runtime; the UI
 says so. Revisit with a groundedness check if eval shows `answered` hiding wrong conclusions.
 
-**Evidence.** Pending: paired v1/v2 run on the 6 smoke questions plus 2 boundary questions on a
-partial synthetic sheet, expectations committed before the run. Spec:
-[2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
+**Evidence.** Paired v1/v2 run, 2026-09-15 (`gpt-4o-mini`, temperature 0, 9 questions × 2
+modes, expectations committed before the run). v1 matched 7/9 expected status+reasons
+(7/17 required sub-answers credited, 2 forbidden conclusions found: `q4` answered "да" with
+no unit selected, and `q8` named a specific duty officer the sheet does not evidence for that
+unit). v2 matched 8/9 (11/17 sub-answers credited, 1 forbidden conclusion found in `q1`, where
+`applied_conclusions` drew a plan-required conclusion from an 8-person headcount that meets
+neither the building nor floor threshold). Full per-question breakdown and quotes:
+[`eval/runs/object_profile_pair_2026-09-15/summary.md`](../../eval/runs/object_profile_pair_2026-09-15/summary.md).
+Spec: [2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
+
+**Default mode.** Решение ожидает (Пётр решает: оставить `v1` по умолчанию или переключить на
+`v2`). Условие пересмотра: v2 обошло v1 по всем трём числам и не допустило answered-без-объекта
+или подмены отсутствующего факта общей нормой, но само дало 1 запрещённый вывод (applied
+conclusion от факта ниже нормативного порога) и закрыло меньше половины подответов — решение
+не откладывается дальше без разбора этого конкретного случая человеком.
 
 ---
 

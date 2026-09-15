@@ -1,0 +1,15 @@
+{
+  "mode": "v1",
+  "model": "gpt-4o-mini",
+  "provider": "openai",
+  "temperature": 0.0,
+  "top_k_per_level": 8,
+  "fusion": "rrf(vector, bm25)",
+  "chroma_db_path": "./chroma_db_dept",
+  "collection": "department_demo",
+  "chunks": 1167,
+  "prompt_version": "v1",
+  "expectations_sha256": "1895ec1de17ee076d792ad3b7c480ce75e2e2fc41da98511e1a35db2b0527281",
+  "profiles": {},
+  "questions": 9
+}
