@@ -48,6 +48,11 @@ class ObjectProfile(BaseModel):
 - **Ограничение:** «Информация уточняется» — это `present`. Неизвестность факта внутри текста
   раздела распознаёт модель, не парсер (проверяется вопросом «факт неизвестен», §5.2).
 - Раздел 6 «Контактные телефоны объекта» парсится, но в промпт не передаётся.
+- **Правила разбора.** Раздел распознаётся по заголовку `## N <название>`, где N от 1 до 9;
+  название не сверяется. Заголовки с другими номерами и первый заголовок листа
+  («Лист особенностей…») разделами не считаются. Повтор номера → `ObjectProfileError`.
+  Строка `Дата заполнения: …` ищется в любом месте листа и **вырезается** из текста раздела,
+  в котором стоит (сейчас это раздел 9): дата живёт только в `as_of_date`.
 - Structured-поля (численность, категории как числа/enum) — только если eval покажет
   систематическую ошибку применения факта. В этой итерации не делаются.
 
@@ -81,19 +86,36 @@ class ModelAnswer(BaseModel):
 
 `Level` расширяется значением `"object"`, префикс `obj_` → `object`.
 
-Правила `check_citations` / `decide` (порядок проверки сохраняется: `out_of_scope` →
-цитаты → уточнения → основания):
+Правила `check_citations` / `decide`. Порядок: `out_of_scope` → цитаты (при любой ошибке
+возвращается ровно `["citation_invalid"]`) → уточнения → reason_codes.
+
+Определения:
+
+- `has_ext` / `has_int` — есть хотя бы один `ext_*` / `int_*` в `external_basis` /
+  `internal_basis` **или** в `applied_conclusions`: норма, применённая к объекту, считается
+  найденной нормой.
+- `cites_object` — есть хотя бы один `obj_*` в `object_facts` или `applied_conclusions`.
+- `fact_only` — `object_facts` не пуст, `applied_conclusions` пуст, `has_ext` и `has_int` ложны.
 
 | Ситуация | Статус / reason |
 |---|---|
+| Пустой `evidence_ids` у любого элемента (`Basis`, `ObjectFact`, `AppliedConclusion`) | `failed` / `citation_invalid` |
 | Несуществующий id, в том числе `obj_s*` при непереданном профиле | `failed` / `citation_invalid` |
 | Уровень перепутан: `ext_`/`int_` в `object_facts`, `obj_` в `external_basis`/`internal_basis` | `failed` / `citation_invalid` |
-| Ссылка на раздел с `presence: missing` (или на раздел 6) | `failed` / `citation_invalid` |
+| Ссылка на раздел с `presence: missing` или на раздел 6 — такие разделы не кладутся в `evidence`, это частный случай «несуществующего id» | `failed` / `citation_invalid` |
 | `applied_conclusions` без `obj_*` | `failed` / `citation_invalid` |
 | `applied_conclusions` с `obj_*`, но без `ext_*`/`int_*` | `needs_review` / `applied_without_norm` |
-| Процитирован `obj_*`, `as_of_date is None` | `needs_review` / `object_profile_undated` |
-| Только `object_facts`, нет `applied_conclusions`, нет ext/int | `answered` — отсутствие норм не штрафуется |
-| Есть `applied_conclusions` | прежние `external_evidence_missing` / `internal_evidence_missing` применяются как в v1 |
+| `clarifying_questions` не пуст и не (`has_ext` и `has_int`) — в том числе при `fact_only` | `needs_context` / `applicability_unclear` (как в v1) |
+| `fact_only` | `external_evidence_missing` / `internal_evidence_missing` **не** добавляются |
+| Не `fact_only` (есть applied или хотя бы одна норма) | `external_evidence_missing` / `internal_evidence_missing` по `has_ext` / `has_int`, как в v1 |
+| `cites_object` и `as_of_date is None` | добавляется `object_profile_undated` |
+| `possible_mismatch` при `has_ext` и `has_int` | добавляется `possible_mismatch` (как в v1) |
+
+reason_codes накапливаются в порядке строк таблицы: `applied_without_norm`,
+`external_evidence_missing`, `internal_evidence_missing`, `object_profile_undated`,
+`possible_mismatch`. Непустой список → `needs_review`, пустой → `answered`.
+Пример: `object_facts` + `external_basis`, без applied → `needs_review` /
+`internal_evidence_missing`.
 
 Обоснование строки «только факты → answered»: вопрос «кто ночью принимает сигнал» — вопрос о
 факте объекта, нормы в нём нет; v1 штрафовал его `external_evidence_missing`.
@@ -101,15 +123,20 @@ class ModelAnswer(BaseModel):
 ### 2.4. Поток данных
 
 1. `corpus/manifest.yaml`: у листа `role: object_profile` (остальные документы — без `role`).
-   Валидация: `role: object_profile` допустим только при `source_type: internal`, `scope: unit`.
+   Валидация: `role: object_profile` допустим только при `source_type: internal`, `scope: unit`;
+   не больше одного листа на `unit_id`. `Manifest` получает поле
+   `object_profiles: dict[unit_id, file]` — `role` в метаданные чанков не пишется.
 2. `apply_manifest` отбрасывает чанки документов с `role: object_profile` — листы не попадают
    ни в Chroma, ни в BM25.
 3. Новый модуль `src/department_qa/object_profile.py`: `load_profiles(manifest, source_dir)
-   → dict[unit_id, ObjectProfile]`. Лист, в котором не распознан ни один раздел шаблона,
+   → dict[unit_id, ObjectProfile]`; `source_dir` передаёт `wiring.py` из
+   `settings.SOURCE_DOCS_PATH`. Лист, в котором не распознан ни один раздел шаблона,
    → `ObjectProfileError` при старте (ошибка данных, не деградация). Отдельный отсутствующий
    раздел → `missing`, не падение.
 4. `answer_question(..., profile: Optional[ObjectProfile])`: разделы (кроме 6) становятся
    evidence уровня `object` с id `obj_sN` и попадают в тот же словарь `evidence` для проверки.
+   Поля: `title` — название листа, `locator` — «N <название раздела>», `source` — имя файла,
+   `document_id` — из manifest. Разделы `missing` и раздел 6 в `evidence` не кладутся.
 5. Промпт `department_answer` **v2** (v1 остаётся в registry для парного прогона):
    блок «СВЕДЕНИЯ ОБ ОБЪЕКТЕ» с датой заполнения и разделами;
    - подразделение не выбрано → «объект не выбран»; вопрос, зависящий от объекта, →
@@ -118,7 +145,10 @@ class ModelAnswer(BaseModel):
    - раздел `empty` показывается как «(не заполнено)».
    Правила: `object_facts` — только `obj_*`; `applied_conclusions` — факт объекта плюс норма;
    норма без факта — в `external_basis`/`internal_basis`.
+   `PromptVars` расширяется полями `object_label` и `object_sections` со значениями по
+   умолчанию; v1 рендерится из того же класса и новые поля игнорирует.
 6. `DepartmentResponse` + `object_facts`, `applied_conclusions`, `profile_as_of_date`.
+   `evidence` в ответе фильтруется по id из всех четырёх списков, включая `obj_*`.
 7. Streamlit-страница: блок «Сведения объекта» (процитированные разделы и дата заполнения).
 
 ## 3. Вне этой итерации
@@ -162,9 +192,17 @@ class ModelAnswer(BaseModel):
 | 7 | `unit_partial` | Нужен ли на нашем объекте план эвакуации? (граница 50 человек) |
 | 8 | `unit_partial` | Кто у нас принимает сигнал пожарной сигнализации ночью? (раздел 5 отсутствует) |
 
-- v1 — текущая коллекция `department_demo` (листы в индексе), промпт v1. Для вопросов 7–8 лист
-  `unit_partial` индексируется в неё же, чтобы сравнение было на одинаковых данных.
-- v2 — новая коллекция без листов, профили из `object_profile.py`, промпт v2.
+- **Порядок сборки коллекций.** После введения `role` пересборка `department_demo` потеряет
+  листы. Поэтому первый шаг плана, до любых изменений кода: лист `unit_partial` добавляется
+  в manifest без `role` и `department_demo` пересобирается текущим `index.py` — это база v1
+  на тех же данных. После этого `department_demo` не пересобирается до конца сравнения.
+  Затем в manifest у четырёх листов ставится `role: object_profile`.
+- v1 — коллекция `department_demo`, промпт v1.
+- v2 — новая коллекция `department_demo_v2` без листов, профили из `object_profile.py`,
+  промпт v2.
+- Скрипт `eval/run_object_profile_pair.py`; версия промпта выбирается через
+  `PROMPT_DEPARTMENT_ANSWER_VERSION` (`PromptManager`). `active_version` в `registry.yaml`
+  остаётся v1 до разбора итога; переключение — отдельное решение по результату.
 - Модель `gpt-4o-mini`, 16 вызовов, оценка < $0.05.
 - **Ожидания** (статус, reason_codes, ключевой вывод, какие `obj_s*` должны быть процитированы)
   записываются в `eval/data/object_profile_pair_expectations.yaml` и коммитятся **до** прогона.
