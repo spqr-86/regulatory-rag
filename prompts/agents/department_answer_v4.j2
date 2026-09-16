@@ -49,7 +49,7 @@
 
 # ТИПИЗИРОВАННЫЕ ФАКТЫ ОБ ОБЪЕКТЕ
 
-{% for f in typed_fields %}[{{ f.section_id }}] {{ f.label }}: {{ f.value }}
+{% for f in typed_fields %}[{{ f.id }}] {{ f.label }}: {{ f.value }}
 {% else %}{{ object_label }}
 {% endfor %}
 

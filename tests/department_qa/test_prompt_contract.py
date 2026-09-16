@@ -117,6 +117,7 @@ def test_v4_renders_typed_fields_before_raw_sections():
         object_label="Лист: офис.",
         typed_fields=[
             TypedFieldLine(
+                id="obj_f_people_in_building_total",
                 section_id="obj_s7",
                 label="Людей в здании всего",
                 value="неизвестно",
@@ -127,7 +128,7 @@ def test_v4_renders_typed_fields_before_raw_sections():
     text = PromptManager().render(
         "department_answer", version="v4", **vars_.model_dump()
     )
-    field = "[obj_s7] Людей в здании всего: неизвестно"
+    field = "[obj_f_people_in_building_total] Людей в здании всего: неизвестно"
     assert field in text
     assert text.index(field) < text.index("# СВЕДЕНИЯ ОБ ОБЪЕКТЕ")
     assert "одноимённое типизированное поле" in text

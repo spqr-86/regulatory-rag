@@ -185,6 +185,32 @@ def test_profile_sections_become_object_evidence_and_prompt_block():
 
 
 @pytest.mark.unit
+def test_typed_field_id_is_valid_object_evidence():
+    answer = ModelAnswer(
+        answer="Число людей в здании неизвестно.",
+        object_facts=[
+            ObjectFact(
+                statement="Число людей в здании неизвестно",
+                evidence_ids=["obj_f_people_in_building_total"],
+            )
+        ],
+    )
+
+    result = answer_question(
+        "Сколько людей в здании?",
+        "unit_1",
+        FakeSearch(),
+        _model(answer),
+        profile=_profile(),
+        prompt_version="v4",
+    )
+
+    assert (result.status, result.reason_codes) == ("answered", [])
+    assert [e.id for e in result.evidence] == ["obj_f_people_in_building_total"]
+    assert result.evidence[0].text == "Людей в здании всего: неизвестно"
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize("section_id", ["obj_s4", "obj_s5", "obj_s6"])
 def test_empty_missing_and_contacts_sections_are_not_citable(section_id):
     bad = ModelAnswer(

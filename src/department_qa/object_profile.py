@@ -7,6 +7,7 @@
 #   template: sheet title "## Лист особенностей объекта защиты…", sections "## N Title"
 #   (N 1–9, title checked against SECTION_TITLES), optional "Дата заполнения: ДД.ММ.ГГГГ".
 # Output: ObjectProfile with all nine sections (present / empty / missing).
+#   Typed fields are exposed as individually citable obj_f_* evidence.
 # Failure modes: any grammar violation → ObjectProfileError at startup (data error,
 #   not degradation). The parser does not read meaning: "информация уточняется" is present.
 """
@@ -247,32 +248,34 @@ def parse_profile(
 
 
 def typed_fields_prompt_lines(profile: ObjectProfile) -> list[TypedFieldLine]:
-    def display(value) -> str:
-        if value == UNKNOWN:
-            return "неизвестно"
-        if value == NOT_APPLICABLE:
-            return "не применимо"
-        if isinstance(value, bool):
-            return "да" if value else "нет"
-        if isinstance(value, date):
-            return value.strftime("%d.%m.%Y")
-        if isinstance(value, list):
-            return "; ".join(value)
-        return str(value)
-
     return [
         TypedFieldLine(
+            id=f"obj_f_{key}",
             section_id=f"obj_s{section}",
             label=label,
-            value=display(getattr(profile.typed_fields, key)),
+            value=_display_field_value(getattr(profile.typed_fields, key)),
         )
         for key, (section, label, _kind) in FIELD_SPECS.items()
     ]
 
 
+def _display_field_value(value) -> str:
+    if value == UNKNOWN:
+        return "неизвестно"
+    if value == NOT_APPLICABLE:
+        return "не применимо"
+    if isinstance(value, bool):
+        return "да" if value else "нет"
+    if isinstance(value, date):
+        return value.strftime("%d.%m.%Y")
+    if isinstance(value, list):
+        return "; ".join(value)
+    return str(value)
+
+
 def profile_evidence(profile: ObjectProfile) -> list[Evidence]:
-    """Citable sections only: present and not contacts (spec object-profile §2.4 п. 4)."""
-    return [
+    """Citable raw sections and individually addressable typed fields."""
+    sections = [
         Evidence(
             id=s.id,
             level="object",
@@ -285,6 +288,19 @@ def profile_evidence(profile: ObjectProfile) -> list[Evidence]:
         for s in profile.sections.values()
         if s.presence == "present" and s.number != CONTACTS_SECTION
     ]
+    fields = [
+        Evidence(
+            id=field.id,
+            level="object",
+            text=f"{field.label}: {field.value}",
+            source=profile.source,
+            title=profile.title,
+            locator=f"Типизированное поле: {field.label}",
+            document_id=profile.document_id,
+        )
+        for field in typed_fields_prompt_lines(profile)
+    ]
+    return sections + fields
 
 
 def profile_prompt_block(

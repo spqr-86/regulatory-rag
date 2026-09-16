@@ -12,6 +12,8 @@ from src.department_qa.object_profile import (
     ObjectProfileError,
     load_profiles,
     parse_profile,
+    profile_evidence,
+    typed_fields_prompt_lines,
 )
 from src.indexing.manifest import load_manifest
 
@@ -69,6 +71,37 @@ def test_full_sheet_has_nine_present_sections():
     assert profile.typed_fields.evacuation_plan_present is True
     assert profile.typed_fields.room_categories == ["В2", "Д"]
     assert "Типизированные поля" not in profile.sections["obj_s7"].text
+
+
+@pytest.mark.unit
+def test_typed_fields_have_stable_semantic_evidence_ids():
+    profile = _parse(_sheet(FULL))
+
+    lines = typed_fields_prompt_lines(profile)
+
+    assert [line.id for line in lines] == [
+        "obj_f_people_in_object_zone",
+        "obj_f_people_on_floor_total",
+        "obj_f_people_in_building_total",
+        "obj_f_permanent_workplaces_on_floor",
+        "obj_f_evacuation_plan_present",
+        "obj_f_room_categories",
+        "obj_f_aupt_present",
+        "obj_f_extinguishers_total",
+        "obj_f_outside_ladder_last_test_date",
+    ]
+
+
+@pytest.mark.unit
+def test_typed_fields_are_individually_citable_evidence():
+    profile = _parse(_sheet(FULL))
+
+    evidence = {item.id: item for item in profile_evidence(profile)}
+
+    field = evidence["obj_f_people_in_building_total"]
+    assert field.level == "object"
+    assert field.text == "Людей в здании всего: 25"
+    assert field.locator == "Типизированное поле: Людей в здании всего"
 
 
 @pytest.mark.unit

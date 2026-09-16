@@ -62,8 +62,9 @@ class ObjectSection(BaseModel):
 
 
 class TypedFieldLine(BaseModel):
-    """One canonical object field rendered with its existing section evidence id."""
+    """One canonical object field with its own stable evidence id."""
 
+    id: str
     section_id: str
     label: str
     value: str
