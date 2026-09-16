@@ -1,0 +1,22 @@
+{
+  "mode": "v2",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "provider": "openrouter",
+  "temperature": 0.0,
+  "top_k_per_level": 8,
+  "fusion": "rrf(vector, bm25)",
+  "chroma_db_path": "./chroma_db_dept_v2",
+  "collection": "department_demo_v2",
+  "chunks": 1115,
+  "prompt_version": "v4",
+  "verify_prompt_version": "v1",
+  "verification_enabled": true,
+  "expectations_sha256": "e618e52339a78da09281cd56babfd21b6883166c9b11ca49628e201a14356d4c",
+  "profiles": {
+    "unit_office": "39347c767e73adbffaf3248f8f697f8dd9a1d5ca710840eaefe47716ee63587e",
+    "unit_dispatch": "41d5a17e928c2a0e559344c2f0afae27dc85dc2aada7d4deb360b1bf75c299d0",
+    "unit_depot": "add475f546616d86d116335e6123ea57654500a065a17455ac0afea5488a82fd",
+    "unit_partial": "7f3ad281b099a31fc5ab333501d1acd5ad2976e45c8ab740a0e026be1f651fb8"
+  },
+  "questions": 1
+}
