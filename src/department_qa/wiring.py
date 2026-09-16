@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
@@ -87,7 +88,10 @@ def build_mode_config(
 def ensure_store_matches(
     config: ModeConfig, chroma_db_path: str, collection: str
 ) -> None:
-    if (chroma_db_path, collection) != (config.chroma_db_path, config.collection):
+    same_path = os.path.abspath(chroma_db_path) == os.path.abspath(
+        config.chroma_db_path
+    )
+    if not same_path or collection != config.collection:
         raise RuntimeError(
             f"DEPARTMENT_QA_MODE={config.mode} needs CHROMA_DB_PATH={config.chroma_db_path} "
             f"and CHROMA_COLLECTION_NAME={config.collection}; "

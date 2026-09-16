@@ -7,20 +7,24 @@
 # Input: expectations file (n, unit_id, question); DepartmentStack from
 #   build_department_stack(recorder=...).
 # Output: eval/runs/<out>/<mode>/q<N>.json per question (prompt, raw model output incl.
-#   schema retries, evidence passed to search, DepartmentResponse) and
+#   schema retries, search calls with raw hits, evidence ids in prompt order,
+#   DepartmentResponse) and
 #   eval/runs/<out>/<mode>/config.json (run configuration, no secrets).
 #
 # The Chroma store and BM25 index are process-wide singletons taken from settings,
 # so each mode runs in its own process with its own CHROMA_DB_PATH/collection.
-# Every call is logged in full: prompt, raw model output (all attempts), evidence
-# passed to the prompt, DepartmentResponse; plus the run configuration.
+# Every call is logged in full: prompt, raw model output (all attempts), search calls,
+# ids of the evidence given to the prompt, DepartmentResponse; plus the run configuration.
+# Runs recorded before Issue #47 store raw search hits under `evidence_passed`.
 
 Usage::
 
     RUN=eval/runs/object_profile_pair_2026-09-DD
     DEPARTMENT_QA_MODE=v1 CHROMA_DB_PATH=./chroma_db_dept CHROMA_COLLECTION_NAME=department_demo \\
+      CORPUS_MANIFEST_PATH=corpus/manifest.yaml SOURCE_DOCS_PATH=./source_docs_dept \\
       .venv/bin/python eval/run_object_profile_pair.py --out $RUN
     DEPARTMENT_QA_MODE=v2 CHROMA_DB_PATH=./chroma_db_dept_v2 CHROMA_COLLECTION_NAME=department_demo_v2 \\
+      CORPUS_MANIFEST_PATH=corpus/manifest.yaml SOURCE_DOCS_PATH=./source_docs_dept \\
       .venv/bin/python eval/run_object_profile_pair.py --out $RUN
 
 Paid: 9 calls per mode (+ at most 9 schema retries). Budget agreed 15.09: < $0.05 for 18 calls.
@@ -31,6 +35,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -92,6 +97,14 @@ def load_questions(path: Path) -> list[dict]:
     ]
 
 
+_PROMPT_EVIDENCE_ID = re.compile(r"^\[((?:ext|int|obj)_\w+)\]", re.MULTILINE)
+
+
+def prompt_evidence_ids(prompt: str) -> list[str]:
+    """Ids of the evidence blocks in the rendered prompt, in prompt order (spec §5.2)."""
+    return _PROMPT_EVIDENCE_ID.findall(prompt)
+
+
 def run_mode(
     stack, questions: list[dict], out_dir: Path, raw_log: list[dict]
 ) -> list[dict]:
@@ -135,7 +148,8 @@ def run_mode(
                 hashlib.sha256(prompts[0].encode()).hexdigest() if prompts else None
             ),
             "raw_model_output": list(raw_log),
-            "evidence_passed": passed,
+            "search_calls": passed,
+            "evidence_ids": prompt_evidence_ids(prompts[0]) if prompts else [],
             "profile_sha256": profile.content_sha256 if profile else None,
             "response": json.loads(response.model_dump_json()),
         }
