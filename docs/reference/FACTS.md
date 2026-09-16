@@ -48,8 +48,9 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 - applicability_retriever: v2
 - department_answer: v1
 
-`department_answer` v2 exists in the registry (not `active_version`) and is selected by
-`DEPARTMENT_QA_MODE=v2` at runtime, not by the registry — see "Q&A подразделений" below.
+`department_answer` v2 and v3 exist in the registry (neither is `active_version`); `v3` is
+selected by `DEPARTMENT_QA_MODE=v2` at runtime, not by the registry — see "Q&A подразделений"
+below. `v2` is kept unchanged so the 2026-09-15 paired run can be re-rendered.
 
 ## corpus
 - documents: 12 НТД
@@ -73,7 +74,7 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 | mode | Chroma path | collection | profiles | prompt | structured-output schema |
 |---|---|---|---|---|---|
 | `v1` | `./chroma_db_dept` | `department_demo` (sheets in the index) | not loaded, `profile=None` | `department_answer` v1 | `ModelAnswerV1` |
-| `v2` | `./chroma_db_dept_v2` | `department_demo_v2` (sheets excluded, `role: object_profile`) | `load_profiles` | `department_answer` v2 | `ModelAnswer` |
+| `v2` | `./chroma_db_dept_v2` | `department_demo_v2` (sheets excluded, `role: object_profile`) | `load_profiles` | `department_answer` v3 | `ModelAnswer` |
 
 Two Chroma paths exist because `index.py` deletes the whole `CHROMA_DB_PATH` folder before
 writing (not just the collection) — building `department_demo_v2` into `chroma_db_dept` would

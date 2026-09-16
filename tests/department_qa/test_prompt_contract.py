@@ -11,12 +11,16 @@ from src.infra.prompt_manager import PromptManager
 OBJECT_FIELDS = {"object_label", "object_sections"}
 
 
-def _template_vars(version: str) -> set[str]:
+def _template_source(version: str) -> str:
     pm = PromptManager()
     path = pm.registry["department_answer"]["versions"][version]
     env = Environment(loader=FileSystemLoader(pm.prompts_dir))
-    source = env.loader.get_source(env, path)[0]
-    return meta.find_undeclared_variables(env.parse(source))
+    return env.loader.get_source(env, path)[0]
+
+
+def _template_vars(version: str) -> set[str]:
+    env = Environment(loader=FileSystemLoader(PromptManager().prompts_dir))
+    return meta.find_undeclared_variables(env.parse(_template_source(version)))
 
 
 @pytest.mark.unit
@@ -25,8 +29,9 @@ def test_v1_variables_are_contract_without_object_fields():
 
 
 @pytest.mark.unit
-def test_v2_variables_match_contract_fields():
-    assert _template_vars("v2") == set(PromptVars.model_fields)
+@pytest.mark.parametrize("version", ["v2", "v3"])
+def test_object_versions_variables_match_contract_fields(version):
+    assert _template_vars(version) == set(PromptVars.model_fields)
 
 
 @pytest.mark.unit
@@ -52,7 +57,8 @@ def test_render_puts_evidence_ids_and_question_into_prompt():
 
 
 @pytest.mark.unit
-def test_v2_renders_object_block_with_empty_and_missing_markers():
+@pytest.mark.parametrize("version", ["v2", "v3"])
+def test_object_versions_render_object_block_with_empty_and_missing_markers(version):
     vars_ = PromptVars(
         question="Кто принимает сигнал?",
         unit_label="Подразделение: unit_1",
@@ -79,7 +85,7 @@ def test_v2_renders_object_block_with_empty_and_missing_markers():
         ],
     )
     text = PromptManager().render(
-        "department_answer", version="v2", **vars_.model_dump()
+        "department_answer", version=version, **vars_.model_dump()
     )
     assert "СВЕДЕНИЯ ОБ ОБЪЕКТЕ" in text
     assert "Дата заполнения: 01.09.2026" in text
@@ -89,6 +95,22 @@ def test_v2_renders_object_block_with_empty_and_missing_markers():
     )
     assert "5 Дежурный персонал (раздела нет в листе) — ссылаться нельзя" in text
     assert "[obj_s4]" not in text and "[obj_s5]" not in text
+
+
+@pytest.mark.unit
+def test_v3_requires_matching_the_fact_quantity_against_the_threshold():
+    """q1 of the 2026-09-15 run: a plan-required conclusion drawn from 8 people in the
+    office against a 50-per-building / 10-workplaces-per-floor threshold (design
+    decision 10). v3 states the rule; v2 is kept as recorded for that run."""
+    source = _template_source("v3")
+    v2_source = _template_source("v2")
+    for fragment in (
+        "порог",
+        "та же величина",
+        "условно",
+    ):
+        assert fragment in source, fragment
+    assert "та же величина" not in v2_source
 
 
 @pytest.mark.unit
