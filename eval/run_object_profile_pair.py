@@ -51,7 +51,16 @@ EXPECTATIONS = REPO_ROOT / "eval" / "data" / "object_profile_pair_expectations.y
 PAID_QUESTION_COUNT = 9  # spec §5.2: 9 questions × 2 modes = 18 calls, budget < $0.05
 
 
-def check_paid_run(settings, questions: list[dict], mode_dir: Path) -> None:
+DEFAULT_ALLOWED_MODELS = frozenset({"gpt-4o-mini", "openai/gpt-4o-mini"})
+
+
+def check_paid_run(
+    settings,
+    questions: list[dict],
+    mode_dir: Path,
+    allowed_models=DEFAULT_ALLOWED_MODELS,
+    expected_count: int = PAID_QUESTION_COUNT,
+) -> None:
     """Refuse a non-dry paid run outside the agreed budget (spec §5.2, final-review #2).
 
     Raises ``ValueError`` before any paid call when the model, temperature or
@@ -60,10 +69,10 @@ def check_paid_run(settings, questions: list[dict], mode_dir: Path) -> None:
     a prior run.
     """
     errors: list[str] = []
-    allowed_models = {"gpt-4o-mini", "openai/gpt-4o-mini"}
     if settings.SIMPLE_MODEL_NAME not in allowed_models:
         errors.append(
-            f"model must be gpt-4o-mini (spec §5.2), got {settings.SIMPLE_MODEL_NAME!r}"
+            f"model must be one of {sorted(allowed_models)} (default gpt-4o-mini, "
+            f"spec §5.2), got {settings.SIMPLE_MODEL_NAME!r}"
         )
     if settings.TEMPERATURE != 0:
         errors.append(
@@ -74,10 +83,10 @@ def check_paid_run(settings, questions: list[dict], mode_dir: Path) -> None:
             "provider must be openai or openrouter (spec §5.2), "
             f"got {settings.SIMPLE_LLM_PROVIDER!r}"
         )
-    if len(questions) != PAID_QUESTION_COUNT:
+    if len(questions) != expected_count:
         errors.append(
-            f"expectations must yield exactly {PAID_QUESTION_COUNT} questions "
-            f"(spec §5.2, {PAID_QUESTION_COUNT}×2=18 calls), got {len(questions)}"
+            f"expectations must yield exactly {expected_count} questions "
+            f"(spec §5.2 default {PAID_QUESTION_COUNT}), got {len(questions)}"
         )
     mode_dir = Path(mode_dir)
     if mode_dir.exists():
@@ -97,6 +106,15 @@ def load_questions(path: Path) -> list[dict]:
         {"n": q["n"], "unit_id": q.get("unit_id"), "question": q["question"]}
         for q in data.get("questions") or []
     ]
+
+
+def select_questions(questions: list[dict], only: str) -> list[dict]:
+    """Keep questions whose ``n`` is listed in ``only`` ("1,2"), in file order."""
+    wanted = {int(x) for x in only.split(",") if x.strip()}
+    unknown = wanted - {q["n"] for q in questions}
+    if unknown:
+        raise ValueError(f"unknown question numbers: {sorted(unknown)}")
+    return [q for q in questions if q["n"] in wanted]
 
 
 _PROMPT_EVIDENCE_ID = re.compile(r"^\[((?:ext|int|obj)_\w+)\]", re.MULTILINE)
@@ -189,6 +207,14 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--expectations", type=Path, default=EXPECTATIONS)
     parser.add_argument(
+        "--only",
+        help="comma-separated question numbers for a partial paid run, e.g. 1,2",
+    )
+    parser.add_argument(
+        "--model",
+        help="explicitly allow this SIMPLE_MODEL_NAME for the paid run (agreed per run)",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="configuration only, no model calls"
     )
     args = parser.parse_args()
@@ -203,11 +229,19 @@ def main() -> int:
         recorder=raw_log.append, verifier_recorder=verifier_log.append
     )
     questions = load_questions(args.expectations)
+    if args.only:
+        questions = select_questions(questions, args.only)
     mode_dir = args.out / stack.config.mode
     mode_dir.mkdir(parents=True, exist_ok=True)
     if not args.dry_run:
         try:
-            check_paid_run(settings, questions, mode_dir)
+            check_paid_run(
+                settings,
+                questions,
+                mode_dir,
+                allowed_models=({args.model} if args.model else DEFAULT_ALLOWED_MODELS),
+                expected_count=(len(questions) if args.only else PAID_QUESTION_COUNT),
+            )
         except ValueError as exc:
             print(exc, file=sys.stderr)
             return 2
@@ -237,8 +271,13 @@ def main() -> int:
     if args.dry_run:
         return 0
 
+    usage = {"input_tokens": 0, "output_tokens": 0}
     for r in run_mode(stack, questions, mode_dir, raw_log, verifier_log):
         print(r["n"], r["response"]["status"], r["response"]["reason_codes"])
+        for call in r["raw_model_output"] + r["raw_verifier_output"]:
+            for key in usage:
+                usage[key] += (call.get("usage") or {}).get(key) or 0
+    print("usage", json.dumps(usage))
     return 0
 
 

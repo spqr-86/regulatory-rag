@@ -191,8 +191,8 @@ def test_model_fn_records_raw_output_of_every_attempt():
     )
     make_model_fn(llm, recorder=records.append)("prompt")
     assert records == [
-        {"attempt": 1, "raw": "{broken", "parsing_error": "bad"},
-        {"attempt": 2, "raw": '{"answer": "ok"}', "parsing_error": None},
+        {"attempt": 1, "raw": "{broken", "parsing_error": "bad", "usage": None},
+        {"attempt": 2, "raw": '{"answer": "ok"}', "parsing_error": None, "usage": None},
     ]
 
 
@@ -208,3 +208,19 @@ def test_store_path_spelling_does_not_matter(path):
             "v2", manifest=MagicMock(), source_dir="docs", cfg=CFG
         )
     ensure_store_matches(config, path, "department_demo_v2")
+
+
+@pytest.mark.unit
+def test_model_fn_records_token_usage():
+    raw = AIMessage(
+        content="{}",
+        usage_metadata={"input_tokens": 100, "output_tokens": 20, "total_tokens": 120},
+    )
+    llm, _ = _structured([{"parsed": GOOD, "parsing_error": None, "raw": raw}])
+    log = []
+    make_model_fn(llm, recorder=log.append)("prompt")
+    assert log[0]["usage"] == {
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "total_tokens": 120,
+    }

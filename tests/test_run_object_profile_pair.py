@@ -12,6 +12,7 @@ from eval.run_object_profile_pair import (
     load_questions,
     prompt_evidence_ids,
     run_mode,
+    select_questions,
 )
 from src.department_qa.contract import ModelAnswer
 
@@ -146,3 +147,39 @@ def test_prompt_evidence_ids_keeps_prompt_order():
         "[int_001] Инструкция, 5\nтекст\n"
     )
     assert prompt_evidence_ids(prompt) == ["obj_s4", "ext_001", "int_001"]
+
+
+@pytest.mark.unit
+def test_check_paid_run_accepts_explicitly_allowed_model_and_subset(tmp_path):
+    settings = _settings(
+        SIMPLE_LLM_PROVIDER="openrouter", SIMPLE_MODEL_NAME="anthropic/claude-sonnet-5"
+    )
+    assert (
+        check_paid_run(
+            settings,
+            _questions(2),
+            tmp_path / "v2",
+            allowed_models={"anthropic/claude-sonnet-5"},
+            expected_count=2,
+        )
+        is None
+    )
+
+
+@pytest.mark.unit
+def test_check_paid_run_subset_still_checks_count(tmp_path):
+    with pytest.raises(ValueError, match="exactly 2"):
+        check_paid_run(_settings(), _questions(3), tmp_path / "v1", expected_count=2)
+
+
+@pytest.mark.unit
+def test_select_questions_keeps_only_requested_numbers():
+    qs = [{"n": i, "unit_id": None, "question": "q"} for i in range(1, 10)]
+    assert [q["n"] for q in select_questions(qs, "2,1")] == [1, 2]
+
+
+@pytest.mark.unit
+def test_select_questions_rejects_unknown_number():
+    qs = [{"n": 1, "unit_id": None, "question": "q"}]
+    with pytest.raises(ValueError, match="7"):
+        select_questions(qs, "1,7")

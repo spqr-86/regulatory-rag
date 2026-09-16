@@ -121,6 +121,11 @@ def make_model_fn(
                     "attempt": attempt,
                     "raw": raw.content if isinstance(raw, AIMessage) else "",
                     "parsing_error": str(error) if error is not None else None,
+                    "usage": (
+                        dict(raw.usage_metadata)
+                        if isinstance(raw, AIMessage) and raw.usage_metadata
+                        else None
+                    ),
                 }
             )
         return result
