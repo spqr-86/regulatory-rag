@@ -10,7 +10,7 @@ import pytest
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 
-from src.department_qa.contract import ModelAnswer, ModelAnswerV1
+from src.department_qa.contract import ModelAnswer, ModelAnswerV1, VerificationResult
 from src.department_qa.wiring import (
     build_mode_config,
     ensure_store_matches,
@@ -165,6 +165,14 @@ def test_model_fn_uses_requested_schema():
     )
     make_model_fn(llm, schema=ModelAnswerV1)("prompt")
     assert llm.with_structured_output.call_args.args[0] is ModelAnswerV1
+
+
+@pytest.mark.unit
+def test_model_fn_supports_verification_schema():
+    verdict = VerificationResult(verdict="missing", missing_fields=["люди в здании"])
+    llm, _ = _structured([{"parsed": verdict, "parsing_error": None, "raw": None}])
+    assert make_model_fn(llm, schema=VerificationResult)("prompt") == verdict
+    assert llm.with_structured_output.call_args.args[0] is VerificationResult
 
 
 @pytest.mark.unit

@@ -51,6 +51,7 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 `department_answer` v2 and v3 exist in the registry (neither is `active_version`); `v3` is
 selected by `DEPARTMENT_QA_MODE=v2` at runtime, not by the registry — see "Q&A подразделений"
 below. `v2` is kept unchanged so the 2026-09-15 paired run can be re-rendered.
+`department_verify` v1 is an opt-in experimental second call; it is not enabled in the UI.
 
 ## corpus
 - documents: 12 НТД
@@ -97,6 +98,11 @@ Object sheets use `typed_fields_v1` from
 nine strict fields in sections 2, 3, 4, 7 and 8. Prompt v4 renders them as a separate block
 with the existing `obj_sN` evidence ids. `ModelAnswer` and `decide()` do not validate the field
 semantics in this step.
+
+The 2026-09-16 verifier experiment used `openai/gpt-4o-mini` through OpenRouter. It gated
+q1 from `answered` to `needs_review/verification_contradiction`, but failed to diagnose the
+actual missing fields and left the unsafe draft text intact. Artifacts and decision:
+`eval/runs/object_profile_verify_2026-09-16/summary.md`.
 
 ## nodes
 Graph nodes (`src/v7/graph.py`), entry = `intent_gate`:

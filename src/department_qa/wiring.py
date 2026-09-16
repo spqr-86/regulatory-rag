@@ -23,8 +23,9 @@ from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
 from langchain_core.messages import AIMessage, HumanMessage
+from pydantic import BaseModel
 
-from src.department_qa.contract import ModelAnswer, ModelAnswerV1
+from src.department_qa.contract import ModelAnswer, ModelAnswerV1, VerificationResult
 from src.department_qa.object_profile import ObjectProfile, load_profiles
 from src.indexing.manifest import Manifest
 from src.v7.nlp_core import bm25_search, rrf_merge
@@ -103,9 +104,9 @@ def ensure_store_matches(
 
 def make_model_fn(
     llm,
-    schema: type[ModelAnswerV1] = ModelAnswer,
+    schema: type[BaseModel] = ModelAnswer,
     recorder: Optional[Callable[[dict], None]] = None,
-) -> Callable[[str], ModelAnswerV1]:
+) -> Callable[[str], BaseModel]:
     structured = llm.with_structured_output(
         schema, method="json_schema", include_raw=True
     )
@@ -124,7 +125,7 @@ def make_model_fn(
             )
         return result
 
-    def _call(prompt: str) -> ModelAnswerV1:
+    def _call(prompt: str) -> BaseModel:
         messages = [HumanMessage(content=prompt)]
         result = _invoke(messages, 1)
         if result.get("parsing_error") is None and result.get("parsed") is not None:
@@ -152,11 +153,13 @@ class DepartmentStack:
     manifest: Manifest
     search_fn: Callable[..., List[dict]]
     model_fn: Callable[[str], ModelAnswerV1]
+    verifier_fn: Callable[[str], VerificationResult]
     store: object
 
 
 def build_department_stack(
     recorder: Optional[Callable[[dict], None]] = None,
+    verifier_recorder: Optional[Callable[[dict], None]] = None,
 ) -> DepartmentStack:
     """The only assembly of the department Q&A stack: Streamlit page and eval share it."""
     from config.settings import settings
@@ -174,11 +177,16 @@ def build_department_stack(
     )
     store = get_vector_store_backend(load_existing=True)
     init_v7_pipeline(store)  # builds the BM25 index over the same collection
-    model_fn = make_model_fn(get_simple_llm(), schema=config.schema, recorder=recorder)
+    llm = get_simple_llm()
+    model_fn = make_model_fn(llm, schema=config.schema, recorder=recorder)
+    verifier_fn = make_model_fn(
+        llm, schema=VerificationResult, recorder=verifier_recorder
+    )
     return DepartmentStack(
         config=config,
         manifest=manifest,
         search_fn=make_hybrid_search_fn(store),
         model_fn=model_fn,
+        verifier_fn=verifier_fn,
         store=store,
     )

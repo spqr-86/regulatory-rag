@@ -12,12 +12,29 @@ import pytest
 
 
 @pytest.mark.unit
-def test_registry_contains_gemini_and_openai():
+def test_registry_contains_supported_chat_providers():
     """Registry must expose both providers after refactor."""
     from src.infra.llm_factory import _LLM_PROVIDERS
 
     assert "gemini" in _LLM_PROVIDERS
     assert "openai" in _LLM_PROVIDERS
+    assert "openrouter" in _LLM_PROVIDERS
+
+
+@pytest.mark.unit
+def test_openrouter_uses_its_key_and_endpoint(monkeypatch):
+    import src.infra.llm_factory as lf
+
+    spy = MagicMock(name="ChatOpenAI")
+    monkeypatch.setattr(lf, "ChatOpenAI", spy)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
+
+    lf._create_openrouter_llm(model_name="openai/gpt-4o-mini")
+
+    kwargs = spy.call_args.kwargs
+    assert kwargs["model"] == "openai/gpt-4o-mini"
+    assert kwargs["api_key"] == "router-key"
+    assert kwargs["base_url"] == "https://openrouter.ai/api/v1"
 
 
 # --- CARD-5.1: AFC disabled via public bind(), no monkey-patch ----------------

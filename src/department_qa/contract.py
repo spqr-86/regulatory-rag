@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 Level = Literal["external", "internal", "object"]
 Status = Literal["answered", "needs_context", "needs_review", "out_of_scope", "failed"]
+VerificationVerdict = Literal["none", "missing", "contradiction"]
 
 _PREFIX: dict[str, Level] = {"ext_": "external", "int_": "internal", "obj_": "object"}
 _NORM_LEVELS = {"external", "internal"}
@@ -96,6 +97,14 @@ class ModelAnswer(ModelAnswerV1):
 
     object_facts: list[ObjectFact] = Field(default_factory=list)
     applied_conclusions: list[AppliedConclusion] = Field(default_factory=list)
+
+
+class VerificationResult(BaseModel):
+    """Independent check that object facts support the model's applied conclusions."""
+
+    verdict: VerificationVerdict
+    missing_fields: list[str] = Field(default_factory=list)
+    explanation: str = ""
 
 
 class PromptVars(BaseModel):

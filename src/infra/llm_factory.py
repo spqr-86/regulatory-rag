@@ -105,6 +105,26 @@ def _create_openai_llm(**kwargs):
     )
 
 
+def _create_openrouter_llm(**kwargs):
+    dropped = {k: kwargs.pop(k) for k in list(kwargs) if k in _GEMINI_ONLY_KWARGS}
+    if dropped:
+        _log.warning("llm_factory.kwarg_drop", provider="openrouter", dropped=dropped)
+    model = kwargs.pop("model_name", "openai/gpt-4o-mini")
+    temperature = kwargs.pop("temperature", settings.TEMPERATURE)
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY not set")
+    return ChatOpenAI(
+        model=model,
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1",
+        temperature=temperature,
+        timeout=settings.REQUEST_TIMEOUT,
+        max_retries=3,
+        **kwargs,
+    )
+
+
 def _create_gemini_llm(**kwargs):
     """Forward kwargs (thinking_budget, response_mime_type, ...) to get_gemini_llm."""
     return get_gemini_llm(**kwargs)
@@ -112,6 +132,7 @@ def _create_gemini_llm(**kwargs):
 
 _LLM_PROVIDERS = {
     "openai": _create_openai_llm,
+    "openrouter": _create_openrouter_llm,
     "gemini": _create_gemini_llm,
     "deepseek": _create_deepseek_llm,
 }

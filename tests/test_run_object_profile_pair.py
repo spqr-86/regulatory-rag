@@ -106,6 +106,15 @@ def test_check_paid_run_rejects_non_openai_provider(tmp_path):
 
 
 @pytest.mark.unit
+def test_check_paid_run_accepts_openrouter_model_id(tmp_path):
+    settings = _settings(
+        SIMPLE_LLM_PROVIDER="openrouter",
+        SIMPLE_MODEL_NAME="openai/gpt-4o-mini",
+    )
+    assert check_paid_run(settings, _questions(), tmp_path / "v2") is None
+
+
+@pytest.mark.unit
 def test_check_paid_run_rejects_wrong_question_count(tmp_path):
     with pytest.raises(ValueError, match="9"):
         check_paid_run(_settings(), _questions(8), tmp_path / "v1")

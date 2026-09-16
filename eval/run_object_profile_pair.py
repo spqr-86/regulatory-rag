@@ -60,7 +60,8 @@ def check_paid_run(settings, questions: list[dict], mode_dir: Path) -> None:
     a prior run.
     """
     errors: list[str] = []
-    if settings.SIMPLE_MODEL_NAME != "gpt-4o-mini":
+    allowed_models = {"gpt-4o-mini", "openai/gpt-4o-mini"}
+    if settings.SIMPLE_MODEL_NAME not in allowed_models:
         errors.append(
             f"model must be gpt-4o-mini (spec §5.2), got {settings.SIMPLE_MODEL_NAME!r}"
         )
@@ -68,9 +69,10 @@ def check_paid_run(settings, questions: list[dict], mode_dir: Path) -> None:
         errors.append(
             f"temperature must be 0 (spec §5.2), got {settings.TEMPERATURE!r}"
         )
-    if settings.SIMPLE_LLM_PROVIDER != "openai":
+    if settings.SIMPLE_LLM_PROVIDER not in {"openai", "openrouter"}:
         errors.append(
-            f"provider must be openai (spec §5.2), got {settings.SIMPLE_LLM_PROVIDER!r}"
+            "provider must be openai or openrouter (spec §5.2), "
+            f"got {settings.SIMPLE_LLM_PROVIDER!r}"
         )
     if len(questions) != PAID_QUESTION_COUNT:
         errors.append(
@@ -106,7 +108,11 @@ def prompt_evidence_ids(prompt: str) -> list[str]:
 
 
 def run_mode(
-    stack, questions: list[dict], out_dir: Path, raw_log: list[dict]
+    stack,
+    questions: list[dict],
+    out_dir: Path,
+    raw_log: list[dict],
+    verifier_log: list[dict] | None = None,
 ) -> list[dict]:
     from src.department_qa.service import answer_question
 
@@ -115,11 +121,20 @@ def run_mode(
     records = []
     for q in questions:
         prompts: list[str] = []
+        verify_prompts: list[str] = []
         raw_log.clear()
+        if verifier_log is not None:
+            verifier_log.clear()
 
         def model_fn(prompt: str, _prompts=prompts):
             _prompts.append(prompt)
             return stack.model_fn(prompt)
+
+        stack_verifier = getattr(stack, "verifier_fn", None)
+
+        def verifier_fn(prompt: str, _prompts=verify_prompts):
+            _prompts.append(prompt)
+            return stack_verifier(prompt)
 
         profile = stack.config.profiles.get(q["unit_id"]) if q["unit_id"] else None
         passed: list[dict] = []
@@ -137,6 +152,7 @@ def run_mode(
             snapshot_id=stack.manifest.snapshot_id,
             profile=profile,
             prompt_version=stack.config.prompt_version,
+            verifier_fn=verifier_fn if stack_verifier is not None else None,
         )
         record = {
             "n": q["n"],
@@ -148,6 +164,13 @@ def run_mode(
                 hashlib.sha256(prompts[0].encode()).hexdigest() if prompts else None
             ),
             "raw_model_output": list(raw_log),
+            "verify_prompt": verify_prompts[0] if verify_prompts else "",
+            "verify_prompt_sha256": (
+                hashlib.sha256(verify_prompts[0].encode()).hexdigest()
+                if verify_prompts
+                else None
+            ),
+            "raw_verifier_output": list(verifier_log or []),
             "search_calls": passed,
             "evidence_ids": prompt_evidence_ids(prompts[0]) if prompts else [],
             "profile_sha256": profile.content_sha256 if profile else None,
@@ -175,7 +198,10 @@ def main() -> int:
     from src.department_qa.wiring import build_department_stack
 
     raw_log: list[dict] = []
-    stack = build_department_stack(recorder=raw_log.append)
+    verifier_log: list[dict] = []
+    stack = build_department_stack(
+        recorder=raw_log.append, verifier_recorder=verifier_log.append
+    )
     questions = load_questions(args.expectations)
     mode_dir = args.out / stack.config.mode
     mode_dir.mkdir(parents=True, exist_ok=True)
@@ -196,6 +222,8 @@ def main() -> int:
         "collection": settings.CHROMA_COLLECTION_NAME,
         "chunks": sum(1 for _ in stack.store.iter_all_documents()),
         "prompt_version": stack.config.prompt_version,
+        "verify_prompt_version": "v1",
+        "verification_enabled": True,
         "expectations_sha256": hashlib.sha256(
             args.expectations.read_bytes()
         ).hexdigest(),
@@ -209,7 +237,7 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    for r in run_mode(stack, questions, mode_dir, raw_log):
+    for r in run_mode(stack, questions, mode_dir, raw_log, verifier_log):
         print(r["n"], r["response"]["status"], r["response"]["reason_codes"])
     return 0
 

@@ -12,6 +12,7 @@ from src.department_qa.contract import (
     ModelAnswer,
     ObjectFact,
     ObjectSection,
+    VerificationResult,
 )
 from src.department_qa.object_profile import ObjectProfile, TypedObjectFields
 from src.department_qa.service import answer_question
@@ -273,6 +274,75 @@ def test_applied_conclusion_evidence_is_resolved():
     )
     assert result.status == "answered"
     assert [e.id for e in result.evidence] == ["ext_001", "int_001", "obj_s3"]
+
+
+@pytest.mark.unit
+def test_verifier_missing_fact_gates_answered_to_needs_context():
+    applied = ModelAnswer(
+        answer="На этаже нужен второй эвакуационный выход.",
+        applied_conclusions=[
+            AppliedConclusion(
+                statement="Порог применён",
+                evidence_ids=["obj_s3", "ext_001", "int_001"],
+            )
+        ],
+    )
+    verify_prompts = []
+
+    def verify(prompt):
+        verify_prompts.append(prompt)
+        return VerificationResult(
+            verdict="missing",
+            missing_fields=["Численность людей на этаже"],
+            explanation="В листе указана только другая величина.",
+        )
+
+    result = answer_question(
+        "Нужен ли второй выход?",
+        "unit_1",
+        FakeSearch(),
+        _model(applied),
+        profile=_profile(),
+        prompt_version="v2",
+        verifier_fn=verify,
+    )
+
+    assert result.status == "needs_context"
+    assert result.reason_codes == ["verification_missing_facts"]
+    assert result.clarifying_questions == ["Численность людей на этаже"]
+    assert result.verification.verdict == "missing"
+    assert "Численность людей на этаже" not in verify_prompts[0]
+    assert "Порог применён" in verify_prompts[0]
+
+
+@pytest.mark.unit
+def test_verifier_failure_fails_closed_without_hiding_answer():
+    applied = ModelAnswer(
+        answer="Вывод.",
+        applied_conclusions=[
+            AppliedConclusion(
+                statement="вывод", evidence_ids=["obj_s3", "ext_001", "int_001"]
+            )
+        ],
+    )
+
+    def broken(_prompt):
+        raise RuntimeError("provider unavailable")
+
+    result = answer_question(
+        "q",
+        "unit_1",
+        FakeSearch(),
+        _model(applied),
+        profile=_profile(),
+        prompt_version="v2",
+        verifier_fn=broken,
+    )
+    assert (result.status, result.reason_codes) == (
+        "needs_review",
+        ["verification_failed"],
+    )
+    assert result.answer == "Вывод."
 
 
 @pytest.mark.unit

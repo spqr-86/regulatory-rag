@@ -32,6 +32,7 @@ from src.department_qa.contract import (
     ObjectFact,
     PromptVars,
     Status,
+    VerificationResult,
     cited_ids,
     decide,
 )
@@ -48,8 +49,10 @@ logger = structlog.get_logger()
 
 SearchFn = Callable[..., list[dict]]
 ModelFn = Callable[[str], ModelAnswerV1]
+VerifierFn = Callable[[str], VerificationResult]
 
 PROMPT_ID = "department_answer"
+VERIFY_PROMPT_ID = "department_verify"
 TOP_K_PER_LEVEL = 8
 
 _NEXT_STEP: dict[str, str] = {
@@ -77,6 +80,7 @@ class DepartmentResponse(BaseModel):
     unit_id: Optional[str] = None
     profile_as_of_date: Optional[date] = None
     profile_sha256: Optional[str] = None
+    verification: Optional[VerificationResult] = None
 
 
 def _to_evidence(passages: list[dict], prefix: str, level) -> list[Evidence]:
@@ -107,6 +111,8 @@ def answer_question(
     prompts: Optional[PromptManager] = None,
     profile: Optional[ObjectProfile] = None,
     prompt_version: Optional[str] = None,
+    verifier_fn: Optional[VerifierFn] = None,
+    verify_prompt_version: str = "v1",
 ) -> DepartmentResponse:
     trace_id = uuid.uuid4().hex
     base = {
@@ -183,6 +189,35 @@ def answer_question(
     status, reasons = decide(
         model_answer, evidence, profile_as_of=profile.as_of_date if profile else None
     )
+    verification = None
+    clarifying_questions = list(model_answer.clarifying_questions)
+    if (
+        verifier_fn is not None
+        and status == "answered"
+        and getattr(model_answer, "applied_conclusions", [])
+    ):
+        try:
+            verify_prompt = (prompts or PromptManager()).render(
+                VERIFY_PROMPT_ID,
+                version=verify_prompt_version,
+                question=question,
+                answer_json=model_answer.model_dump_json(indent=2),
+                evidence=ordered,
+            )
+            verification = verifier_fn(verify_prompt)
+            if verification.verdict == "missing":
+                status = "needs_context"
+                reasons = ["verification_missing_facts"]
+                clarifying_questions.extend(verification.missing_fields)
+            elif verification.verdict == "contradiction":
+                status = "needs_review"
+                reasons = ["verification_contradiction"]
+        except Exception as exc:
+            logger.warning(
+                "department_qa.verification_failed", trace_id=trace_id, error=str(exc)
+            )
+            status = "needs_review"
+            reasons = ["verification_failed"]
     logger.info(
         "department_qa.answer",
         trace_id=trace_id,
@@ -194,6 +229,7 @@ def answer_question(
         n_object=len(objects),
         prompt_version=prompt_version,
         profile_sha256=base["profile_sha256"],
+        verification_verdict=verification.verdict if verification else None,
     )
     if reasons == ["citation_invalid"]:
         return _fail("citation_invalid")
@@ -211,8 +247,9 @@ def answer_question(
         applied_conclusions=getattr(model_answer, "applied_conclusions", []),
         status=status,
         reason_codes=reasons,
-        clarifying_questions=model_answer.clarifying_questions,
+        clarifying_questions=clarifying_questions,
         next_step=_NEXT_STEP[status],
         evidence=[e for e in ordered if e.id in cited],
+        verification=verification,
         **base,
     )
