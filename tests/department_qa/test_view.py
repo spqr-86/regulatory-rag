@@ -50,6 +50,7 @@ def _response(**kw) -> DepartmentResponse:
         ("needs_review", ["object_fact_normative"], "warning", "вывод о норме"),
         ("needs_review", ["object_profile_undated"], "warning", "дата заполнения"),
         ("needs_context", ["applicability_unclear"], "info", "Уточн"),
+        ("needs_context", ["applied_on_unknown_field"], "info", "неизвестное значение"),
         ("out_of_scope", [], "info", "вне"),
         ("failed", ["citation_invalid"], "error", "ссылк"),
         ("failed", ["retrieval_failed"], "error", "поиск"),

@@ -14,6 +14,7 @@ from src.department_qa.contract import (
     ModelAnswer,
     ModelAnswerV1,
     ObjectFact,
+    applied_on_unknown_fields,
     check_citations,
     cited_ids,
     decide,
@@ -27,6 +28,20 @@ EVIDENCE = {
         id="int_001", level="internal", text="осмотр раз в квартал", source="pril3.md"
     ),
     "obj_s3": Evidence(id="obj_s3", level="object", text="АПС есть", source="list.md"),
+    "obj_f_people_in_object_zone": Evidence(
+        id="obj_f_people_in_object_zone",
+        level="object",
+        text="Людей в зоне объекта: 8",
+        source="list.md",
+        field_state="known",
+    ),
+    "obj_f_people_in_building_total": Evidence(
+        id="obj_f_people_in_building_total",
+        level="object",
+        text="Людей в здании всего: неизвестно",
+        source="list.md",
+        field_state="unknown",
+    ),
 }
 DATED = date(2026, 9, 1)
 
@@ -240,6 +255,63 @@ def test_applied_with_both_levels_answered_when_dated():
         "answered",
         [],
     )
+
+
+# --- unknown typed field: applied conclusion -> needs_context -------------------
+
+
+@pytest.mark.unit
+def test_applied_on_unknown_field_needs_context():
+    answer = _v2(
+        applied=[
+            ("План эвакуации необходим", ("obj_f_people_in_building_total", "ext_001"))
+        ],
+        ext=("ext_001",),
+        internal=("int_001",),
+    )
+    assert decide(answer, EVIDENCE, profile_as_of=DATED) == (
+        "needs_context",
+        ["applied_on_unknown_field"],
+    )
+
+
+@pytest.mark.unit
+def test_applied_on_known_field_is_answered():
+    answer = _v2(
+        applied=[("вывод", ("obj_f_people_in_object_zone", "ext_001"))],
+        ext=("ext_001",),
+        internal=("int_001",),
+    )
+    assert decide(answer, EVIDENCE, profile_as_of=DATED) == ("answered", [])
+
+
+@pytest.mark.unit
+def test_clarifying_question_wins_over_unknown_field():
+    answer = _v2(
+        applied=[("вывод", ("obj_f_people_in_building_total", "ext_001"))],
+        ext=("ext_001",),
+        internal=("int_001",),
+        clarifying_questions=["Сколько людей в здании?"],
+    )
+    assert decide(answer, EVIDENCE, profile_as_of=DATED) == (
+        "needs_context",
+        ["applicability_unclear"],
+    )
+
+
+@pytest.mark.unit
+def test_applied_on_unknown_fields_reports_ids_once():
+    answer = _v2(
+        applied=[
+            ("вывод", ("obj_f_people_in_building_total", "ext_001")),
+            ("вывод 2", ("obj_f_people_in_building_total", "int_001")),
+        ],
+        ext=("ext_001",),
+        internal=("int_001",),
+    )
+    assert applied_on_unknown_fields(answer, EVIDENCE) == [
+        "obj_f_people_in_building_total"
+    ]
 
 
 @pytest.mark.unit

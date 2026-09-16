@@ -22,7 +22,12 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-from src.department_qa.contract import Evidence, ObjectSection, TypedFieldLine
+from src.department_qa.contract import (
+    Evidence,
+    FieldState,
+    ObjectSection,
+    TypedFieldLine,
+)
 from src.indexing.manifest import Manifest
 
 SECTION_TITLES: dict[int, str] = {
@@ -254,9 +259,18 @@ def typed_fields_prompt_lines(profile: ObjectProfile) -> list[TypedFieldLine]:
             section_id=f"obj_s{section}",
             label=label,
             value=_display_field_value(getattr(profile.typed_fields, key)),
+            state=_field_state(getattr(profile.typed_fields, key)),
         )
         for key, (section, label, _kind) in FIELD_SPECS.items()
     ]
+
+
+def _field_state(value) -> FieldState:
+    if value == UNKNOWN:
+        return "unknown"
+    if value == NOT_APPLICABLE:
+        return "not_applicable"
+    return "known"
 
 
 def _display_field_value(value) -> str:
@@ -297,6 +311,7 @@ def profile_evidence(profile: ObjectProfile) -> list[Evidence]:
             title=profile.title,
             locator=f"Типизированное поле: {field.label}",
             document_id=profile.document_id,
+            field_state=field.state,
         )
         for field in typed_fields_prompt_lines(profile)
     ]

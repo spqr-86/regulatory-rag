@@ -7,6 +7,8 @@
 #   + profile fill date.
 # Output: (status, reason_codes). Invalid citation → failed/citation_invalid, no
 #   regeneration (spec П6). answered = citations checked, not meaning checked (§2.0).
+#   An applied conclusion resting on a field the sheet marks `unknown` →
+#   needs_context/applied_on_unknown_field (spec typed-object-sheet §9).
 # The schema checks types only; every invariant on evidence_ids lives in decide(),
 #   so a bad model answer gets its status instead of generation_failed.
 """
@@ -22,6 +24,9 @@ from pydantic import BaseModel, Field
 Level = Literal["external", "internal", "object"]
 Status = Literal["answered", "needs_context", "needs_review", "out_of_scope", "failed"]
 VerificationVerdict = Literal["none", "missing", "contradiction"]
+# State of a typed object field (spec typed-object-sheet §3): `unknown` is a
+# missing fact, `not_applicable` and `false` are known states.
+FieldState = Literal["known", "unknown", "not_applicable"]
 
 _PREFIX: dict[str, Level] = {"ext_": "external", "int_": "internal", "obj_": "object"}
 _NORM_LEVELS = {"external", "internal"}
@@ -44,6 +49,8 @@ class Evidence(BaseModel):
     locator: Optional[str] = None
     document_id: Optional[str] = None
     chunk_id: Optional[int] = None
+    # Only typed object fields (obj_f_*) carry a state; sections and chunks don't.
+    field_state: Optional[FieldState] = None
 
 
 class Basis(BaseModel):
@@ -68,6 +75,7 @@ class TypedFieldLine(BaseModel):
     section_id: str
     label: str
     value: str
+    state: FieldState = "known"
 
 
 class ObjectFact(BaseModel):
@@ -128,6 +136,25 @@ def _applied(answer: ModelAnswerV1) -> list[AppliedConclusion]:
     return getattr(answer, "applied_conclusions", [])
 
 
+def applied_on_unknown_fields(
+    answer: ModelAnswerV1, evidence: dict[str, Evidence]
+) -> list[str]:
+    """Ids of unknown typed object fields cited by applied conclusions.
+
+    A conclusion that rests on a field the sheet marks ``unknown`` is applied to
+    a fact that is not established — the deterministic *scope drift* signal
+    (spec typed-object-sheet §1, §9). Known and ``not_applicable`` fields are
+    not reported: ``false`` and ``not_applicable`` are established states.
+    """
+    out: list[str] = []
+    for conclusion in _applied(answer):
+        for eid in conclusion.evidence_ids:
+            found = evidence.get(eid)
+            if found is not None and found.field_state == "unknown" and eid not in out:
+                out.append(eid)
+    return out
+
+
 def cited_ids(answer: ModelAnswerV1) -> set[str]:
     items = (
         answer.external_basis
@@ -176,6 +203,8 @@ def decide(
         return "failed", ["citation_invalid"]
     if answer.clarifying_questions:
         return "needs_context", ["applicability_unclear"]
+    if applied_on_unknown_fields(answer, evidence):
+        return "needs_context", ["applied_on_unknown_field"]
 
     facts, applied = _facts(answer), _applied(answer)
     applied_levels = [{evidence[e].level for e in c.evidence_ids} for c in applied]

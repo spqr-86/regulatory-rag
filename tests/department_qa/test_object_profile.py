@@ -102,6 +102,11 @@ def test_typed_fields_are_individually_citable_evidence():
     assert field.level == "object"
     assert field.text == "Людей в здании всего: 25"
     assert field.locator == "Типизированное поле: Людей в здании всего"
+    assert field.field_state == "known"
+
+    unknown_field = evidence["obj_f_people_on_floor_total"]
+    assert unknown_field.field_state == "unknown"
+    assert unknown_field.text == "Людей на этаже всего: неизвестно"
 
 
 @pytest.mark.unit
