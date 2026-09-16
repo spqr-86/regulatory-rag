@@ -280,11 +280,24 @@ neither the building nor floor threshold). Full per-question breakdown and quote
 Spec: [2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
 
 **Default mode.** `v2` (decided by Petr, 2026-09-15). v2 beat v1 on all three numbers and
-produced no answered-without-unit and no norm substituted for a missing fact. **Known error,
-accepted:** `q1` — `applied_conclusions` concluded an evacuation plan is required from an
-8-person headcount that meets neither the building nor the floor threshold; v2 also credits
-only 11/17 required sub-answers. Next task: fix threshold application and rerun the pair.
-Revisit (back to `v1`) if the rerun shows more forbidden conclusions in v2 than in v1.
+produced no answered-without-unit and no norm substituted for a missing fact. **Known error, not
+fixed by the prompt:** `q1` — `applied_conclusions` concluded an evacuation plan is required
+from an 8-person headcount that meets neither the building nor the floor threshold; v2 also
+credits only 11/17 required sub-answers. Retrieval was not at fault: both thresholds of п. 5
+were in the prompt. The prompt had no rule tying a norm's threshold to a fact of the same
+quantity, so `department_answer` v3 added one (name what the threshold counts and where, find
+the fact about that same quantity, compare the numbers; otherwise answer conditionally and ask
+for the missing quantity). v3 is the prompt of mode `v2`; template v2 is left untouched so the
+2026-09-15 run stays reproducible. **The rerun (2026-09-16, mode `v2` only, same store,
+profiles and expectations) shows the rule did not change the behaviour:** `q1` repeats the same
+unconditional conclusion with `clarifying_questions: []`, and the rule is present verbatim in
+the recorded prompt. Contract matches went 8/9 → 9/9 (from `q8`, unrelated to thresholds),
+sub-answers stayed 11/17, forbidden conclusions stayed at 1. So a stated rule is not enough
+here; the open options are another prompt iteration, a deterministic threshold check in
+`decide()`, or accepting the limit and stating it in the `answered` guarantee. Rerun breakdown:
+[`eval/runs/object_profile_pair_2026-09-16/summary.md`](../../eval/runs/object_profile_pair_2026-09-16/summary.md).
+The rerun kept v2 at 1 forbidden conclusion against v1's 2, so the revisit condition
+(back to `v1` on more forbidden conclusions in v2) did not trigger.
 
 ---
 

@@ -129,7 +129,7 @@ def test_mode_v2_bundle_loads_profiles():
         "./chroma_db_dept_v2",
         "department_demo_v2",
     )
-    assert config.prompt_version == "v2"
+    assert config.prompt_version == "v3"
     assert config.schema is ModelAnswer
     assert config.profiles == {"u": "p"}
 
