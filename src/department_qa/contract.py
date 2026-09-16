@@ -60,6 +60,14 @@ class ObjectSection(BaseModel):
     presence: Literal["present", "empty", "missing"]
 
 
+class TypedFieldLine(BaseModel):
+    """One canonical object field rendered with its existing section evidence id."""
+
+    section_id: str
+    label: str
+    value: str
+
+
 class ObjectFact(BaseModel):
     statement: str
     evidence_ids: list[str] = Field(default_factory=list)  # prompt: obj_* only
@@ -91,7 +99,7 @@ class ModelAnswer(ModelAnswerV1):
 
 
 class PromptVars(BaseModel):
-    """Only way to render prompts/agents/department_answer_v{1,2}.j2; v1 ignores object fields."""
+    """Only way to render department_answer prompts; v1 ignores object fields."""
 
     question: str
     unit_label: str
@@ -99,6 +107,7 @@ class PromptVars(BaseModel):
     internal_evidence: list[Evidence]
     object_label: str = ""
     object_sections: list[ObjectSection] = Field(default_factory=list)
+    typed_fields: list[TypedFieldLine] = Field(default_factory=list)
 
 
 def _facts(answer: ModelAnswerV1) -> list[ObjectFact]:

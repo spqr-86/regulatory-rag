@@ -74,7 +74,7 @@ below. `v2` is kept unchanged so the 2026-09-15 paired run can be re-rendered.
 | mode | Chroma path | collection | profiles | prompt | structured-output schema |
 |---|---|---|---|---|---|
 | `v1` | `./chroma_db_dept` | `department_demo` (sheets in the index) | not loaded, `profile=None` | `department_answer` v1 | `ModelAnswerV1` |
-| `v2` | `./chroma_db_dept_v2` | `department_demo_v2` (sheets excluded, `role: object_profile`) | `load_profiles` | `department_answer` v3 | `ModelAnswer` |
+| `v2` | `./chroma_db_dept_v2` | `department_demo_v2` (sheets excluded, `role: object_profile`) | `load_profiles` | `department_answer` v4 | `ModelAnswer` |
 
 Two Chroma paths exist because `index.py` deletes the whole `CHROMA_DB_PATH` folder before
 writing (not just the collection) — building `department_demo_v2` into `chroma_db_dept` would
@@ -91,6 +91,12 @@ role, no blocking clarifying question is pending, both norm levels are present (
 normative wording in object facts. It does not mean the citation supports the claim or that
 the answer is complete — see design-decisions §10. UI banner: "Ссылки сверены: законодательство
 и ЛНА. Смысл ответа не проверен специалистом."
+
+Object sheets use `typed_fields_v1` from
+[2026-09-16-typed-object-sheet-design](../superpowers/specs/2026-09-16-typed-object-sheet-design.md):
+nine strict fields in sections 2, 3, 4, 7 and 8. Prompt v4 renders them as a separate block
+with the existing `obj_sN` evidence ids. `ModelAnswer` and `decide()` do not validate the field
+semantics in this step.
 
 ## nodes
 Graph nodes (`src/v7/graph.py`), entry = `intent_gate`:

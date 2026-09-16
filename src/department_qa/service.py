@@ -39,6 +39,7 @@ from src.department_qa.object_profile import (
     ObjectProfile,
     profile_evidence,
     profile_prompt_block,
+    typed_fields_prompt_lines,
 )
 from src.infra.prompt_manager import PromptManager
 from src.v7.scope_filter import build_scope_filters
@@ -166,6 +167,7 @@ def answer_question(
         internal_evidence=internal,
         object_label=object_label,
         object_sections=object_sections,
+        typed_fields=typed_fields_prompt_lines(profile) if profile else [],
     )
     try:
         prompt = (prompts or PromptManager()).render(

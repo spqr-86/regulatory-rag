@@ -13,7 +13,7 @@ from src.department_qa.contract import (
     ObjectFact,
     ObjectSection,
 )
-from src.department_qa.object_profile import ObjectProfile
+from src.department_qa.object_profile import ObjectProfile, TypedObjectFields
 from src.department_qa.service import answer_question
 from src.v7.scope_filter import build_scope_filters
 
@@ -126,6 +126,17 @@ def _profile(unit_id="unit_1", as_of=date(2026, 9, 1)) -> ObjectProfile:
         title="Лист особенностей объекта защиты: тест",
         as_of_date=as_of,
         sections=sections,
+        typed_fields=TypedObjectFields(
+            people_in_object_zone=8,
+            people_on_floor_total="unknown",
+            people_in_building_total="unknown",
+            permanent_workplaces_on_floor="unknown",
+            evacuation_plan_present=False,
+            room_categories="unknown",
+            aupt_present=False,
+            extinguishers_total=2,
+            outside_ladder_last_test_date="not_applicable",
+        ),
     )
 
 

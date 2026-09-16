@@ -17,11 +17,11 @@ import hashlib
 import re
 from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
-from src.department_qa.contract import Evidence, ObjectSection
+from src.department_qa.contract import Evidence, ObjectSection, TypedFieldLine
 from src.indexing.manifest import Manifest
 
 SECTION_TITLES: dict[int, str] = {
@@ -42,6 +42,38 @@ _SECTION_HEADING = re.compile(r"^## (\d+) (.+?)\s*$")
 _DATE_LINE = re.compile(r"^\s*Дата заполнения:\s*(.*?)\s*$")
 _DATE_VALUE = re.compile(r"^(\d{2})\.(\d{2})\.(\d{4})\.?$")
 _DATE_PLACEHOLDER = "[дата]"
+_TYPED_HEADING = "### Типизированные поля"
+_FIELD_LINE = re.compile(r"^- ([^:]+):\s*(.*?)\s*$")
+UNKNOWN = "unknown"
+NOT_APPLICABLE = "not_applicable"
+
+FIELD_SPECS = {
+    "people_in_object_zone": (7, "Людей в зоне объекта", "int"),
+    "people_on_floor_total": (7, "Людей на этаже всего", "int"),
+    "people_in_building_total": (7, "Людей в здании всего", "int"),
+    "permanent_workplaces_on_floor": (7, "Постоянных рабочих мест на этаже", "int"),
+    "evacuation_plan_present": (7, "План эвакуации разработан", "bool"),
+    "room_categories": (2, "Категории помещений", "list"),
+    "aupt_present": (3, "АУПТ на объекте", "bool"),
+    "extinguishers_total": (4, "Огнетушителей всего", "int"),
+    "outside_ladder_last_test_date": (
+        8,
+        "Последнее испытание наружной пожарной лестницы",
+        "date",
+    ),
+}
+
+
+class TypedObjectFields(BaseModel):
+    people_in_object_zone: int | Literal["unknown"]
+    people_on_floor_total: int | Literal["unknown"]
+    people_in_building_total: int | Literal["unknown"]
+    permanent_workplaces_on_floor: int | Literal["unknown"]
+    evacuation_plan_present: bool | Literal["unknown"]
+    room_categories: list[str] | Literal["unknown"]
+    aupt_present: bool | Literal["unknown"]
+    extinguishers_total: int | Literal["unknown"]
+    outside_ladder_last_test_date: date | Literal["unknown", "not_applicable"]
 
 
 class ObjectProfileError(ValueError):
@@ -56,6 +88,78 @@ class ObjectProfile(BaseModel):
     title: str
     as_of_date: Optional[date]
     sections: dict[str, ObjectSection]
+    typed_fields: TypedObjectFields
+
+
+def _parse_field_value(kind: str, raw: str, source: str, label: str):
+    if raw == "неизвестно":
+        return UNKNOWN
+    if kind == "int":
+        if not raw.isdigit():
+            raise ObjectProfileError(f"{source}: bad value for {label!r}: {raw!r}")
+        return int(raw)
+    if kind == "bool":
+        if raw not in {"да", "нет"}:
+            raise ObjectProfileError(f"{source}: bad value for {label!r}: {raw!r}")
+        return raw == "да"
+    if kind == "list":
+        values = [item.strip() for item in raw.split(";")]
+        if not values or any(not item for item in values):
+            raise ObjectProfileError(f"{source}: bad value for {label!r}: {raw!r}")
+        return values
+    if raw == "не применимо":
+        return NOT_APPLICABLE
+    if not _DATE_VALUE.match(raw):
+        raise ObjectProfileError(f"{source}: bad value for {label!r}: {raw!r}")
+    return _parse_date(raw, source)
+
+
+def _extract_typed_fields(
+    bodies: dict[int, list[str]], source: str
+) -> TypedObjectFields:
+    by_label = {
+        label: (key, section, kind)
+        for key, (section, label, kind) in FIELD_SPECS.items()
+    }
+    parsed = {}
+    for section, lines in bodies.items():
+        heading_rows = [i for i, line in enumerate(lines) if line == _TYPED_HEADING]
+        expected_here = any(spec[0] == section for spec in FIELD_SPECS.values())
+        if len(heading_rows) != (1 if expected_here else 0):
+            raise ObjectProfileError(
+                f"{source}: section {section} must contain {1 if expected_here else 0} typed field block(s)"
+            )
+        if not heading_rows:
+            continue
+        start = heading_rows[0]
+        end = start + 1
+        while end < len(lines) and lines[end].startswith("- "):
+            match = _FIELD_LINE.match(lines[end])
+            if not match:
+                raise ObjectProfileError(
+                    f"{source}: malformed typed field {lines[end]!r}"
+                )
+            label, raw = match.groups()
+            if label not in by_label:
+                raise ObjectProfileError(f"{source}: unknown typed field {label!r}")
+            key, required_section, kind = by_label[label]
+            if required_section != section:
+                raise ObjectProfileError(
+                    f"{source}: field {label!r} belongs to section {required_section}"
+                )
+            if key in parsed:
+                raise ObjectProfileError(f"{source}: typed field {label!r} repeated")
+            parsed[key] = _parse_field_value(kind, raw, source, label)
+            end += 1
+        del lines[start:end]
+        if start < len(lines) and not lines[start].strip():
+            del lines[start]
+    missing = [key for key in FIELD_SPECS if key not in parsed]
+    if missing:
+        raise ObjectProfileError(
+            f"{source}: missing typed fields: {', '.join(missing)}"
+        )
+    return TypedObjectFields(**parsed)
 
 
 def _normalize(title: str) -> str:
@@ -112,6 +216,8 @@ def parse_profile(
     if not bodies:
         raise ObjectProfileError(f"{source}: no sections")
 
+    typed_fields = _extract_typed_fields(bodies, source)
+
     sections: dict[str, ObjectSection] = {}
     for number, section_title in SECTION_TITLES.items():
         section_id = f"obj_s{number}"
@@ -136,7 +242,32 @@ def parse_profile(
         title=title,
         as_of_date=as_of_date,
         sections=sections,
+        typed_fields=typed_fields,
     )
+
+
+def typed_fields_prompt_lines(profile: ObjectProfile) -> list[TypedFieldLine]:
+    def display(value) -> str:
+        if value == UNKNOWN:
+            return "неизвестно"
+        if value == NOT_APPLICABLE:
+            return "не применимо"
+        if isinstance(value, bool):
+            return "да" if value else "нет"
+        if isinstance(value, date):
+            return value.strftime("%d.%m.%Y")
+        if isinstance(value, list):
+            return "; ".join(value)
+        return str(value)
+
+    return [
+        TypedFieldLine(
+            section_id=f"obj_s{section}",
+            label=label,
+            value=display(getattr(profile.typed_fields, key)),
+        )
+        for key, (section, label, _kind) in FIELD_SPECS.items()
+    ]
 
 
 def profile_evidence(profile: ObjectProfile) -> list[Evidence]:

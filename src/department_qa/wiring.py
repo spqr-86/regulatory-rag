@@ -9,9 +9,9 @@
 #   (service maps it to failed/generation_failed).
 # Mode: DEPARTMENT_QA_MODE picks one bundle atomically (spec object-profile §2.4 п. 7):
 #   v1 = sheets in index, no profiles, prompt v1, ModelAnswerV1;
-#   v2 = sheets out of index, load_profiles, prompt v3, ModelAnswer. The prompt version
-#   moves inside the bundle: v3 = v2 plus the threshold rule (design decision 10, q1);
-#   v2 stays in the registry so the 2026-09-15 run can be re-rendered.
+#   v2 = sheets out of index, load_profiles, prompt v4, ModelAnswer. The prompt version
+#   moves inside the bundle: v4 adds typed object fields to the v3 threshold rule;
+#   v2/v3 stay in the registry so the 2026-09-15/16 runs can be re-rendered.
 # The Chroma store is a process-wide singleton from settings, so a mode never
 #   switches the store; ensure_store_matches fails fast on a mismatch instead.
 """
@@ -80,7 +80,7 @@ def build_mode_config(
             mode="v2",
             chroma_db_path=cfg.DEPARTMENT_V2_CHROMA_DB_PATH,
             collection=cfg.DEPARTMENT_V2_COLLECTION,
-            prompt_version="v3",
+            prompt_version="v4",
             schema=ModelAnswer,
             profiles=load_profiles(manifest, source_dir),
         )

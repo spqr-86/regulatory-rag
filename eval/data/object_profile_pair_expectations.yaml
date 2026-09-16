@@ -6,7 +6,9 @@
 # (ПП РФ от 16.09.2020 № 1479, статус «Действует c изменениями», последняя редакция
 # от 03.02.2025 № 90); corpus text of every listed point matches the official wording.
 meta:
-  spec: docs/superpowers/specs/2026-09-15-object-profile-design.md
+  spec: docs/superpowers/specs/2026-09-16-typed-object-sheet-design.md
+  object_sheet_schema: typed_fields_v1
+  baseline_note: листы и их sha изменены; следующий прогон v2 является новой базой и не сравнивается напрямую с прогонами 15–16.09
   model: gpt-4o-mini
   temperature: 0
   partial_credit_rule: a required sub-answer counts only if no forbidden conclusion is present
@@ -38,7 +40,14 @@ questions:
         - раздел 3 листа unit_office — АУПТ нет
       missing:
         - численность людей на 3 этаже и в здании бизнес-центра (уточняется у арендодателя)
+        - количество постоянных рабочих мест на 3 этаже
         - категории помещений (раздел 2 — акт отсутствует)
+      typed_fields:
+        people_in_object_zone: 8
+        people_on_floor_total: unknown
+        people_in_building_total: unknown
+        permanent_workplaces_on_floor: unknown
+        evacuation_plan_present: false
     norm:
       - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 50", applies_to: здание (одновременно находящиеся люди), verified: true}
       - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 10", applies_to: этаж (постоянные рабочие места), verified: true}

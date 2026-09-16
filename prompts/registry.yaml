@@ -21,3 +21,4 @@ department_answer:
     v1: "agents/department_answer_v1.j2"
     v2: "agents/department_answer_v2.j2"
     v3: "agents/department_answer_v3.j2"
+    v4: "agents/department_answer_v4.j2"

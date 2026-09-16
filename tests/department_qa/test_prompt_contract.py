@@ -5,10 +5,15 @@ from __future__ import annotations
 import pytest
 from jinja2 import Environment, FileSystemLoader, meta
 
-from src.department_qa.contract import Evidence, ObjectSection, PromptVars
+from src.department_qa.contract import (
+    Evidence,
+    ObjectSection,
+    PromptVars,
+    TypedFieldLine,
+)
 from src.infra.prompt_manager import PromptManager
 
-OBJECT_FIELDS = {"object_label", "object_sections"}
+OBJECT_FIELDS = {"object_label", "object_sections", "typed_fields"}
 
 
 def _template_source(version: str) -> str:
@@ -30,8 +35,13 @@ def test_v1_variables_are_contract_without_object_fields():
 
 @pytest.mark.unit
 @pytest.mark.parametrize("version", ["v2", "v3"])
-def test_object_versions_variables_match_contract_fields(version):
-    assert _template_vars(version) == set(PromptVars.model_fields)
+def test_recorded_object_versions_keep_their_original_contract(version):
+    assert _template_vars(version) == set(PromptVars.model_fields) - {"typed_fields"}
+
+
+@pytest.mark.unit
+def test_v4_variables_match_contract_fields():
+    assert _template_vars("v4") == set(PromptVars.model_fields)
 
 
 @pytest.mark.unit
@@ -57,7 +67,7 @@ def test_render_puts_evidence_ids_and_question_into_prompt():
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("version", ["v2", "v3"])
+@pytest.mark.parametrize("version", ["v2", "v3", "v4"])
 def test_object_versions_render_object_block_with_empty_and_missing_markers(version):
     vars_ = PromptVars(
         question="Кто принимает сигнал?",
@@ -95,6 +105,32 @@ def test_object_versions_render_object_block_with_empty_and_missing_markers(vers
     )
     assert "5 Дежурный персонал (раздела нет в листе) — ссылаться нельзя" in text
     assert "[obj_s4]" not in text and "[obj_s5]" not in text
+
+
+@pytest.mark.unit
+def test_v4_renders_typed_fields_before_raw_sections():
+    vars_ = PromptVars(
+        question="Нужен ли план?",
+        unit_label="Подразделение: unit_office",
+        external_evidence=[],
+        internal_evidence=[],
+        object_label="Лист: офис.",
+        typed_fields=[
+            TypedFieldLine(
+                section_id="obj_s7",
+                label="Людей в здании всего",
+                value="неизвестно",
+            )
+        ],
+        object_sections=[],
+    )
+    text = PromptManager().render(
+        "department_answer", version="v4", **vars_.model_dump()
+    )
+    field = "[obj_s7] Людей в здании всего: неизвестно"
+    assert field in text
+    assert text.index(field) < text.index("# СВЕДЕНИЯ ОБ ОБЪЕКТЕ")
+    assert "одноимённое типизированное поле" in text
 
 
 @pytest.mark.unit

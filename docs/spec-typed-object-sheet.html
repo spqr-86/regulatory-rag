@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Regulatory RAG — типизированный лист объекта</title>
+  <style>
+    :root { --ink:#172033; --muted:#5e687b; --line:#dce2ea; --paper:#fff; --bg:#f4f6f9; --accent:#3157d5; --ok:#167451; --warn:#925c00; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { max-width:1080px; margin:0 auto; padding:48px 24px 80px; }
+    header,.card { background:var(--paper); border:1px solid var(--line); border-radius:16px; }
+    header { padding:36px; margin-bottom:22px; }
+    h1 { font-size:clamp(30px,5vw,48px); line-height:1.08; margin:0 0 16px; letter-spacing:-.035em; }
+    h2 { margin:38px 0 14px; font-size:26px; }
+    h3 { margin:0 0 8px; font-size:19px; }
+    p { margin:8px 0; }
+    .lead { max-width:800px; color:var(--muted); font-size:19px; }
+    .badge { display:inline-block; padding:5px 10px; border-radius:999px; background:#eaf7f1; color:var(--ok); font-weight:700; font-size:13px; margin-bottom:16px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; }
+    .card { padding:20px; }
+    .chosen { border:2px solid var(--accent); box-shadow:0 8px 24px #3157d51a; }
+    .tag { color:var(--accent); font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+    .pros { color:var(--ok); } .cons { color:var(--warn); }
+    table { width:100%; border-collapse:collapse; background:var(--paper); border-radius:12px; overflow:hidden; }
+    th,td { text-align:left; vertical-align:top; padding:12px 14px; border-bottom:1px solid var(--line); }
+    th { background:#eef2f8; font-size:13px; }
+    code,pre { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+    pre { overflow:auto; padding:18px; border-radius:12px; background:#172033; color:#edf2ff; }
+    .flow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:18px 0; }
+    .step { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 14px; font-weight:650; }
+    .arrow { color:var(--muted); }
+    .gate { border-left:5px solid var(--warn); background:#fff8e9; padding:18px 20px; border-radius:10px; }
+    ul { padding-left:22px; } li { margin:7px 0; }
+    .check li { list-style:"□  "; }
+    footer { color:var(--muted); margin-top:32px; font-size:14px; }
+  </style>
+</head>
+<body><main>
+  <header>
+    <div class="badge">Выбран вариант A · 16.09.2026</div>
+    <h1>Типизированный лист объекта</h1>
+    <p class="lead">Разводим похожие величины до вызова модели: людей в зоне, на этаже, в здании и постоянные рабочие места. Поля показываются в prompt v4, а контракт ответа и <code>decide()</code> пока остаются прежними.</p>
+  </header>
+
+  <h2>Почему меняем вход</h2>
+  <p>В q1 модель второй раз сделала безусловный вывод о плане эвакуации, применив порог к другой величине. Prompt v3 уже содержал правило сверки порога, но ошибка повторилась дословно. Шаг 1 проверяет, достаточно ли явно разделить исходные факты.</p>
+
+  <h2>Четыре архитектуры</h2>
+  <div class="grid">
+    <section class="card chosen"><div class="tag">A · выбрано</div><h3>Поля → промпт</h3><p>Строгие поля внутри листа, детерминированный парсер, отдельный блок в v4.</p><p class="pros">+ Изолирует качество входа</p><p class="cons">− Код ещё не проверяет вывод</p></section>
+    <section class="card"><div class="tag">B · при провале A</div><h3>Поля как evidence</h3><p><code>obj_f_*</code> и структурная проверка порогов в <code>decide()</code>.</p><p class="pros">+ Жёсткая гарантия</p><p class="cons">− Рано предполагает правильные ссылки модели</p></section>
+    <section class="card"><div class="tag">C · отклонено</div><h3>Извлечение из текста</h3><p>Regex или отдельный LLM превращает старые абзацы в поля.</p><p class="pros">+ Не надо менять листы</p><p class="cons">− Новый источник ошибок</p></section>
+    <section class="card"><div class="tag">D · отклонено</div><h3>Ещё одно правило</h3><p>Только усиливаем инструкцию модели без изменения данных.</p><p class="pros">+ Минимальная правка</p><p class="cons">− Этот путь уже провалился в v3</p></section>
+  </div>
+
+  <h2>Поток данных</h2>
+  <div class="flow"><span class="step">4 листа</span><span class="arrow">→</span><span class="step">строгий парсер</span><span class="arrow">→</span><span class="step">TypedObjectFields</span><span class="arrow">→</span><span class="step">prompt v4</span><span class="arrow">→</span><span class="step">9 eval-вопросов</span></div>
+
+  <h2>Шаблон раздела 7</h2>
+  <pre>### Типизированные поля
+- Людей в зоне объекта: 8
+- Людей на этаже всего: неизвестно
+- Людей в здании всего: неизвестно
+- Постоянных рабочих мест на этаже: неизвестно
+- План эвакуации разработан: нет</pre>
+
+  <h2>Реестр полей</h2>
+  <table><thead><tr><th>Раздел</th><th>Поля</th><th>Тип</th></tr></thead><tbody>
+    <tr><td>2</td><td>Категории помещений</td><td>список или <code>неизвестно</code></td></tr>
+    <tr><td>3</td><td>АУПТ на объекте</td><td><code>да / нет / неизвестно</code></td></tr>
+    <tr><td>4</td><td>Огнетушителей всего</td><td>целое ≥ 0 или <code>неизвестно</code></td></tr>
+    <tr><td>7</td><td>Люди в зоне, на этаже, в здании; постоянные рабочие места; план эвакуации</td><td>целые и трёхсоставные значения</td></tr>
+    <tr><td>8</td><td>Последнее испытание наружной лестницы</td><td>дата, <code>неизвестно</code> или <code>не применимо</code></td></tr>
+  </tbody></table>
+
+  <h2>Поведение при ошибке</h2>
+  <p>Все девять полей обязательны. Пропуск, дубль, лишнее имя, неверный раздел или значение останавливают загрузку с <code>ObjectProfileError</code>. Синонимы неизвестности не принимаются. Булево «нет» остаётся установленным фактом и не смешивается с «неизвестно».</p>
+
+  <h2>Критерий q1 записан до прогона</h2>
+  <div class="gate"><strong>Успех:</strong> только условный ответ или вопрос о численности в здании / постоянных рабочих местах на этаже.<br><strong>Провал:</strong> любой безусловный вывод по нерелевантной величине. Тогда без ещё одной итерации промпта переходим к варианту B.</div>
+
+  <h2>Приёмка</h2>
+  <ul class="check">
+    <li>Четыре листа содержат все девять полей и проходят строгий парсер.</li>
+    <li>Prompt v1–v3 не изменены; режим v2 использует v4.</li>
+    <li>Поля показаны один раз и цитируются прежними <code>obj_sN</code>.</li>
+    <li><code>ModelAnswer</code>, <code>decide()</code>, UI и retrieval не меняются.</li>
+    <li>Dry-run фиксирует v4 и новые sha до 9 платных вызовов.</li>
+    <li>Новый прогон помечен как новая база: изменились входные листы и expectations sha.</li>
+  </ul>
+  <footer>Полная инженерная спецификация: docs/superpowers/specs/2026-09-16-typed-object-sheet-design.md</footer>
+</main></body></html>

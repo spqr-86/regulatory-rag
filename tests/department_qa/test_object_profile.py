@@ -17,12 +17,29 @@ from src.indexing.manifest import load_manifest
 
 FULL = {n: f"Текст раздела {n}." for n in SECTION_TITLES}
 
+FIELDS = {
+    2: ["- Категории помещений: В2; Д"],
+    3: ["- АУПТ на объекте: нет"],
+    4: ["- Огнетушителей всего: 8"],
+    7: [
+        "- Людей в зоне объекта: 25",
+        "- Людей на этаже всего: неизвестно",
+        "- Людей в здании всего: 25",
+        "- Постоянных рабочих мест на этаже: неизвестно",
+        "- План эвакуации разработан: да",
+    ],
+    8: ["- Последнее испытание наружной пожарной лестницы: неизвестно"],
+}
 
-def _sheet(bodies, *, date_line="Дата заполнения: 15.09.2026", headings=None):
+
+def _sheet(
+    bodies, *, date_line="Дата заполнения: 15.09.2026", headings=None, fields=FIELDS
+):
     parts = ["## Лист особенностей объекта защиты: тестовый объект", "Преамбула листа."]
     for n, body in bodies.items():
         heading = (headings or {}).get(n, f"## {n} {SECTION_TITLES[n]}")
-        parts += [heading, body]
+        typed = ["### Типизированные поля", *fields.get(n, [])] if n in fields else []
+        parts += [heading, *typed, "", body]
     if date_line is not None:
         parts.append(date_line)
     return "\n".join(parts) + "\n"
@@ -47,6 +64,11 @@ def test_full_sheet_has_nine_present_sections():
     assert profile.sections["obj_s3"].number == 3
     assert profile.title == "Лист особенностей объекта защиты: тестовый объект"
     assert "Преамбула" not in "".join(s.text for s in profile.sections.values())
+    assert profile.typed_fields.people_in_object_zone == 25
+    assert profile.typed_fields.people_on_floor_total == "unknown"
+    assert profile.typed_fields.evacuation_plan_present is True
+    assert profile.typed_fields.room_categories == ["В2", "Д"]
+    assert "Типизированные поля" not in profile.sections["obj_s7"].text
 
 
 @pytest.mark.unit
@@ -65,6 +87,33 @@ def test_unknown_fact_text_is_present():
         _sheet({**FULL, 8: "Огнезащитная обработка: информация уточняется."})
     )
     assert profile.sections["obj_s8"].presence == "present"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {**FIELDS, 7: FIELDS[7][1:]},
+        {**FIELDS, 4: ["- Огнетушителей всего: -1"]},
+        {**FIELDS, 3: ["- АУПТ на объекте: возможно"]},
+        {**FIELDS, 2: ["- Категории помещений: неизвестно", "- Лишнее поле: 1"]},
+        {**FIELDS, 8: ["- Последнее испытание наружной пожарной лестницы: [дата]"]},
+    ],
+    ids=["missing", "negative", "bad-bool", "extra", "placeholder"],
+)
+def test_typed_field_grammar_violations_raise(fields):
+    with pytest.raises(ObjectProfileError):
+        _parse(_sheet(FULL, fields=fields))
+
+
+@pytest.mark.unit
+def test_ladder_date_not_applicable_is_distinct_from_unknown():
+    fields = {
+        **FIELDS,
+        8: ["- Последнее испытание наружной пожарной лестницы: не применимо"],
+    }
+    profile = _parse(_sheet(FULL, fields=fields))
+    assert profile.typed_fields.outside_ladder_last_test_date == "not_applicable"
 
 
 @pytest.mark.unit
