@@ -1,0 +1,190 @@
+# Trap set for cheap-model selection (separate from the 9-question pair run).
+# Purpose: catch models that apply a norm's threshold to the wrong magnitude
+# (area, distance, period) or that over-generalize a rule.
+# Written before the paid comparison run. Sources are document_id + section/point,
+# never dynamic ids like obj_s2 / int_001.
+# Official edition checked 17.09.2026 by extracting source_docs_dept/ext_ppr_1479.pdf
+# (pymupdf): п. 401, п. 406, п. 17 «б», приложение № 1 text matches the quoted wording.
+# This file must not be merged into object_profile_pair_expectations.yaml: the pair run
+# keeps its own sha and 9-question baseline.
+meta:
+  kind: trap_set
+  spec: docs/superpowers/specs/2026-09-16-typed-object-sheet-design.md
+  object_sheet_schema: typed_fields_v1
+  baseline_note: отдельный набор; не входит в парный прогон 9 вопросов и не меняет baseline 15–16.09
+  model: TBD (candidate comparison)
+  temperature: 0
+  partial_credit_rule: a required sub-answer counts only if no forbidden conclusion is present
+  ppr_edition: ПП РФ № 1479 в ред. от 03.02.2025 № 90; действует до 31.12.2026 включительно (п. 2 постановления)
+  forbidden_matching: exact substring, casefolded; manual semantic scoring is primary
+
+questions:
+  - n: 1
+    unit_id: unit_prod
+    question: Нужно ли оснащать огнетушителями помещение категории Д площадью 80 м²?
+    checks: площадь ниже порога п. 401 — норма не применяется
+    required_subanswers:
+      - помещение категории Д площадью не более 100 кв. метров огнетушителями не оснащается (п. 401 ПП РФ № 1479)
+      - фактически в кладовой площадью 80 м² огнетушители не размещены
+    accepted_alternatives:
+      - ссылка на п. 5.13.1 Инструкции о мерах ПБ (при определении количества учитываются категория, класс пожара и площадь)
+      - оговорка, что «не менее 2 огнетушителей на этаж» (п. 400) относится к общественным зданиям, а не к помещению категории Д
+    forbidden_conclusions:
+      - требуется не менее 2 огнетушителей
+      - необходимо разместить огнетушитель
+      - огнетушители обязательны
+      - необходимо оснастить помещение огнетушителями
+    object_facts:
+      sufficient:
+        - раздел 2 листа unit_prod — кладовая негорючих материалов категории Д площадью 80 м²
+        - раздел 4 листа unit_prod — в кладовой 80 м² огнетушители не размещены; всего в здании 2 огнетушителя (участок сборки 130 м²)
+      missing: []
+      typed_fields:
+        room_categories: "Д"
+        extinguishers_total: 2
+        aupt_present: false
+    norm:
+      - {document_id: ext_ppr_1479, point: "п. 401", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≤ 100 м²", applies_to: помещение категории Д (не оснащается), verified: true}
+    expected:
+      v2:
+        status: needs_review
+        reasons: [internal_evidence_missing]
+        alternatives:
+          - {status: answered, reasons: [], why: вывод опирается на п. 401 и внутренний ЛНА (5.13.1) с полным набором ссылок}
+          - {status: needs_review, reasons: [external_evidence_missing, internal_evidence_missing], why: вывод без ссылки на п. 401}
+          - {status: needs_context, reasons: [applicability_unclear], why: модель задаёт уточняющий вопрос о требуемом оснащении}
+          - {status: needs_review, reasons: [verification_contradiction], why: verifier счёл вывод противоречащим фактам}
+          - {status: needs_context, reasons: [verification_missing_facts], why: verifier счёл фактов недостаточно}
+    sources:
+      - {document_id: ext_ppr_1479, section: "XIX, п. 401"}
+      - {document_id: int_instr_mery_pb, section: "5.13.1"}
+      - {document_id: int_unit_prod_list, section: "2 Категории помещений"}
+      - {document_id: int_unit_prod_list, section: "4 Первичные средства пожаротушения"}
+
+  - n: 2
+    unit_id: unit_prod
+    question: Нужно ли оснащать огнетушителями помещение категории Д площадью 130 м²?
+    checks: площадь выше порога п. 401 — норма применяется
+    required_subanswers:
+      - да, помещение огнетушителями обеспечивается — исключение п. 401 действует только при площади не более 100 кв. метров
+      - фактически на участке сборки 130 м² размещены 2 огнетушителя ОП-8
+    accepted_alternatives:
+      - тип и ранг определяются по категории помещения и классу пожара (приложение № 1, пп. 5.13.1–5.13.2 Инструкции)
+      - уточняющий вопрос о требуемом ранге или расчёте количества
+    forbidden_conclusions:
+      - 130 м² не требует оснащения
+      - оснащение огнетушителями не требуется
+      - не нужно оснащать
+      - так как помещение категории Д, огнетушители не нужны
+    object_facts:
+      sufficient:
+        - раздел 2 листа unit_prod — участок сборки металлоконструкций категории Д площадью 130 м²
+        - раздел 4 листа unit_prod — на участке сборки 2 огнетушителя ОП-8
+      missing: []
+      typed_fields:
+        room_categories: "Д"
+        extinguishers_total: 2
+        aupt_present: false
+    norm:
+      - {document_id: ext_ppr_1479, point: "п. 401", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≤ 100 м²", applies_to: помещение категории Д (порог превышен, оснащается), verified: true}
+      - {document_id: ext_ppr_1479, point: "приложение № 1", edition: "ред. от 24.10.2022 № 1885", operator: "ранг по категории и классу пожара", applies_to: помещение категории Д, класс пожара A (2A), verified: true}
+    expected:
+      v2:
+        status: answered
+        reasons: []
+        alternatives:
+          - {status: needs_review, reasons: [internal_evidence_missing], why: вывод на п. 401/прил. № 1 без внутреннего ЛНА}
+          - {status: needs_review, reasons: [external_evidence_missing], why: вывод на внутреннем ЛНА без внешней нормы}
+          - {status: needs_context, reasons: [applicability_unclear], why: модель задаёт уточняющий вопрос о ранге или количестве}
+          - {status: needs_review, reasons: [verification_contradiction], why: verifier счёл вывод противоречащим фактам}
+          - {status: needs_context, reasons: [verification_missing_facts], why: verifier счёл фактов недостаточно}
+    sources:
+      - {document_id: ext_ppr_1479, section: "XIX, п. 401"}
+      - {document_id: ext_ppr_1479, section: "приложение № 1"}
+      - {document_id: int_instr_mery_pb, section: "5.13.1, 5.13.2"}
+      - {document_id: int_unit_prod_list, section: "2 Категории помещений"}
+      - {document_id: int_unit_prod_list, section: "4 Первичные средства пожаротушения"}
+
+  - n: 3
+    unit_id: unit_warehouse_v2
+    question: Соблюдено ли расстояние от возможного очага пожара до огнетушителя в складском помещении?
+    checks: 25 м против предела 30 м для В1–В4
+    required_subanswers:
+      - предел для помещений категорий А, Б, В1–В4 — 30 метров (п. 406 ПП РФ № 1479; п. 5.13.4 Инструкции)
+      - фактически 25 метров не превышают 30 метров — расстояние соблюдено
+    accepted_alternatives:
+      - пояснение, что 20 метров относится к помещениям административного и общественного назначения и здесь не применяется
+      - ссылка на п. 400 и приложение № 1 применительно к общественным зданиям не требуется
+    forbidden_conclusions:
+      - расстояние не соблюдено
+      - не соблюдено
+      - нарушение требований к расстоянию
+      - должно быть не более 20 метров
+      - расстояние должно быть уменьшено
+    object_facts:
+      sufficient:
+        - раздел 2 листа unit_warehouse_v2 — складское помещение категории В2 площадью 900 м², класс пожара A
+        - раздел 4 листа unit_warehouse_v2 — расстояние от наиболее удалённого очага до ближайшего огнетушителя 25 метров
+      missing: []
+      typed_fields:
+        room_categories: "В2"
+        extinguishers_total: 4
+    norm:
+      - {document_id: ext_ppr_1479, point: "п. 406", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≤ 30 м", applies_to: помещения категорий А, Б, В1–В4, verified: true}
+    expected:
+      v2:
+        status: answered
+        reasons: []
+        alternatives:
+          - {status: needs_review, reasons: [external_evidence_missing], why: вывод только по внутреннему ЛНА 5.13.4 без п. 406}
+          - {status: needs_review, reasons: [internal_evidence_missing], why: вывод только по п. 406 без внутреннего ЛНА}
+          - {status: needs_context, reasons: [applicability_unclear], why: модель задаёт уточняющий вопрос}
+          - {status: needs_review, reasons: [verification_contradiction], why: verifier счёл вывод противоречащим фактам}
+          - {status: needs_context, reasons: [verification_missing_facts], why: verifier счёл фактов недостаточно}
+    sources:
+      - {document_id: ext_ppr_1479, section: "XIX, п. 406"}
+      - {document_id: int_instr_mery_pb, section: "5.13.4"}
+      - {document_id: int_unit_warehouse_v2_list, section: "2 Категории помещений"}
+      - {document_id: int_unit_warehouse_v2_list, section: "4 Первичные средства пожаротушения"}
+
+  - n: 4
+    unit_id: unit_warehouse_v2
+    question: Просрочено ли испытание наружной пожарной лестницы и когда следующее?
+    checks: периодичность 5 лет, дата 15.11.2021
+    required_subanswers:
+      - периодичность эксплуатационных испытаний — не реже 1 раза в 5 лет (п. 17 «б» ПП РФ № 1479; п. 5.1.2.12 Инструкции)
+      - последнее испытание 15.11.2021, следующее — не позднее 15.11.2026
+      - на дату заполнения листа 17.09.2026 срок не истёк, испытание не просрочено
+    accepted_alternatives:
+      - напоминание о необходимости составления протокола испытаний
+      - ссылка на журнал эксплуатации систем противопожарной защиты
+    forbidden_conclusions:
+      - испытание просрочено
+      - срок испытания истёк
+      - требуется провести испытание немедленно
+      - проводится 1 раз в год
+      - 1 раз в 3 года
+    object_facts:
+      sufficient:
+        - раздел 8 листа unit_warehouse_v2 — наружная металлическая лестница на кровлю, последнее испытание 15.11.2021
+        - раздел 7 листа unit_warehouse_v2 — дата заполнения листа 17.09.2026
+      missing: []
+      typed_fields:
+        outside_ladder_last_test_date: "15.11.2021"
+    norm:
+      - {document_id: ext_ppr_1479, point: "п. 17 «б»", edition: "ред. от 03.02.2025 № 90", operator: "не реже 1 раза в 5 лет", applies_to: эксплуатационные испытания пожарных лестниц, verified: true}
+    expected:
+      v2:
+        status: answered
+        reasons: []
+        alternatives:
+          - {status: needs_review, reasons: [external_evidence_missing], why: вывод только по внутреннему ЛНА 5.1.2.12 без п. 17 «б»}
+          - {status: needs_review, reasons: [internal_evidence_missing], why: вывод только по п. 17 «б» без внутреннего ЛНА}
+          - {status: needs_context, reasons: [applicability_unclear], why: модель задаёт уточняющий вопрос о дате или протоколе}
+          - {status: needs_review, reasons: [verification_contradiction], why: verifier счёл вывод противоречащим фактам}
+          - {status: needs_context, reasons: [verification_missing_facts], why: verifier счёл фактов недостаточно}
+    sources:
+      - {document_id: ext_ppr_1479, section: "I. Общие положения, п. 17 «б»"}
+      - {document_id: int_instr_mery_pb, section: "5.1.2.12"}
+      - {document_id: int_unit_warehouse_v2_list, section: "7 Планировка и эвакуация"}
+      - {document_id: int_unit_warehouse_v2_list, section: "8 Технические особенности"}

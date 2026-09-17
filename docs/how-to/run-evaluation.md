@@ -45,8 +45,9 @@ The completed 81-profile run retained the current defaults.
 [2026-09-15-object-profile-design §5.2](../superpowers/specs/2026-09-15-object-profile-design.md).
 
 Сборка двух баз (`index.py` удаляет всю папку `CHROMA_DB_PATH`, поэтому у режимов разные пути).
-**Важно:** committed `corpus/manifest.yaml` уже несёт `role: object_profile` на всех четырёх
-листах (issue #44) — сборка v1 **по нему** индексирует v1 без листов объекта и молча превращает
+**Важно:** committed `corpus/manifest.yaml` уже несёт `role: object_profile` на всех листах
+объекта (шесть: четыре смоук-листа issue #44 плюс `unit_prod` и `unit_warehouse_v2` из набора
+ловушек) — сборка v1 **по нему** индексирует v1 без листов объекта и молча превращает
 сравнение в «v2-ретрив против v2». v1 нужно собирать из отдельной копии манифеста без строк
 `role: object_profile`, в scratch-каталоге вне репозитория (не коммитится). После сборки **ни
 `chroma_db_dept`, ни `chroma_db_dept_v2` больше не пересобирать до конца сравнения** — повторный
@@ -96,3 +97,23 @@ DEPARTMENT_QA_MODE=v2 CHROMA_DB_PATH=./chroma_db_dept_v2 CHROMA_COLLECTION_NAME=
 затрат.
 
 **Перепрогон одного режима.** После правки промпта режима достаточно прогнать только его: `--out` указывает на новый каталог прогона (`check_paid_run` отказывается дописывать в каталог, где уже лежат `q*.json`). Перепрогон 16.09 — только `v2` (промпт `department_answer` v3, 9 вызовов, согласовано Петром).
+
+**Набор ловушек (выбор дешёвой модели).** Отдельный набор
+`eval/data/object_profile_traps_expectations.yaml` (4 вопроса, синтетические листы `unit_prod` и
+`unit_warehouse_v2`) проверяет подмену величины порога и обобщение правила: п. 401 (категория Д,
+площадь ≤ 100 м²), п. 406 (30 м для В1–В4), п. 17 «б» (испытания лестницы не реже 1 раза в 5 лет).
+Набор не входит в парный прогон 9 вопросов и не меняет его baseline. Запуск — режим `v2`,
+частичный прогон:
+
+```bash
+RUN=eval/runs/object_profile_traps_$(date +%F)
+DEPARTMENT_QA_MODE=v2 CHROMA_DB_PATH=./chroma_db_dept_v2 CHROMA_COLLECTION_NAME=department_demo_v2 \
+  CORPUS_MANIFEST_PATH=corpus/manifest.yaml SOURCE_DOCS_PATH=./source_docs_dept \
+  .venv/bin/python eval/run_object_profile_pair.py --out $RUN \
+  --expectations eval/data/object_profile_traps_expectations.yaml --only 1,2,3,4 --model <model>
+.venv/bin/python eval/score_object_profile_run.py --run $RUN/v2 \
+  --expectations eval/data/object_profile_traps_expectations.yaml
+```
+
+`forbidden_conclusion` в этом наборе — точное совпадение подстроки; смысловая оценка по
+`required_subanswers` остаётся ручной.

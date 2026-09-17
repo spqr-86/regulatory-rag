@@ -68,3 +68,20 @@ documents:
     unit_id: unit_partial
     title: Лист особенностей объекта защиты — учебный класс (демонстрационные данные)
     role: object_profile
+
+  # Trap units for cheap-model selection (eval/data/object_profile_traps_expectations.yaml).
+  - file: int_unit_prod_list.md
+    document_id: int_unit_prod_list
+    source_type: internal
+    scope: unit
+    unit_id: unit_prod
+    title: Лист особенностей объекта защиты — производственный корпус (демонстрационные данные)
+    role: object_profile
+
+  - file: int_unit_warehouse_v2_list.md
+    document_id: int_unit_warehouse_v2_list
+    source_type: internal
+    scope: unit
+    unit_id: unit_warehouse_v2
+    title: Лист особенностей объекта защиты — склад В2 (демонстрационные данные)
+    role: object_profile

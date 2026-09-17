@@ -9,7 +9,9 @@
 > are absent in CI; chunk count needs a live ChromaDB. Those are checked only locally.
 
 ## models
-- simple: `openai` / `gpt-4o-mini`  (`SIMPLE_LLM_PROVIDER`, `SIMPLE_MODEL_NAME`)
+- simple: `openrouter` / `deepseek/deepseek-v4.1-flash`  (`SIMPLE_LLM_PROVIDER`, `SIMPLE_MODEL_NAME`)
+  — showcase default since 17.09.2026, chosen by `eval/runs/object_profile_traps_2026-09-17/summary.md`;
+  OSS/OpenAI alternative: `openai` / `gpt-4o-mini`
 - complex: `openai` / `gpt-4o`  (`COMPLEX_LLM_PROVIDER`, `COMPLEX_MODEL_NAME`)
 - judge (eval only): `gpt-4o`  (`JUDGE_MODEL_NAME`)
 - reranker: `crossencoder`  (`RERANKER_BACKEND`; alt: `flashrank`)
@@ -97,7 +99,9 @@ Object sheets use `typed_fields_v1` from
 [2026-09-16-typed-object-sheet-design](../superpowers/specs/2026-09-16-typed-object-sheet-design.md):
 nine strict fields in sections 2, 3, 4, 7 and 8. Prompt v4 renders them as a separate block
 with the existing `obj_sN` evidence ids. `ModelAnswer` and `decide()` do not validate the field
-semantics in this step.
+semantics in this step. Six sheets are committed: `unit_office`, `unit_dispatch`, `unit_depot`,
+`unit_partial` (pair run) and `unit_prod`, `unit_warehouse_v2` (trap set for cheap-model
+selection, `eval/data/object_profile_traps_expectations.yaml`).
 
 The 2026-09-16 verifier experiment used `openai/gpt-4o-mini` through OpenRouter. It gated
 q1 from `answered` to `needs_review/verification_contradiction`, but failed to diagnose the
