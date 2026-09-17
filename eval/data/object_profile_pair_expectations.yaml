@@ -48,6 +48,10 @@ questions:
         people_in_building_total: unknown
         permanent_workplaces_on_floor: unknown
         evacuation_plan_present: false
+        room_categories: unknown
+        aupt_present: false
+        extinguishers_total: 2
+        outside_ladder_last_test_date: not_applicable
     norm:
       - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 50", applies_to: здание (одновременно находящиеся люди), verified: true}
       - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 10", applies_to: этаж (постоянные рабочие места), verified: true}
@@ -237,6 +241,12 @@ questions:
       missing:
         - сведения о плане эвакуации («сведений нет»)
         - дата заполнения листа
+      typed_fields:
+        people_in_object_zone: 50
+        people_on_floor_total: 50
+        people_in_building_total: unknown
+        permanent_workplaces_on_floor: unknown
+        evacuation_plan_present: unknown
     norm:
       - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 50", applies_to: здание (одновременно находящиеся люди; 50 на этаже — нижняя граница для здания), verified: true}
       - {document_id: ext_ppr_1479, point: "п. 5", edition: "исходная редакция, в ред. № 90 не изменялся", operator: "≥ 10", applies_to: этаж (постоянные рабочие места; для учебного класса не основное условие), verified: true}

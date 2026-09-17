@@ -127,7 +127,15 @@ def _field_ref(eid: str, states: dict[str, str]) -> FieldRef:
 
 
 def applied_on_unknown(response: dict, states: dict[str, str]) -> list[Violation]:
-    """Applied conclusions that cite a field the object sheet marks unknown."""
+    """Unconditional applied conclusions that cite an unknown object field.
+
+    This mirrors ``department_qa.contract.decide``: clarifying questions take
+    precedence and make the response ``applicability_unclear``. In that case an
+    applied conclusion may state the rule conditionally while naming the facts
+    still needed, so citing the unknown field is not itself a violation.
+    """
+    if response.get("clarifying_questions"):
+        return []
     out: list[Violation] = []
     for conclusion in response.get("applied_conclusions") or []:
         unknown = [
@@ -217,13 +225,23 @@ def score_question(expectation: dict, record: dict) -> QuestionReport:
     )
 
 
-def score_run(expectations: dict[int, dict], run_dir: Path) -> list[QuestionReport]:
-    """Score every expectation against the run, in expectation order."""
+def score_run(
+    expectations: dict[int, dict],
+    run_dir: Path,
+    only: set[int] | None = None,
+) -> list[QuestionReport]:
+    """Score selected expectations against the run, in expectation order."""
+    selected = expectations
+    if only is not None:
+        unknown = only - set(expectations)
+        if unknown:
+            raise ValueError(f"unknown question numbers: {sorted(unknown)}")
+        selected = {n: q for n, q in expectations.items() if n in only}
     records = load_run(run_dir)
-    missing = sorted(set(expectations) - set(records))
+    missing = sorted(set(selected) - set(records))
     if missing:
         raise ValueError(f"{run_dir}: no records for questions {missing}")
-    return [score_question(expectations[n], records[n]) for n in expectations]
+    return [score_question(selected[n], records[n]) for n in selected]
 
 
 def summarize(reports: list[QuestionReport]) -> dict:
@@ -278,12 +296,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", type=Path, required=True, help="mode directory")
     parser.add_argument("--expectations", type=Path, default=DEFAULT_EXPECTATIONS)
+    parser.add_argument(
+        "--only", help="comma-separated question numbers to score, e.g. 1,7"
+    )
     parser.add_argument("--json", action="store_true", help="output JSON, not markdown")
     args = parser.parse_args()
 
     try:
         expectations = load_expectations(args.expectations)
-        reports = score_run(expectations, args.run)
+        only = (
+            {int(value) for value in args.only.split(",") if value.strip()}
+            if args.only
+            else None
+        )
+        reports = score_run(expectations, args.run, only=only)
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return 2

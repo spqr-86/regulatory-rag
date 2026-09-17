@@ -152,6 +152,20 @@ def test_applied_on_unknown_flags_conclusion_citing_unknown_field():
 
 
 @pytest.mark.unit
+def test_applied_on_unknown_ignores_conditional_answer_asking_for_context():
+    response = {
+        "clarifying_questions": ["Сколько людей может находиться в здании?"],
+        "applied_conclusions": [
+            {
+                "statement": "План нужен, если в здании 50 и более человек.",
+                "evidence_ids": ["obj_f_people_in_building_total", "ext_002"],
+            }
+        ],
+    }
+    assert applied_on_unknown(response, {"people_in_building_total": "unknown"}) == []
+
+
+@pytest.mark.unit
 def test_applied_on_unknown_ignores_known_and_unmapped_fields():
     response = {
         "applied_conclusions": [
@@ -288,6 +302,14 @@ def test_score_run_scores_all_in_expectation_order(tmp_path):
     (tmp_path / "q1.json").write_text(json.dumps(_record(1)), encoding="utf-8")
     reports = score_run(expectations, tmp_path)
     assert [r.n for r in reports] == [1, 2]
+
+
+@pytest.mark.unit
+def test_score_run_only_scores_selected_questions(tmp_path):
+    expectations = {1: _expectation(1), 2: _expectation(2)}
+    (tmp_path / "q2.json").write_text(json.dumps(_record(2)), encoding="utf-8")
+    reports = score_run(expectations, tmp_path, only={2})
+    assert [r.n for r in reports] == [2]
 
 
 # ── summary / render ───────────────────────────────────────────────────────────
