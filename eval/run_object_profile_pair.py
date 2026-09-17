@@ -131,6 +131,7 @@ def run_mode(
     out_dir: Path,
     raw_log: list[dict],
     verifier_log: list[dict] | None = None,
+    enable_verifier: bool = True,
 ) -> list[dict]:
     from src.department_qa.service import answer_question
 
@@ -148,7 +149,9 @@ def run_mode(
             _prompts.append(prompt)
             return stack.model_fn(prompt)
 
-        stack_verifier = getattr(stack, "verifier_fn", None)
+        stack_verifier = (
+            getattr(stack, "verifier_fn", None) if enable_verifier else None
+        )
 
         def verifier_fn(prompt: str, _prompts=verify_prompts):
             _prompts.append(prompt)
@@ -215,6 +218,11 @@ def main() -> int:
         help="explicitly allow this SIMPLE_MODEL_NAME for the paid run (agreed per run)",
     )
     parser.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="skip the independent verifier call (answer + verify otherwise)",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="configuration only, no model calls"
     )
     args = parser.parse_args()
@@ -257,7 +265,7 @@ def main() -> int:
         "chunks": sum(1 for _ in stack.store.iter_all_documents()),
         "prompt_version": stack.config.prompt_version,
         "verify_prompt_version": "v1",
-        "verification_enabled": True,
+        "verification_enabled": not args.no_verify,
         "expectations_sha256": hashlib.sha256(
             args.expectations.read_bytes()
         ).hexdigest(),
@@ -272,7 +280,14 @@ def main() -> int:
         return 0
 
     usage = {"input_tokens": 0, "output_tokens": 0}
-    for r in run_mode(stack, questions, mode_dir, raw_log, verifier_log):
+    for r in run_mode(
+        stack,
+        questions,
+        mode_dir,
+        raw_log,
+        verifier_log,
+        enable_verifier=not args.no_verify,
+    ):
         print(r["n"], r["response"]["status"], r["response"]["reason_codes"])
         for call in r["raw_model_output"] + r["raw_verifier_output"]:
             for key in usage:

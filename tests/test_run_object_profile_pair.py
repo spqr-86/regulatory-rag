@@ -79,6 +79,59 @@ def test_run_mode_writes_one_record_per_question(tmp_path):
     assert saved["evidence_ids"] == []
 
 
+def _capture_verifier_fn(monkeypatch):
+    """Patch answer_question to record the verifier_fn it is called with."""
+    from src.department_qa.service import DepartmentResponse
+
+    captured: dict = {}
+
+    def fake_answer_question(*args, verifier_fn=None, **kwargs):
+        captured["verifier_fn"] = verifier_fn
+        return DepartmentResponse(status="out_of_scope", trace_id="t")
+
+    monkeypatch.setattr(
+        "src.department_qa.service.answer_question", fake_answer_question
+    )
+    return captured
+
+
+def _verifier_stack():
+    def verifier_fn(prompt):
+        raise AssertionError("verifier must not be called")
+
+    return SimpleNamespace(
+        config=SimpleNamespace(mode="v2", prompt_version="v2", profiles={}),
+        manifest=SimpleNamespace(snapshot_id="snap"),
+        search_fn=lambda q, filters=None, top_k=8: [],
+        model_fn=lambda prompt: ModelAnswer(answer="", out_of_scope=True),
+        verifier_fn=verifier_fn,
+    )
+
+
+@pytest.mark.unit
+def test_run_mode_passes_verifier_by_default(tmp_path, monkeypatch):
+    captured = _capture_verifier_fn(monkeypatch)
+    questions = [{"n": 1, "unit_id": None, "question": "q"}]
+
+    run_mode(_verifier_stack(), questions, tmp_path, [])
+
+    assert captured["verifier_fn"] is not None
+    assert (tmp_path / "q1.json").exists()
+
+
+@pytest.mark.unit
+def test_run_mode_can_disable_verifier(tmp_path, monkeypatch):
+    captured = _capture_verifier_fn(monkeypatch)
+    questions = [{"n": 1, "unit_id": None, "question": "q"}]
+
+    run_mode(_verifier_stack(), questions, tmp_path, [], enable_verifier=False)
+
+    assert captured["verifier_fn"] is None
+    saved = json.loads((tmp_path / "q1.json").read_text(encoding="utf-8"))
+    assert saved["verify_prompt"] == ""
+    assert saved["raw_verifier_output"] == []
+
+
 @pytest.mark.unit
 def test_check_paid_run_passes_for_valid_config(tmp_path):
     assert check_paid_run(_settings(), _questions(), tmp_path / "v1") is None
