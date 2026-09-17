@@ -1,24 +1,32 @@
-# Regulatory Compliance RAG
+# Regulatory Compliance Q&A
 
-**RAG pipeline for Russian regulatory documents (ГОСТ, СНиП, Trudovoy Kodeks, fire-safety and labour-safety rules) — answers questions with citations or explicitly abstains when uncertain.**
+**A compliance Q&A system over Russian regulatory documents (ГОСТ, СНиП, ТК РФ, fire- and labour-safety rules): it answers with citations, applies norms to a specific unit's own facts, and abstains when the evidence is not there. Because a confidently wrong compliance answer is a liability, not a UX bug, the pipeline decides deterministically and is conservative about what it releases.**
+
+Two product lines on one retrieval core:
+
+- **Regulatory Q&A** — ask a norm question; the answer is grounded in retrieved clauses, or the system explicitly refuses when retrieval confidence is low (a deterministic three-metric gate, no LLM in routing).
+- **Department Q&A** — ask about one unit's object; the answer combines three evidence levels — external legislation, the unit's own local acts, and the unit's structured object sheet — and is released only when its citations pass deterministic checks (`answered` = "citations checked"). Vertical slice on a synthetic corpus, limits documented.
+
+**Proven, not promised.** Retrieval and generation are measured **separately** — retrieval on 90 questions written by real OT/PB practitioners, generation by an LLM judge — and the design choices are backed by experiments, including the rejected ones.
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Answer quality** (56-question golden set, `gpt-4o` judge): in-scope correctness **7.47 / 10** · faithfulness **0.891** · answer relevance **0.879** · OOS rejection **1.00** · false-sufficiency **11.4%** · complex-path **17%** · **~$0.0039/query**, p50 **4.5 s**.
+**Retrieval** (90 practitioner questions): HR@5 **0.63** · HR@12 **0.81** · MRR **0.50**.
 
-> Metrics are judge-dependent — canonical values live in [docs/reference/FACTS.md](./docs/reference/FACTS.md). The reasoning behind the architecture is in [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
+> Metrics are judge-dependent — canonical values live in [docs/reference/FACTS.md](./docs/reference/FACTS.md). Design reasoning: [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md). Full methodology, per-experiment evidence and limits: [evaluation report](./docs/evaluation/README.md).
 
 [Russian README →](./README_RU.md)
 
 ---
 
-## The problem
+## Why it's hard
 
-Regulatory documents in industrial domains (workplace safety, fire safety, construction) span hundreds of PDFs with dense cross-references. Manual lookup is slow and error-prone. A hallucinated answer to a compliance question isn't a UX issue — it's a liability.
+Regulatory documents in industrial domains (workplace safety, fire safety, construction) span hundreds of PDFs with dense cross-references and multi-prong clauses. Manual lookup is slow and error-prone; the right answer often depends on another clause, a threshold, or the document edition.
 
-This project explores how far RAG + deterministic guardrails can go toward reliable Q&A over regulatory corpora.
+This project explores how far retrieval plus deterministic guardrails can go toward reliable compliance Q&A — across a whole corpus and down to a single unit's own facts — and where the honest limits are.
 
 ---
 
