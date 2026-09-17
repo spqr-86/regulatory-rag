@@ -210,7 +210,7 @@ LLM and vector store are accessed through factory layers (`src/infra/llm_factory
 
 | Layer | Shipped | Configurable via | Roadmap |
 |-------|---------|------------------|---------|
-| LLM   | OpenAI, Gemini, DeepSeek | `SIMPLE_LLM_PROVIDER` / `COMPLEX_LLM_PROVIDER` | Anthropic |
+| LLM   | OpenAI, Gemini, DeepSeek, OpenRouter | `SIMPLE_LLM_PROVIDER` / `COMPLEX_LLM_PROVIDER` | Anthropic |
 | Vector store | Chroma | `VECTOR_STORE` | Qdrant, pgvector |
 | Embeddings | OpenAI, local (sentence-transformers), hf_api | `EMBEDDING_PROVIDER` | — |
 
