@@ -1,7 +1,9 @@
 # Evaluation — reference
 
 Quality evaluation framework for the V7 pipeline. Current scores: [FACTS](FACTS.md#metrics).
-To run a evaluation, see [how-to/run-evaluation](../how-to/run-evaluation.md).
+To run a evaluation, see [how-to/run-evaluation](../how-to/run-evaluation.md). Full
+methodology, headline tables, dataset cards and threats to validity:
+[evaluation report](../evaluation/README.md).
 
 ## Components
 

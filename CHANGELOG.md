@@ -7,6 +7,12 @@ All notable changes are documented here. Format: [Keep a Changelog](https://keep
 ## [Unreleased]
 
 ### Added
+- Evaluation report and per-experiment decision memos under `docs/evaluation/`:
+  methodology, headline results, dataset cards, and the measurements behind the shipped
+  choices and the rejected ones (RRF_K sweep, 81-profile threshold grid, retrieval
+  backbones, triage gap + terminal contract, department Q&A, cheap-model selection).
+- Department Q&A section in the README (EN+RU): object-profile mode, the `answered`
+  guarantee boundary, and the v1/v2 and cheap-model results.
 - Terminal triage decision contract: retrieval nodes now emit one typed
   `route_decision` / `route_reason`, and generation consumes only the validated,
   budgeted `final_context`.
@@ -18,6 +24,11 @@ All notable changes are documented here. Format: [Keep a Changelog](https://keep
   facts in [FACTS.md](docs/reference/FACTS.md#department-qa) (issue #44).
 
 ### Changed
+- README quick start, stack table and `.env.example` now state the showcase LLM split
+  (OpenRouter `deepseek/deepseek-v4.1-flash` on the simple path, OpenAI `gpt-4o` on the
+  complex path) instead of "OpenAI default".
+- `index.py` is no longer described as destructive: the old index is removed only after
+  chunking succeeds (since #32).
 - Department Q&A default `DEPARTMENT_QA_MODE` is now `v2` (object profile in the prompt),
   with the `q1` threshold error accepted as known — decision 10 (issue #44).
 - Final 56-question quality gate (53 valid, `gpt-4o` judge): in-scope correctness 7.47,

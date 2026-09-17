@@ -49,7 +49,7 @@ Triage is a single deterministic path: a three-metric hard gate plus a structure
 sufficiency gap that pulls in cross-referenced clauses before escalating. See
 [docs/explanation/triage.md](./docs/explanation/triage.md).
 
-📖 **Docs:** [architecture](./docs/explanation/architecture.md) · [design decisions](./docs/explanation/design-decisions.md) · [FACTS](./docs/reference/FACTS.md) · [full documentation](./docs/README.md)
+📖 **Docs:** [architecture](./docs/explanation/architecture.md) · [design decisions](./docs/explanation/design-decisions.md) · [evaluation report](./docs/evaluation/README.md) · [FACTS](./docs/reference/FACTS.md) · [full documentation](./docs/README.md)
 
 ---
 
@@ -77,6 +77,60 @@ Canonical values: [docs/reference/FACTS.md](./docs/reference/FACTS.md).
 
 ---
 
+## What the measurements showed
+
+Retrieval and generation are measured **separately** — a single end-to-end score hides
+whether a wrong answer came from a missing chunk or from a bad decision over a good chunk.
+Full methodology, per-experiment memos and threats to validity:
+[docs/evaluation/](./docs/evaluation/README.md).
+
+**Retrieval backbones** (90 practitioner questions; hybrid is production):
+
+| Backbone | HR@5 | HR@12 | MRR | p50 |
+|---|---:|---:|---:|---:|
+| hybrid (production) | 0.633 | 0.811 | 0.503 | 550 ms |
+| vector-only | 0.589 | 0.822 | 0.486 | 148 ms |
+| bm25-only | 0.500 | 0.667 | 0.352 | 24 ms |
+
+BM25-only is disqualified; vector vs hybrid is a near-tie (hybrid wins the top-5 and MRR that
+feed reranking, vector wins HR@12 and runs ~3.5× faster). Hybrid kept on measured grounds,
+not on "best practice" ([memo](./docs/evaluation/experiments/retrieval-backbones.md)).
+
+**Department Q&A — object sheet as a profile (`v2`) vs in the index (`v1`)** (9 questions,
+expectations committed before the run, `gpt-4o-mini`):
+
+| Metric | v1 | v2 |
+|---|---:|---:|
+| Expected status + reasons | 7/9 | 8/9 |
+| Required sub-answers credited | 7/17 | 11/17 |
+| Forbidden conclusions | 2 | 1 |
+
+The remaining `v2` error is a norm threshold applied to a fact of the wrong quantity; it
+survived prompt iterations, a typed object sheet and a post-generation verifier, and was only
+fixed by the model
+([memo](./docs/evaluation/experiments/department-qa-object-profile.md)).
+
+**Cheap-model selection on 4 adversarial threshold traps** (mode `v2`, one run per model):
+
+| Model | Traps passed | Cost, 4 q |
+|---|---:|---:|
+| `deepseek/deepseek-v4.1-flash` | **4/4** | $0.022 |
+| `openai/gpt-5-mini` | 4/4 | $0.049 |
+| `google/gemini-3-flash-preview` | 4/4 | $0.030 |
+| `openai/gpt-4o-mini` | 2/4 | $0.004 |
+| `anthropic/claude-haiku-4.5` | 2/4 | $0.057 |
+| `deepseek/deepseek-v4-flash` | 1–1.5/4 | $0.003 |
+
+DeepSeek V4.1 Flash is the cheapest model that passed all traps and is the showcase default.
+The contract status did not separate correct from wrong answers — models were compared on
+semantics ([memo](./docs/evaluation/experiments/cheap-model-selection.md)).
+
+Rejected after measurement: tuning `RRF_K` (dead knob), a different hard-gate threshold
+profile (81 profiles, none safer), norm-to-field markup. Negative results are documented, not
+hidden: [experiments/](./docs/evaluation/experiments/).
+
+---
+
 ## Quick start
 
 ```bash
@@ -84,18 +138,18 @@ git clone https://github.com/spqr-86/regulatory-rag.git
 cd regulatory-rag
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # add OPENAI_API_KEY (LLM + embeddings by default)
+cp .env.example .env  # fill OPENAI_API_KEY (embeddings, complex path, judge) + OPENROUTER_API_KEY (simple path)
 ```
 
 Drop your PDF/DOCX regulatory documents into `source_docs/`, then:
 
 ```bash
-python index.py                 # index documents → ChromaDB (destructive: wipes the collection first)
+python index.py                 # index documents → ChromaDB (rebuilds the collection; the old index is removed only after chunking succeeds)
 streamlit run app.py --server.port 8502   # UI at http://localhost:8502
 uvicorn api:app --port 8503                # REST API at http://localhost:8503/docs
 ```
 
-Defaults to OpenAI (LLM + embeddings) + ChromaDB. See [Backend abstraction](#backend-abstraction) to swap any layer via `.env`.
+Defaults to ChromaDB, OpenAI embeddings, and a two-provider LLM split (OpenRouter on the simple path, OpenAI on the complex path). See [Backend abstraction](#backend-abstraction) to swap any layer via `.env`.
 
 Optional monitoring stack (Postgres for query events, Grafana on top):
 
@@ -155,6 +209,31 @@ bring your own documents. Exact counts: [docs/reference/FACTS.md](./docs/referen
 
 ---
 
+## Department Q&A
+
+A second product line on the same retrieval core: questions asked **by a specific unit**
+about its own object, answered over two norm levels — company-wide legislation (`external`)
+and the unit's own local acts (`internal`) — plus a third evidence level, the unit's object
+sheet.
+
+The sheet is not a norm to be ranked: it is parsed into a structured **object profile** and
+passed to the prompt whole (`DEPARTMENT_QA_MODE=v2`, default), instead of being indexed as
+ordinary chunks (`v1`). The answer schema adds `object_facts` (facts quoted from the sheet)
+and `applied_conclusions` (an object fact plus the norm applied to it) to the existing answer
+contract.
+
+`answered` means **"citations checked"**, not "content verified": every cited id exists with
+the right role, no clarifying question is pending, both norm levels are present, a cited
+profile carries a fill-in date, and a deterministic gate rejects an applied conclusion that
+cites a field the sheet marks `unknown`. Whether the cited text actually supports the claim is
+measured in eval, not enforced at runtime — and the UI says so.
+
+- Specs: [department Q&A MVP](./docs/superpowers/specs/2026-09-14-department-qa-mvp-design.md) · [object profile](./docs/superpowers/specs/2026-09-15-object-profile-design.md)
+- Mode, env and guarantee boundary: [FACTS § department qa](./docs/reference/FACTS.md#department-qa)
+- Results and known error: [evaluation report](./docs/evaluation/README.md)
+
+---
+
 ## REST API
 
 Run the FastAPI backend alongside Streamlit:
@@ -193,7 +272,7 @@ Full reference with request/response shapes and rate limits:
 | Layer | Technology |
 |-------|-----------|
 | Orchestration | LangGraph (V7 deterministic graph) |
-| LLM | OpenAI (default), Gemini, DeepSeek — configurable per path via `SIMPLE/COMPLEX_LLM_PROVIDER` in `.env` |
+| LLM | Showcase default: OpenRouter `deepseek/deepseek-v4.1-flash` (simple) + OpenAI `gpt-4o` (complex). Also OpenAI, Gemini, DeepSeek, OpenRouter — configurable per path via `SIMPLE/COMPLEX_LLM_PROVIDER` in `.env` |
 | Embeddings | OpenAI text-embedding-3-small |
 | Vector store | ChromaDB |
 | Reranking | CrossEncoder (sentence-transformers); FlashRank selectable via `RERANKER_BACKEND` |
@@ -269,11 +348,13 @@ blockers.
 - ✅ Versioned prompts — Jinja2 templates, registry trimmed to 3 live families; `generate_answer` v8 (anti-sycophancy + value↔condition binding)
 - ✅ Offline eval — golden dataset + 90-question practitioner retrieval test set, per-query cost and latency
 - ✅ Online monitoring — every query is a row in Postgres (cost, latency, route, tokens, `source`), Grafana dashboard, 👍/👎 under the answer; the whole stack is one `docker compose up`
+- ✅ Department Q&A — separate stack for unit-scoped questions over company/internal norms plus a structured object profile; typed object sheet, deterministic citation and unknown-field gates; `v2` default
 - ✅ Deployed on a VPS (port 8502, Streamlit)
 
 Optional post-MVP backlog: independent judge validation, generated comparison tables,
 error attribution between retrieval and generation, and a chunking experiment for tables
-and section headers. See [docs/roadmap.md](./docs/roadmap.md).
+and section headers. See [docs/roadmap.md](./docs/roadmap.md); results to date, rejected
+variants and threats to validity are in the [evaluation report](./docs/evaluation/README.md).
 
 ---
 

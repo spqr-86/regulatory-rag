@@ -24,6 +24,12 @@ The roadmap retains optional experiments for future work.
 - [explanation/triage.md](./explanation/triage.md) — how `evaluate_triage` decides sufficient vs escalate
 - [explanation/design-decisions.md](./explanation/design-decisions.md) — **the 8 key design decisions, with evidence** (start here for the "why")
 
+## Evaluation — what was measured and what it showed
+
+- [evaluation/README.md](./evaluation/README.md) — **evaluation report**: methodology, headline results, decisions, threats to validity
+- [evaluation/datasets.md](./evaluation/datasets.md) — data cards for every eval set (provenance, labels, limitations)
+- [evaluation/experiments/](./evaluation/experiments/) — per-experiment decision memos, including negative results
+
 ## How-to — task recipes
 
 - [how-to/add-a-node.md](./how-to/add-a-node.md) — add a pipeline node

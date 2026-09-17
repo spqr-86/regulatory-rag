@@ -49,7 +49,7 @@ evaluate_triage      — детерминированный гейт доста�
 пробел достаточности, который добирает перекрёстно упомянутые пункты до эскалации. См.
 [docs/explanation/triage.md](./docs/explanation/triage.md).
 
-📖 **Документация:** [архитектура](./docs/explanation/architecture.md) · [проектные решения](./docs/explanation/design-decisions.md) · [FACTS](./docs/reference/FACTS.md) · [полная документация](./docs/README.md)
+📖 **Документация:** [архитектура](./docs/explanation/architecture.md) · [проектные решения](./docs/explanation/design-decisions.md) · [отчёт по eval](./docs/evaluation/README.md) · [FACTS](./docs/reference/FACTS.md) · [полная документация](./docs/README.md)
 
 ---
 
@@ -78,6 +78,59 @@ Hit Rate / MRR меряются отдельно на наборе из 90 ре�
 
 ---
 
+## Что показали замеры
+
+Retrieval и генерация меряются **раздельно** — единый end-to-end score скрывает, откуда
+пришёл неверный ответ: нужного чанка не было или решение по хорошему чанку было неверным.
+Полная методология, разборы экспериментов и ограничения доказательности:
+[docs/evaluation/](./docs/evaluation/README.md).
+
+**Backbone-и retrieval** (90 вопросов практиков; гибрид — прод):
+
+| Backbone | HR@5 | HR@12 | MRR | p50 |
+|---|---:|---:|---:|---:|
+| гибрид (прод) | 0.633 | 0.811 | 0.503 | 550 мс |
+| только вектор | 0.589 | 0.822 | 0.486 | 148 мс |
+| только BM25 | 0.500 | 0.667 | 0.352 | 24 мс |
+
+BM25-only дисквалифицирован; вектор и гибрид почти вничью (гибрид берёт top-5 и MRR, которые
+кормят реранк; вектор берёт HR@12 и работает ~3,5× быстрее). Гибрид оставлен по замеру, а не
+потому что «best practice» ([memo](./docs/evaluation/experiments/retrieval-backbones.md)).
+
+**Q&A подразделений — лист объекта профилем (`v2`) против листа в индексе (`v1`)** (9 вопросов,
+ожидания зафиксированы до прогона, `gpt-4o-mini`):
+
+| Замер | v1 | v2 |
+|---|---:|---:|
+| Ожидаемый статус + причины | 7/9 | 8/9 |
+| Засчитанные подответы | 7/17 | 11/17 |
+| Запрещённые выводы | 2 | 1 |
+
+Оставшаяся ошибка `v2` — порог нормы, применённый к факту другой величины; она пережила
+итерации промпта, типизированный лист и verifier после генерации, и исправилась только
+сменой модели ([memo](./docs/evaluation/experiments/department-qa-object-profile.md)).
+
+**Выбор дешёвой модели на 4 ловушках с порогами** (режим `v2`, один прогон на модель):
+
+| Модель | Ловушки | $ за 4 вопроса |
+|---|---:|---:|
+| `deepseek/deepseek-v4.1-flash` | **4/4** | $0.022 |
+| `openai/gpt-5-mini` | 4/4 | $0.049 |
+| `google/gemini-3-flash-preview` | 4/4 | $0.030 |
+| `openai/gpt-4o-mini` | 2/4 | $0.004 |
+| `anthropic/claude-haiku-4.5` | 2/4 | $0.057 |
+| `deepseek/deepseek-v4-flash` | 1–1.5/4 | $0.003 |
+
+DeepSeek V4.1 Flash — самая дешёвая модель из прошедших все ловушки, она и витринный дефолт.
+Контрактный статус не различал верные и неверные ответы — модели сравнивались по семантике
+([memo](./docs/evaluation/experiments/cheap-model-selection.md)).
+
+Отклонено по замеру: тюнинг `RRF_K` (мёртвая ручка), другой профиль hard-gate порогов
+(81 профиль, ни один не безопаснее), ручная разметка «норма → поля». Отрицательные
+результаты задокументированы, а не спрятаны: [experiments/](./docs/evaluation/experiments/).
+
+---
+
 ## Быстрый старт
 
 ```bash
@@ -85,18 +138,18 @@ git clone https://github.com/spqr-86/regulatory-rag.git
 cd regulatory-rag
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # добавить OPENAI_API_KEY (по умолчанию LLM + embeddings)
+cp .env.example .env  # заполнить OPENAI_API_KEY (embeddings, complex-путь, судья) + OPENROUTER_API_KEY (simple-путь)
 ```
 
 Положите PDF/DOCX нормативных документов в `source_docs/`, затем:
 
 ```bash
-python index.py                              # индексировать → ChromaDB (деструктивно: сносит коллекцию)
+python index.py                              # индексировать → ChromaDB (пересобирает коллекцию; старый индекс удаляется только после успешной нарезки)
 streamlit run app.py --server.port 8502      # UI на http://localhost:8502
 uvicorn api:app --port 8503                   # REST API на http://localhost:8503/docs
 ```
 
-По умолчанию: OpenAI (LLM + embeddings) + ChromaDB. Раздел [Замена бэкенда](#замена-бэкенда) — переключение через `.env`.
+По умолчанию: ChromaDB, embeddings OpenAI и LLM в двух провайдерах (OpenRouter на simple-пути, OpenAI на complex). Раздел [Замена бэкенда](#замена-бэкенда) — переключение через `.env`.
 
 Опциональный стек мониторинга (Postgres для событий запросов, Grafana сверху):
 
@@ -142,6 +195,30 @@ flowchart TD
 
 ---
 
+## Q&A подразделений
+
+Вторая продуктовая линия на том же ядре поиска: вопросы **от конкретного подразделения** о
+своём объекте, ответ поверх двух уровней норм — законодательство компании (`external`) и
+собственные ЛНА подразделения (`internal`) — плюс третий уровень, лист объекта.
+
+Лист объекта — не норма, которую надо ранжировать: он парсится в структурированный
+**профиль объекта** и подаётся в промпт целиком (`DEPARTMENT_QA_MODE=v2`, дефолт), а не
+индексируется обычными чанками (`v1`). В схему ответа добавлены `object_facts` (факты,
+процитированные из листа) и `applied_conclusions` (факт объекта плюс применённая к нему
+норма) поверх существующего контракта ответа.
+
+`answered` означает **«ссылки сверены»**, а не «смысл проверен»: каждый процитированный id
+существует с верной ролью, нет блокирующего уточняющего вопроса, оба уровня норм
+присутствуют, у процитированного профиля есть дата заполнения, а детерминированный гейт
+отклоняет вывод, опирающийся на поле со статусом `unknown`. Действительно ли цитата
+подтверждает утверждение — меряется в eval, а не в рантайме, и UI это говорит.
+
+- Спеки: [Q&A подразделений](./docs/superpowers/specs/2026-09-14-department-qa-mvp-design.md) · [профиль объекта](./docs/superpowers/specs/2026-09-15-object-profile-design.md)
+- Режим, env и граница гарантии: [FACTS § department qa](./docs/reference/FACTS.md#department-qa)
+- Результаты и известная ошибка: [отчёт по eval](./docs/evaluation/README.md)
+
+---
+
 ## REST API
 
 Запуск FastAPI-бэкенда вместе со Streamlit:
@@ -180,7 +257,7 @@ curl -X POST http://localhost:8503/query \
 | Слой | Технология |
 |------|-----------|
 | Оркестрация | LangGraph (V7 детерминированный граф) |
-| LLM | OpenAI (по умолчанию), Gemini, DeepSeek — настраивается через `SIMPLE/COMPLEX_LLM_PROVIDER` в `.env` |
+| LLM | Витринный дефолт: OpenRouter `deepseek/deepseek-v4.1-flash` (simple) + OpenAI `gpt-4o` (complex). Также OpenAI, Gemini, DeepSeek, OpenRouter — настраивается через `SIMPLE/COMPLEX_LLM_PROVIDER` в `.env` |
 | Embeddings | OpenAI text-embedding-3-small |
 | Vector store | ChromaDB |
 | Переранжирование | CrossEncoder (sentence-transformers); FlashRank выбирается через `RERANKER_BACKEND` |
@@ -256,11 +333,13 @@ terms:
 - ✅ Версионированные промпты — Jinja2-шаблоны, реестр сокращён до 3 активных семейств; `generate_answer` v8 (anti-sycophancy + value↔condition)
 - ✅ Offline eval — golden dataset + тест-набор для retrieval из 90 вопросов практиков, цена и латентность на запрос
 - ✅ Онлайн-мониторинг — каждый запрос строкой в Postgres (цена, латентность, маршрут, токены, `source`), дашборд Grafana, 👍/👎 под ответом; весь стек — один `docker compose up`
+- ✅ Q&A подразделений — отдельный стек для вопросов об объекте подразделения поверх внешних и внутренних норм плюс структурированный профиль объекта; типизированный лист, детерминированные гейты цитат и `unknown`-полей; дефолт `v2`
 - ✅ Задеплоен на VPS (порт 8502, Streamlit)
 
 Необязательный post-MVP backlog: независимая валидация судьи, генерируемая таблица
 сравнений, разделение ошибок retrieval и generation и эксперимент с нарезкой таблиц и
-заголовков. См. [docs/roadmap.md](./docs/roadmap.md).
+заголовков. См. [docs/roadmap.md](./docs/roadmap.md); результаты, отклонённые варианты и
+ограничения доказательности — в [отчёте по eval](./docs/evaluation/README.md).
 
 ---
 
