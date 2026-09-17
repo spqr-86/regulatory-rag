@@ -46,6 +46,7 @@ The roadmap retains optional experiments for future work.
 - [reference/data-pipeline.md](./reference/data-pipeline.md) — indexing: Docling, HybridChunker, embeddings, ChromaDB
 - [reference/evaluation.md](./reference/evaluation.md) — eval metrics and report format
 - [reference/api.md](./reference/api.md) — REST endpoints
+- [reference/configuration.md](./reference/configuration.md) — backend swaps (LLM, embeddings, vector store) and domain adaptation (glossary, prompts, corpus)
 
 Historical plans and the V7 migration spec live in [archive/](./archive/).
 

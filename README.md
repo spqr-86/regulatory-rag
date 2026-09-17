@@ -1,61 +1,76 @@
-# Regulatory Compliance Q&A
+# Regulatory RAG — evidence-gated compliance Q&A
 
-**A compliance Q&A system over Russian regulatory documents (ГОСТ, СНиП, ТК РФ, fire- and labour-safety rules): it answers with citations, applies norms to a specific unit's own facts, and abstains when the evidence is not there. Because a confidently wrong compliance answer is a liability, not a UX bug, the pipeline decides deterministically and is conservative about what it releases.**
+In a distributed organisation the same compliance questions come back every week: is this
+briefing still mandatory, how often, and does it apply to *this* particular site. The answer
+usually sits in three places at once — an external regulation (ГОСТ, СНиП, ТК РФ, fire- and
+labour-safety rules), the unit's own local act, and the recorded facts of the object itself.
+Manual lookup across hundreds of PDFs with dense cross-references is slow, and in compliance
+a confident unsupported answer is worse than an explicit "I don't know".
 
-Two product lines on one retrieval core:
-
-- **Regulatory Q&A** — ask a norm question; the answer is grounded in retrieved clauses, or the system explicitly refuses when retrieval confidence is low (a deterministic three-metric gate, no LLM in routing).
-- **Department Q&A** — ask about one unit's object; the answer combines three evidence levels — external legislation, the unit's own local acts, and the unit's structured object sheet — and is released only when its citations pass deterministic checks (`answered` = "citations checked"). Vertical slice on a synthetic corpus, limits documented.
-
-**Proven, not promised.** Retrieval and generation are measured **separately** — retrieval on 90 questions written by real OT/PB practitioners, generation by an LLM judge — and the design choices are backed by experiments, including the rejected ones.
+**This system answers such questions with citations — or refuses.** Every routing decision is
+deterministic (score thresholds, no LLM in the loop), the answer is released only when the
+evidence passes a sufficiency gate, and retrieval and generation are measured separately so
+that a wrong answer can be attributed to a missing chunk or to a bad decision over a good one.
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Answer quality** (56-question golden set, `gpt-4o` judge): in-scope correctness **7.47 / 10** · faithfulness **0.891** · answer relevance **0.879** · OOS rejection **1.00** · false-sufficiency **11.4%** · complex-path **17%** · **~$0.0039/query**, p50 **4.5 s**.
-**Retrieval** (90 practitioner questions): HR@5 **0.63** · HR@12 **0.81** · MRR **0.50**.
+**Retrieval** (90 questions taken verbatim from OT/PB practitioner forums, never used for
+tuning): HR@5 **0.63** · HR@12 **0.81** · MRR **0.50**.
+**Generation** (56-question golden set, `gpt-4o` judge): in-scope correctness **7.47 / 10** ·
+faithfulness **0.891** · answer relevance **0.879** · **~$0.0039/query**, p50 **4.5 s**.
 
-> Metrics are judge-dependent — canonical values live in [docs/reference/FACTS.md](./docs/reference/FACTS.md). Design reasoning: [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md). Full methodology, per-experiment evidence and limits: [evaluation report](./docs/evaluation/README.md).
+Two of the numbers miss their targets and are reported anyway: in-scope correctness 7.47
+against a >7.5 target, and false-sufficiency 11.4% against a <10% target. Sample sizes and
+what each metric actually denominates are in [Metrics](#metrics).
+
+> Canonical values live in [docs/reference/FACTS.md](./docs/reference/FACTS.md). Design
+> reasoning: [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
+> Full methodology, per-experiment evidence and threats to validity:
+> [evaluation report](./docs/evaluation/README.md).
 
 [Russian README →](./README_RU.md)
 
 ---
 
-## Why it's hard
-
-Regulatory documents in industrial domains (workplace safety, fire safety, construction) span hundreds of PDFs with dense cross-references and multi-prong clauses. Manual lookup is slow and error-prone; the right answer often depends on another clause, a threshold, or the document edition.
-
-This project explores how far retrieval plus deterministic guardrails can go toward reliable compliance Q&A — across a whole corpus and down to a single unit's own facts — and where the honest limits are.
-
----
-
 ## How it works
 
-```
-User query
-    ↓
-intent_gate          — regex noise filter + (optional) cosine-to-centroid OOS gate, before retrieval
-    ↓
-router               — query plan + glossary expansion + multi-query (RRF merge)
-    ↓
-rag_simple           — hybrid retrieval (BM25 + vectors, top-12) + CrossEncoder rerank
-    ↓
-evaluate_triage      — deterministic sufficiency gate (no LLM scoring)
-    ├── sufficient    → generate_answer
-    └── insufficient  → rag_complex (top-60 + MMR) → evaluate_complex
-                            ├── pass  → generate_answer
-                            └── fail  → abstain (explicit refusal)
+```mermaid
+flowchart TD
+    subgraph Ingestion
+        Docs[PDF / DOCX] --> Docling[Docling Parser]
+        Docling --> Split[HybridChunker max_tokens=400, merge_peers]
+        Split --> Embed[OpenAI Embeddings]
+        Embed --> DB[(ChromaDB)]
+    end
+
+    subgraph V7 [V7 LangGraph Pipeline]
+        Q[Query] --> Gate{intent_gate + domain gate}
+        Gate -->|noise / out-of-scope| End[END / abstain]
+        Gate -->|in-domain| Router[router + glossary + multi-query]
+        Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
+        Simple --> Triage{evaluate_triage hard gate + gap}
+        Triage -->|sufficient| Gen[generate_answer]
+        Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
+        Complex --> Eval[evaluate_complex]
+        Eval -->|pass| Gen
+        Eval -->|fail| Abstain[abstain]
+        Gen --> Answer[Answer + sources]
+    end
 ```
 
 Key design decisions:
-- **No LLM routing** — all branching decisions use deterministic score thresholds
-- **Abstain > hallucinate** — the system refuses to answer when retrieval confidence is low
-- **Two-stage retrieval** — a fast path handles most queries; the slow path activates only when needed
+- **No LLM routing** — all branching uses deterministic score thresholds, so the same query
+  takes the same path twice.
+- **Abstain > hallucinate** — the system refuses when retrieval confidence is low; triage is a
+  three-metric hard gate plus a structured sufficiency gap that pulls in cross-referenced
+  clauses before escalating ([triage](./docs/explanation/triage.md)).
+- **Two-stage retrieval** — a fast path handles most queries; the slow path (top-60 + MMR)
+  activates only when the gate says the evidence is thin.
 
-Triage is a single deterministic path: a three-metric hard gate plus a structured
-sufficiency gap that pulls in cross-referenced clauses before escalating. See
-[docs/explanation/triage.md](./docs/explanation/triage.md).
+The shipped index holds 12 regulatory documents (~7.8k chunks) as an example corpus — bring
+your own. Exact counts: [FACTS § corpus](./docs/reference/FACTS.md#corpus).
 
 📖 **Docs:** [architecture](./docs/explanation/architecture.md) · [design decisions](./docs/explanation/design-decisions.md) · [evaluation report](./docs/evaluation/README.md) · [FACTS](./docs/reference/FACTS.md) · [full documentation](./docs/README.md)
 
@@ -63,25 +78,28 @@ sufficiency gap that pulls in cross-referenced clauses before escalating. See
 
 ## Metrics
 
-| Metric | Value |
-|---|---|
-| In-scope correctness | 7.47 / 10 |
-| Correctness (all questions) | 7.26 / 10 |
-| Faithfulness | 0.891 |
-| Answer relevance | 0.879 |
-| OOS rejection rate | 1.00 |
-| False-sufficiency rate | 11.4% |
-| Complex-path rate | 17% |
-| Latency p50 / p95 / mean | 4.51 / 15.70 / 6.83 s |
-| Cost / query | $0.00387 ($0.205 / run) |
-| Retrieval HR@5 / HR@12 / MRR (hybrid, 90 practitioner questions) | 0.63 / 0.81 / 0.50 |
+| Metric | Value | Measured on |
+|---|---|---|
+| Retrieval HR@5 / HR@12 / MRR (hybrid) | 0.63 / 0.81 / 0.50 | 90 practitioner questions |
+| In-scope correctness | 7.47 / 10 | 43 in-scope questions (target >7.5) |
+| Correctness, all questions | 7.26 / 10 | 56-question golden set |
+| Faithfulness | 0.891 | 56-question golden set |
+| Answer relevance | 0.879 | 56-question golden set |
+| OOS abstain rate | 1.00 | out-of-scope subset only — 7 questions, a small sample |
+| False-sufficiency rate | 11.4% | share of simple-path answers the judge scored < 5/10 (target <10%) |
+| Complex-path rate | 17% | 56-question golden set |
+| Latency p50 / p95 / mean | 4.51 / 15.70 / 6.83 s | per query, end to end |
+| Cost / query | $0.00387 ($0.205 / run) | provider token usage, not an estimate |
 
-Eval: 56-question golden dataset (`tests/dataset.csv`), `eval/run_v7_eval.py`, LLM judge
-`gpt-4o`. Numbers are judge-dependent — compare runs only under the same judge. Retrieval
-Hit Rate / MRR are measured separately on a 90-question test set of real questions taken
-verbatim from OT/PB practitioner forums, kept only where a corpus answer exists and not
-used for any tuning (`eval/run_retrieval_eval.py`); see [docs/roadmap.md](./docs/roadmap.md).
-Canonical values: [docs/reference/FACTS.md](./docs/reference/FACTS.md).
+**How to read these.** The golden set is 56 questions — 43 in-scope, 7 out-of-scope, 6 with a
+false premise; 53 of 56 answers were valid in the reported run. *False-sufficiency* is not a
+hallucination rate and not a gate error rate: it is the share of answers released on the fast
+path that the judge then scored below 5/10 (`eval/run_v7_eval.py`) — the question it answers
+is "how often did the fast path release something weak". *OOS abstain* is measured on the
+out-of-scope subset alone, so 1.00 rests on 7 questions and should be read as a sanity check,
+not as a guarantee. All generation numbers are judge-dependent: compare runs only under the
+same judge. Retrieval is measured independently (`eval/run_retrieval_eval.py`) on questions
+frozen before any tuning.
 
 ---
 
@@ -113,9 +131,10 @@ expectations committed before the run, `gpt-4o-mini`):
 | Required sub-answers credited | 7/17 | 11/17 |
 | Forbidden conclusions | 2 | 1 |
 
-The remaining `v2` error is a norm threshold applied to a fact of the wrong quantity; it
-survived prompt iterations, a typed object sheet and a post-generation verifier, and was only
-fixed by the model
+Hypothesis, pre-committed expectations, controlled comparison, failure analysis, architecture
+change. The remaining `v2` error is a norm threshold applied to a fact of the wrong quantity;
+it survived prompt iterations, a typed object sheet and a post-generation verifier, and was
+only fixed by the model
 ([memo](./docs/evaluation/experiments/department-qa-object-profile.md)).
 
 **Cheap-model selection on 4 adversarial threshold traps** (mode `v2`, one run per model):
@@ -139,90 +158,12 @@ hidden: [experiments/](./docs/evaluation/experiments/).
 
 ---
 
-## Quick start
-
-```bash
-git clone https://github.com/spqr-86/regulatory-rag.git
-cd regulatory-rag
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env  # fill OPENAI_API_KEY (embeddings, complex path, judge) + OPENROUTER_API_KEY (simple path)
-```
-
-Drop your PDF/DOCX regulatory documents into `source_docs/`, then:
-
-```bash
-python index.py                 # index documents → ChromaDB (rebuilds the collection; the old index is removed only after chunking succeeds)
-streamlit run app.py --server.port 8502   # UI at http://localhost:8502
-uvicorn api:app --port 8503                # REST API at http://localhost:8503/docs
-```
-
-Defaults to ChromaDB, OpenAI embeddings, and a two-provider LLM split (OpenRouter on the simple path, OpenAI on the complex path). See [Backend abstraction](#backend-abstraction) to swap any layer via `.env`.
-
-Optional monitoring stack (Postgres for query events, Grafana on top):
-
-```bash
-cp .env.example .env              # set POSTGRES_PASSWORD and GF_SECURITY_ADMIN_PASSWORD
-docker compose up -d              # both services healthy; schema applied by db/migrations on an empty volume
-V7_TELEMETRY_WRITER=postgres      # in .env: write query events to the stack instead of JSONL
-```
-
-**Where to look:** dashboard *Regulatory RAG — запросы* at
-`http://localhost:3000/d/regrag-queries` (login from `.env`) — cost for the period, 👎 rate,
-queries per day split by `source`, routes, cost and latency at p50/p95, and the latest 👎
-with the question behind each one.
-
-**Where to click:** under every Streamlit answer there are 👍/👎 buttons (a 👎 opens an
-optional comment box). One vote per answer — pressing again overwrites the row, so the
-panels count answers, not clicks. Without the stack the buttons are hidden: a vote would
-have nowhere to land.
-
-**If Postgres is not up:** nothing breaks. Answers keep working, events go to the
-`logs/events.jsonl` journal — also when the database dies mid-flight — and
-`python scripts/ingest_events.py logs/events.jsonl` replays them into the table once it is
-back (idempotent by `query_id`). Port conflicts, a volume with an old password, empty
-panels: [docs/how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md),
-section «Если стек не поднялся».
-
----
-
-## Architecture
-
-```mermaid
-flowchart TD
-    subgraph Ingestion
-        Docs[PDF / DOCX] --> Docling[Docling Parser]
-        Docling --> Split[HybridChunker max_tokens=400, merge_peers]
-        Split --> Embed[OpenAI Embeddings]
-        Embed --> DB[(ChromaDB)]
-    end
-
-    subgraph V7 [V7 LangGraph Pipeline]
-        Q[Query] --> Gate{intent_gate + domain gate}
-        Gate -->|noise / out-of-scope| End[END / abstain]
-        Gate -->|in-domain| Router[router + glossary + multi-query]
-        Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
-        Simple --> Triage{evaluate_triage hard gate + gap}
-        Triage -->|sufficient| Gen[generate_answer]
-        Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
-        Complex --> Eval[evaluate_complex]
-        Eval -->|pass| Gen
-        Eval -->|fail| Abstain[abstain]
-        Gen --> Answer[Answer + sources]
-    end
-```
-
-The shipped index holds 12 regulatory documents (~7.8k chunks). It is an example corpus —
-bring your own documents. Exact counts: [docs/reference/FACTS.md](./docs/reference/FACTS.md#corpus).
-
----
-
 ## Department Q&A
 
 A second product line on the same retrieval core: questions asked **by a specific unit**
 about its own object, answered over two norm levels — company-wide legislation (`external`)
 and the unit's own local acts (`internal`) — plus a third evidence level, the unit's object
-sheet.
+sheet. Vertical slice on a synthetic corpus, limits documented.
 
 The sheet is not a norm to be ranked: it is parsed into a structured **object profile** and
 passed to the prompt whole (`DEPARTMENT_QA_MODE=v2`, default), instead of being indexed as
@@ -242,36 +183,39 @@ measured in eval, not enforced at runtime — and the UI says so.
 
 ---
 
-## REST API
-
-Run the FastAPI backend alongside Streamlit:
+## Quick start
 
 ```bash
-uvicorn api:app --port 8503
+git clone https://github.com/spqr-86/regulatory-rag.git
+cd regulatory-rag
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env  # fill OPENAI_API_KEY (embeddings, complex path, judge) + OPENROUTER_API_KEY (simple path)
 ```
 
-**`POST /query`** — main RAG pipeline
+Drop your PDF/DOCX regulatory documents into `source_docs/`, then:
 
 ```bash
-curl -X POST http://localhost:8503/query \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Как часто проводится повторный инструктаж?"}'
+python index.py                 # index documents → ChromaDB (rebuilds the collection; the old index is removed only after chunking succeeds)
+streamlit run app.py --server.port 8502   # UI at http://localhost:8502
+uvicorn api:app --port 8503                # REST API at http://localhost:8503/docs
 ```
 
-```json
-{
-  "answer": "Повторный инструктаж проводится не реже одного раза в 6 месяцев...",
-  "passages": [{"text": "...", "source": "2464.pdf", "score": 0.91}],
-  "path": "rag_simple → evaluate_triage → generate_answer → END",
-  "elapsed_sec": 4.2
-}
-```
+Defaults: ChromaDB, OpenAI embeddings, and a two-provider LLM split (OpenRouter on the simple
+path, OpenAI on the complex path). Every layer — LLM, embeddings, reranker, vector store — is
+swappable via `.env`, and the glossary, prompts and corpus are what you change to move the
+system to another domain: [configuration reference](./docs/reference/configuration.md).
 
-**`POST /retrieve`** — retrieval only (hybrid search, no LLM); **`GET /corpus`** — indexed
-documents; **`GET /health`** — liveness (`{"status": "ok"}`).
+**Monitoring** (optional): `docker compose up -d` brings up Postgres + Grafana; with
+`V7_TELEMETRY_WRITER=postgres` every query becomes a row (cost, latency, route, tokens,
+`source`) and the dashboard *Regulatory RAG — запросы* at `http://localhost:3000/d/regrag-queries`
+shows cost, 👍/👎 rate, routes and p50/p95. Without the stack nothing breaks: events go to
+`logs/events.jsonl` and can be replayed later. Setup, ports and troubleshooting:
+[how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md).
 
-Full reference with request/response shapes and rate limits:
-[docs/reference/api.md](./docs/reference/api.md). Interactive docs: `http://localhost:8503/docs`.
+**REST API:** `POST /query` (full pipeline), `POST /retrieve` (retrieval only, no LLM),
+`GET /corpus`, `GET /health`. Request/response shapes, examples and rate limits:
+[reference/api.md](./docs/reference/api.md); interactive docs at `http://localhost:8503/docs`.
 
 ---
 
@@ -280,89 +224,37 @@ Full reference with request/response shapes and rate limits:
 | Layer | Technology |
 |-------|-----------|
 | Orchestration | LangGraph (V7 deterministic graph) |
-| LLM | Showcase default: OpenRouter `deepseek/deepseek-v4.1-flash` (simple) + OpenAI `gpt-4o` (complex). Also OpenAI, Gemini, DeepSeek, OpenRouter — configurable per path via `SIMPLE/COMPLEX_LLM_PROVIDER` in `.env` |
-| Embeddings | OpenAI text-embedding-3-small |
+| LLM | OpenRouter `deepseek/deepseek-v4.1-flash` (simple) + OpenAI `gpt-4o` (complex); OpenAI, Gemini, DeepSeek, OpenRouter configurable per path |
+| Embeddings | OpenAI text-embedding-3-small (local sentence-transformers optional) |
 | Vector store | ChromaDB |
-| Reranking | CrossEncoder (sentence-transformers); FlashRank selectable via `RERANKER_BACKEND` |
-| ETL | Docling (PDF/DOCX → chunks) |
-| Evaluation | custom LLM-as-judge (faithfulness, answer relevance, correctness) + IR metrics (Hit Rate@k, MRR) |
+| Reranking | CrossEncoder (sentence-transformers); FlashRank selectable |
+| ETL | Docling (PDF/DOCX → chunks), HybridChunker |
+| Evaluation | custom LLM-as-judge (faithfulness, relevance, correctness) + IR metrics (HR@k, MRR) |
 | Monitoring | Postgres + Grafana (docker compose), events written from inside the graph |
 | UI | Streamlit |
 
 ---
 
-## Backend abstraction
-
-LLM and vector store are accessed through factory layers (`src/infra/llm_factory.py`, `src/backends/`). Adding a new provider is one function plus one registry entry — pipeline code does not change.
-
-| Layer | Shipped | Configurable via | Roadmap |
-|-------|---------|------------------|---------|
-| LLM   | OpenAI, Gemini, DeepSeek, OpenRouter | `SIMPLE_LLM_PROVIDER` / `COMPLEX_LLM_PROVIDER` | Anthropic |
-| Vector store | Chroma | `VECTOR_STORE` | Qdrant, pgvector |
-| Embeddings | OpenAI, local (sentence-transformers), hf_api | `EMBEDDING_PROVIDER` | — |
-
-**Fully local embeddings** (LLM still over an API):
-```bash
-EMBEDDING_PROVIDER=local
-EMBEDDING_MODEL_NAME=ai-forever/sbert_large_nlu_ru
-```
-
-**Adding a new LLM provider** (example: Anthropic):
-1. Add `_create_anthropic_llm(**kwargs)` to `src/infra/llm_factory.py`
-2. Register it in `_LLM_PROVIDERS = {..., "anthropic": _create_anthropic_llm}`
-3. Set `SIMPLE_LLM_PROVIDER=anthropic` (and/or `COMPLEX_LLM_PROVIDER`) in `.env`
-
-Same pattern for vector stores — implement the `VectorStoreBackend` protocol in `src/backends/`, register it in the factory.
-
----
-
-## Adapting to your domain
-
-The system ships tuned for Russian regulatory documents, but domain-specific knowledge is isolated and easy to swap.
-
-**Term glossary** (`config/term_glossary.yaml`) — maps informal abbreviations to their official full names so BM25 and vector search can match indexed text. To extend:
-
-```yaml
-terms:
-  "your abbreviation":
-    official: "Full official term from your documents"
-    source: "Regulation / standard reference (optional)"
-```
-
-No code changes needed — edit the YAML and restart.
-
-**Prompts** (`prompts/`) — Jinja2 templates via `PromptManager`, versioned. Switch the active version via `prompts/registry.yaml`.
-
-**Corpus** — drop your PDFs into `source_docs/` and run `python index.py`. The chunker and embeddings are language-agnostic.
-
----
-
 ## Project status
 
-**Portfolio MVP complete (2026-09-11).** The deployed application, offline evaluation,
-terminal triage contract, per-query cost accounting, and online monitoring form the
-finished showcase scope. Remaining ideas are optional post-MVP experiments, not release
-blockers.
+**Portfolio MVP complete (2026-09-11).** Built:
 
-- ✅ V7 LangGraph pipeline — all nodes, deterministic routing (verifier/rewriter retired — insufficient triage routes straight to rag_complex)
-- ✅ Hybrid retrieval — BM25 + semantic, two-stage (simple/complex path)
-- ✅ Deterministic sufficiency gate — three-metric hard gate, no LLM decisions in routing
-- ✅ Structured triage gap — triage emits a typed gap and closes it by tail-append before escalating (issue #13)
-- ✅ Domain gate — optional pre-retrieval OOS filter via cosine similarity to corpus centroid
-- ✅ HybridChunker — structure-aware chunking aligned to document sections/articles
-- ✅ Contextual embedding — parent-section heading prepended to each chunk vector
-- ✅ Cross-reference expansion — auto-fetches referenced clauses (e.g. "пункт 46") from the same source
-- ✅ Multi-query expansion — LLM generates query variants, RRF merge
-- ✅ Versioned prompts — Jinja2 templates, registry trimmed to 3 live families; `generate_answer` v8 (anti-sycophancy + value↔condition binding)
-- ✅ Offline eval — golden dataset + 90-question practitioner retrieval test set, per-query cost and latency
-- ✅ Online monitoring — every query is a row in Postgres (cost, latency, route, tokens, `source`), Grafana dashboard, 👍/👎 under the answer; the whole stack is one `docker compose up`
-- ✅ Department Q&A — separate stack for unit-scoped questions over company/internal norms plus a structured object profile; typed object sheet, deterministic citation and unknown-field gates; `v2` default
-- ✅ Deployed on a VPS (port 8502, Streamlit)
+- **Evidence-gated LangGraph pipeline** — deterministic routing, three-metric sufficiency
+  gate, structured triage gap, explicit abstention
+- **Hybrid retrieval** — BM25 + vectors, CrossEncoder rerank, two-stage, with
+  cross-reference expansion and glossary/multi-query expansion
+- **Object-aware compliance mode** — Department Q&A over external + internal norms and a
+  typed object profile, with deterministic citation and unknown-field gates
+- **Offline evaluation** — golden set + a 90-question practitioner retrieval set, separate
+  retrieval and generation measurement, per-query cost and latency, negative results kept
+- **Online telemetry** — every query a row in Postgres, Grafana dashboard, 👍/👎 feedback;
+  the whole stack is one `docker compose up`
 
-Optional post-MVP backlog: independent judge validation, generated comparison tables,
-error attribution between retrieval and generation, and a chunking experiment for tables
-and section headers. See [docs/roadmap.md](./docs/roadmap.md); results to date, rejected
-variants and threats to validity are in the [evaluation report](./docs/evaluation/README.md).
+Deployed on a VPS (Streamlit, port 8502). The full shipped-capability checklist and the
+optional post-MVP backlog (independent judge validation, error attribution between retrieval
+and generation, a chunking experiment for tables and headers) are in
+[docs/roadmap.md](./docs/roadmap.md); results, rejected variants and threats to validity are
+in the [evaluation report](./docs/evaluation/README.md).
 
 ---
 

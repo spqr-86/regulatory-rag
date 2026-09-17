@@ -1,88 +1,104 @@
-# Regulatory Compliance Q&A
+# Regulatory RAG — compliance Q&A с гейтом доказательств
 
-**Система Q&A по российским нормативным документам (ГОСТ, СНиП, ТК РФ, правила по пожарной и трудовой безопасности): отвечает со ссылками на нормы, применяет норму к фактам конкретного объекта и отказывается отвечать, когда оснований нет. Уверенный неверный ответ по нормативке — это риск, а не UX-баг, поэтому пайплайн решает детерминированно и осторожен в том, что выпускает.**
+В распределённой организации одни и те же вопросы по требованиям возвращаются каждую неделю:
+обязателен ли ещё этот инструктаж, как часто и относится ли он к *этому* конкретному объекту.
+Ответ обычно лежит сразу в трёх местах — внешняя норма (ГОСТ, СНиП, ТК РФ, правила по
+пожарной и трудовой безопасности), собственный ЛНА подразделения и записанные факты самого
+объекта. Ручной поиск по сотням PDF с плотными перекрёстными ссылками медленный, а в
+нормативке уверенный ответ без основания хуже честного «не знаю».
 
-Две продуктовые линии на одном ядре поиска:
-
-- **Regulatory Q&A** — вопрос по норме; ответ опирается на найденные пункты, либо система явно отказывается при низкой уверенности поиска (детерминированный гейт по трём метрикам, LLM не участвует ни в одном ветвлении).
-- **Q&A подразделений** — вопрос об объекте конкретного подразделения; ответ собирается из трёх уровней доказательств — внешнее законодательство, собственные ЛНА подразделения и структурированный лист объекта — и выпускается только если ссылки проходят детерминированные проверки (`answered` = «ссылки сверены»). Вертикальный срез на синтетическом корпусе, ограничения задокументированы.
-
-**Доказано, а не обещано.** Retrieval и генерация меряются **раздельно** — поиск на 90 вопросах реальных практиков ОТ/ПБ, генерация судьёй-LLM, — и проектные решения подкреплены экспериментами, включая отклонённые.
+**Система отвечает на такие вопросы со ссылками — либо отказывается.** Каждое ветвление
+детерминированно (пороги по метрикам, LLM в роутинге не участвует), ответ выпускается только
+после гейта достаточности, а retrieval и генерация меряются раздельно — чтобы неверный ответ
+можно было отнести к отсутствующему чанку или к неверному решению по хорошему чанку.
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Качество ответов** (56-вопросный golden set, судья `gpt-4o`): in-scope correctness **7.47 / 10** · faithfulness **0.891** · answer relevance **0.879** · отказ на OOS **1.00** · false-sufficiency **11.4%** · complex-путь **17%** · **~$0.0039/запрос**, p50 **4.5 с**.
-**Retrieval** (90 вопросов практиков): HR@5 **0.63** · HR@12 **0.81** · MRR **0.50**.
+**Retrieval** (90 вопросов, взятых дословно с форумов специалистов по ОТ/ПБ и никогда не
+использованных для тюнинга): HR@5 **0.63** · HR@12 **0.81** · MRR **0.50**.
+**Генерация** (56-вопросный golden set, судья `gpt-4o`): in-scope correctness **7.47 / 10** ·
+faithfulness **0.891** · answer relevance **0.879** · **~$0.0039/запрос**, p50 **4.5 с**.
 
-> Метрики зависят от судьи — канонические значения в [docs/reference/FACTS.md](./docs/reference/FACTS.md). Проектные решения: [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md). Полная методология, эксперименты и ограничения: [отчёт по eval](./docs/evaluation/README.md).
+Две цифры не дотягивают до целей и приводятся всё равно: in-scope correctness 7.47 при цели
+>7.5 и false-sufficiency 11.4% при цели <10%. Размеры выборок и что именно стоит в
+знаменателе каждой метрики — в разделе [Метрики](#метрики).
+
+> Канонические значения — в [docs/reference/FACTS.md](./docs/reference/FACTS.md). Проектные
+> решения: [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
+> Полная методология, эксперименты и ограничения доказательности:
+> [отчёт по eval](./docs/evaluation/README.md).
 
 [English README →](./README.md)
 
 ---
 
-## Почему это трудно
-
-Нормативные документы в промышленных отраслях (охрана труда, пожарная безопасность, строительство) — это сотни PDF с плотными перекрёстными ссылками и нормами из нескольких условий. Ручной поиск медленный и ненадёжный; верный ответ часто зависит от другого пункта, порога или редакции документа.
-
-Проект исследует, насколько retrieval плюс детерминированные guardrails решают задачу надёжного compliance-Q&A — от вопросов по всему корпусу до фактов конкретного объекта — и где проходят честные границы.
-
----
-
 ## Как работает
 
+```mermaid
+flowchart TD
+    subgraph Ingestion
+        Docs[PDF / DOCX] --> Docling[Docling Parser]
+        Docling --> Split[HybridChunker max_tokens=400, merge_peers]
+        Split --> Embed[OpenAI Embeddings]
+        Embed --> DB[(ChromaDB)]
+    end
+
+    subgraph V7 [V7 LangGraph Pipeline]
+        Q[Query] --> Gate{intent_gate + domain gate}
+        Gate -->|noise / out-of-scope| End[END / abstain]
+        Gate -->|in-domain| Router[router + glossary + multi-query]
+        Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
+        Simple --> Triage{evaluate_triage hard gate + gap}
+        Triage -->|sufficient| Gen[generate_answer]
+        Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
+        Complex --> Eval[evaluate_complex]
+        Eval -->|pass| Gen
+        Eval -->|fail| Abstain[abstain]
+        Gen --> Answer[Answer + sources]
+    end
 ```
-Запрос пользователя
-    ↓
-intent_gate          — regex-фильтр шума + (опционально) cosine-to-centroid OOS-гейт, до retrieval
-    ↓
-router               — план запроса + расширение глоссарием + multi-query (RRF-слияние)
-    ↓
-rag_simple           — гибридный retrieval (BM25 + векторы, top-12) + CrossEncoder rerank
-    ↓
-evaluate_triage      — детерминированный гейт достаточности (без LLM-оценки)
-    ├── sufficient    → generate_answer
-    └── insufficient  → rag_complex (top-60 + MMR) → evaluate_complex
-                            ├── pass  → generate_answer
-                            └── fail  → abstain (явный отказ)
-```
 
-Ключевые архитектурные решения:
-- **Нет LLM-роутинга** — все ветвления используют детерминированные пороги по score
-- **Abstain лучше галлюцинации** — система отказывается отвечать при низкой уверенности retrieval
-- **Двухэтапный retrieval** — быстрый путь обрабатывает большинство запросов; медленный активируется только при необходимости
+Ключевые проектные решения:
+- **LLM не решает, куда идти** — все ветвления по детерминированным порогам, один и тот же
+  запрос дважды идёт одним путём.
+- **Лучше отказ, чем выдумка** — при низкой уверенности поиска система отказывается; триаж —
+  hard-gate по трём метрикам плюс структурированный пробел достаточности, который подтягивает
+  пункты по перекрёстным ссылкам до эскалации ([триаж](./docs/explanation/triage.md)).
+- **Двухэтапный retrieval** — быстрый путь закрывает большинство запросов; медленный
+  (top-60 + MMR) включается, только когда гейт говорит, что оснований мало.
 
-Триаж — единый детерминированный путь: hard-gate по трём метрикам плюс структурированный
-пробел достаточности, который добирает перекрёстно упомянутые пункты до эскалации. См.
-[docs/explanation/triage.md](./docs/explanation/triage.md).
+В поставляемом индексе 12 нормативных документов (~7,8 тыс. чанков) — это пример корпуса,
+подставляйте свой. Точные значения: [FACTS § corpus](./docs/reference/FACTS.md#corpus).
 
-📖 **Документация:** [архитектура](./docs/explanation/architecture.md) · [проектные решения](./docs/explanation/design-decisions.md) · [отчёт по eval](./docs/evaluation/README.md) · [FACTS](./docs/reference/FACTS.md) · [полная документация](./docs/README.md)
+📖 **Документация:** [архитектура](./docs/explanation/architecture.md) · [проектные решения](./docs/explanation/design-decisions.md) · [отчёт по eval](./docs/evaluation/README.md) · [FACTS](./docs/reference/FACTS.md) · [вся документация](./docs/README.md)
 
 ---
 
 ## Метрики
 
-| Метрика | Значение |
-|---|---|
-| In-scope correctness | 7.47 / 10 |
-| Correctness (все вопросы) | 7.26 / 10 |
-| Faithfulness | 0.891 |
-| Answer relevance | 0.879 |
-| Отказ на OOS-запросах | 1.00 |
-| False-sufficiency rate | 11.4% |
-| Доля complex-пути | 17% |
-| Латентность p50 / p95 / mean | 4.51 / 15.70 / 6.83 с |
-| Стоимость запроса | $0.00387 ($0.205 / прогон) |
-| Retrieval HR@5 / HR@12 / MRR (hybrid, 90 вопросов практиков) | 0.63 / 0.81 / 0.50 |
+| Метрика | Значение | На чём измерено |
+|---|---|---|
+| Retrieval HR@5 / HR@12 / MRR (гибрид) | 0.63 / 0.81 / 0.50 | 90 вопросов практиков |
+| In-scope correctness | 7.47 / 10 | 43 in-scope вопроса (цель >7.5) |
+| Correctness (все вопросы) | 7.26 / 10 | 56-вопросный golden set |
+| Faithfulness | 0.891 | 56-вопросный golden set |
+| Answer relevance | 0.879 | 56-вопросный golden set |
+| Отказ на OOS-запросах | 1.00 | только OOS-подмножество — 7 вопросов, выборка мала |
+| False-sufficiency rate | 11.4% | доля ответов simple-пути, которым судья поставил < 5/10 (цель <10%) |
+| Доля complex-пути | 17% | 56-вопросный golden set |
+| Латентность p50 / p95 / mean | 4.51 / 15.70 / 6.83 с | на запрос, end-to-end |
+| Стоимость запроса | $0.00387 ($0.205 / прогон) | по фактическим токенам провайдера, не оценка |
 
-Eval: 56-вопросный golden dataset (`tests/dataset.csv`), `eval/run_v7_eval.py`, LLM-судья
-`gpt-4o`. Числа зависят от судьи — сравнивать прогоны только под одним судьёй. Retrieval
-Hit Rate / MRR меряются отдельно на наборе из 90 реальных вопросов, взятых дословно
-с форумов специалистов по ОТ/ПБ, оставлены только те, на которые в корпусе есть ответ;
-для тюнинга набор не использовался (`eval/run_retrieval_eval.py`), см.
-[docs/roadmap.md](./docs/roadmap.md). Канонические значения:
-[docs/reference/FACTS.md](./docs/reference/FACTS.md).
+**Как это читать.** Golden set — 56 вопросов: 43 in-scope, 7 out-of-scope, 6 с ложной
+посылкой; в отчётном прогоне валидны 53 из 56 ответов. *False-sufficiency* — не доля
+галлюцинаций и не доля ошибок гейта: это доля ответов, выпущенных быстрым путём, которым
+судья затем поставил ниже 5/10 (`eval/run_v7_eval.py`); метрика отвечает на вопрос «как часто
+быстрый путь выпустил слабый ответ». *Отказ на OOS* измеряется только на OOS-подмножестве,
+поэтому 1.00 стоит на 7 вопросах и читается как проверка вменяемости, а не как гарантия. Все
+метрики генерации зависят от судьи: сравнивать прогоны только под одним судьёй. Retrieval
+меряется независимо (`eval/run_retrieval_eval.py`) на вопросах, замороженных до любого тюнинга.
 
 ---
 
@@ -114,9 +130,11 @@ BM25-only дисквалифицирован; вектор и гибрид по�
 | Засчитанные подответы | 7/17 | 11/17 |
 | Запрещённые выводы | 2 | 1 |
 
-Оставшаяся ошибка `v2` — порог нормы, применённый к факту другой величины; она пережила
-итерации промпта, типизированный лист и verifier после генерации, и исправилась только
-сменой модели ([memo](./docs/evaluation/experiments/department-qa-object-profile.md)).
+Гипотеза, зафиксированные до прогона ожидания, контролируемое сравнение, разбор отказа,
+изменение архитектуры. Оставшаяся ошибка `v2` — порог нормы, применённый к факту другой
+величины; она пережила итерации промпта, типизированный лист и verifier после генерации, и
+исправилась только сменой модели
+([memo](./docs/evaluation/experiments/department-qa-object-profile.md)).
 
 **Выбор дешёвой модели на 4 ловушках с порогами** (режим `v2`, один прогон на модель):
 
@@ -139,75 +157,12 @@ DeepSeek V4.1 Flash — самая дешёвая модель из прошед
 
 ---
 
-## Быстрый старт
-
-```bash
-git clone https://github.com/spqr-86/regulatory-rag.git
-cd regulatory-rag
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env  # заполнить OPENAI_API_KEY (embeddings, complex-путь, судья) + OPENROUTER_API_KEY (simple-путь)
-```
-
-Положите PDF/DOCX нормативных документов в `source_docs/`, затем:
-
-```bash
-python index.py                              # индексировать → ChromaDB (пересобирает коллекцию; старый индекс удаляется только после успешной нарезки)
-streamlit run app.py --server.port 8502      # UI на http://localhost:8502
-uvicorn api:app --port 8503                   # REST API на http://localhost:8503/docs
-```
-
-По умолчанию: ChromaDB, embeddings OpenAI и LLM в двух провайдерах (OpenRouter на simple-пути, OpenAI на complex). Раздел [Замена бэкенда](#замена-бэкенда) — переключение через `.env`.
-
-Опциональный стек мониторинга (Postgres для событий запросов, Grafana сверху):
-
-```bash
-cp .env.example .env              # задать POSTGRES_PASSWORD и GF_SECURITY_ADMIN_PASSWORD
-docker compose up -d              # оба сервиса healthy; схема применяется db/migrations на пустом томе
-V7_TELEMETRY_WRITER=postgres      # в .env: писать события в стек вместо JSONL
-```
-
-Детали, дашборд и что делать, если стек не поднялся:
-[docs/how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md).
-
----
-
-## Архитектура
-
-```mermaid
-flowchart TD
-    subgraph Ingestion [Индексация]
-        Docs[PDF / DOCX] --> Docling[Docling Parser]
-        Docling --> Split[HybridChunker max_tokens=400, merge_peers]
-        Split --> Embed[OpenAI Embeddings]
-        Embed --> DB[(ChromaDB)]
-    end
-
-    subgraph V7 [V7 LangGraph Pipeline]
-        Q[Запрос] --> Gate{intent_gate + domain gate}
-        Gate -->|шум / out-of-scope| End[END / abstain]
-        Gate -->|in-domain| Router[router + глоссарий + multi-query]
-        Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
-        Simple --> Triage{evaluate_triage hard gate + gap}
-        Triage -->|sufficient| Gen[generate_answer]
-        Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
-        Complex --> Eval[evaluate_complex]
-        Eval -->|pass| Gen
-        Eval -->|fail| Abstain[abstain]
-        Gen --> Answer[Ответ + источники]
-    end
-```
-
-Поставляемый индекс — 12 нормативных документов (~7,8k чанков). Это пример корпуса,
-используйте свои документы. Точные числа: [docs/reference/FACTS.md](./docs/reference/FACTS.md#corpus).
-
----
-
 ## Q&A подразделений
 
 Вторая продуктовая линия на том же ядре поиска: вопросы **от конкретного подразделения** о
 своём объекте, ответ поверх двух уровней норм — законодательство компании (`external`) и
-собственные ЛНА подразделения (`internal`) — плюс третий уровень, лист объекта.
+собственные ЛНА подразделения (`internal`) — плюс третий уровень, лист объекта. Вертикальный
+срез на синтетическом корпусе, ограничения задокументированы.
 
 Лист объекта — не норма, которую надо ранжировать: он парсится в структурированный
 **профиль объекта** и подаётся в промпт целиком (`DEPARTMENT_QA_MODE=v2`, дефолт), а не
@@ -227,36 +182,39 @@ flowchart TD
 
 ---
 
-## REST API
-
-Запуск FastAPI-бэкенда вместе со Streamlit:
+## Быстрый старт
 
 ```bash
-uvicorn api:app --port 8503
+git clone https://github.com/spqr-86/regulatory-rag.git
+cd regulatory-rag
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env  # заполнить OPENAI_API_KEY (embeddings, complex-путь, судья) + OPENROUTER_API_KEY (simple-путь)
 ```
 
-**`POST /query`** — основной RAG-пайплайн
+Положите PDF/DOCX нормативных документов в `source_docs/`, затем:
 
 ```bash
-curl -X POST http://localhost:8503/query \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Как часто проводится повторный инструктаж?"}'
+python index.py                              # индексировать → ChromaDB (пересобирает коллекцию; старый индекс удаляется только после успешной нарезки)
+streamlit run app.py --server.port 8502      # UI на http://localhost:8502
+uvicorn api:app --port 8503                   # REST API на http://localhost:8503/docs
 ```
 
-```json
-{
-  "answer": "Повторный инструктаж проводится не реже одного раза в 6 месяцев...",
-  "passages": [{"text": "...", "source": "2464.pdf", "score": 0.91}],
-  "path": "rag_simple → evaluate_triage → generate_answer → END",
-  "elapsed_sec": 4.2
-}
-```
+По умолчанию: ChromaDB, embeddings OpenAI и LLM в двух провайдерах (OpenRouter на simple-пути,
+OpenAI на complex). Любой слой — LLM, embeddings, реранкер, vector store — меняется через
+`.env`, а глоссарий, промпты и корпус — это то, что правят при переносе системы в другой
+домен: [справочник по конфигурации](./docs/reference/configuration.md).
 
-**`POST /retrieve`** — только retrieval (гибридный поиск, без LLM); **`GET /corpus`** —
-проиндексированные документы; **`GET /health`** — liveness (`{"status": "ok"}`).
+**Мониторинг** (опционально): `docker compose up -d` поднимает Postgres + Grafana; с
+`V7_TELEMETRY_WRITER=postgres` каждый запрос становится строкой (цена, латентность, маршрут,
+токены, `source`), а дашборд *Regulatory RAG — запросы* на `http://localhost:3000/d/regrag-queries`
+показывает стоимость, долю 👎, маршруты и p50/p95. Без стека ничего не ломается: события идут
+в `logs/events.jsonl` и заливаются позже. Настройка, порты и разбор проблем:
+[how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md).
 
-Полный справочник со схемами и rate limits: [docs/reference/api.md](./docs/reference/api.md).
-Интерактивная документация: `http://localhost:8503/docs`.
+**REST API:** `POST /query` (весь пайплайн), `POST /retrieve` (только поиск, без LLM),
+`GET /corpus`, `GET /health`. Форматы запроса и ответа, примеры и лимиты:
+[reference/api.md](./docs/reference/api.md); интерактивная документация — `http://localhost:8503/docs`.
 
 ---
 
@@ -265,89 +223,37 @@ curl -X POST http://localhost:8503/query \
 | Слой | Технология |
 |------|-----------|
 | Оркестрация | LangGraph (V7 детерминированный граф) |
-| LLM | Витринный дефолт: OpenRouter `deepseek/deepseek-v4.1-flash` (simple) + OpenAI `gpt-4o` (complex). Также OpenAI, Gemini, DeepSeek, OpenRouter — настраивается через `SIMPLE/COMPLEX_LLM_PROVIDER` в `.env` |
-| Embeddings | OpenAI text-embedding-3-small |
+| LLM | OpenRouter `deepseek/deepseek-v4.1-flash` (simple) + OpenAI `gpt-4o` (complex); OpenAI, Gemini, DeepSeek, OpenRouter настраиваются по путям |
+| Embeddings | OpenAI text-embedding-3-small (локальные sentence-transformers опционально) |
 | Vector store | ChromaDB |
 | Переранжирование | CrossEncoder (sentence-transformers); FlashRank выбирается через `RERANKER_BACKEND` |
-| ETL | Docling (PDF/DOCX → чанки) |
-| Оценка | кастомный LLM-as-judge (faithfulness, answer relevance, correctness) + IR-метрики (Hit Rate@k, MRR) |
+| ETL | Docling (PDF/DOCX → чанки), HybridChunker |
+| Оценка | кастомный LLM-as-judge (faithfulness, relevance, correctness) + IR-метрики (HR@k, MRR) |
 | Мониторинг | Postgres + Grafana (docker compose), события пишутся изнутри графа |
 | UI | Streamlit |
 
 ---
 
-## Замена бэкенда
-
-LLM и vector store доступны через фабричные слои (`src/infra/llm_factory.py`, `src/backends/`). Добавление нового провайдера — одна функция и одна запись в реестре, код пайплайна не меняется.
-
-| Слой | Реализовано | Настройка через | Roadmap |
-|------|-------------|-----------------|---------|
-| LLM   | OpenAI, Gemini, DeepSeek | `SIMPLE_LLM_PROVIDER` / `COMPLEX_LLM_PROVIDER` | Anthropic |
-| Vector store | Chroma | `VECTOR_STORE` | Qdrant, pgvector |
-| Embeddings | OpenAI, local (sentence-transformers), hf_api | `EMBEDDING_PROVIDER` | — |
-
-**Локальные embeddings** (LLM всё равно через API):
-```bash
-EMBEDDING_PROVIDER=local
-EMBEDDING_MODEL_NAME=ai-forever/sbert_large_nlu_ru
-```
-
-**Добавление нового LLM-провайдера** (пример: Anthropic):
-1. Добавить `_create_anthropic_llm(**kwargs)` в `src/infra/llm_factory.py`
-2. Зарегистрировать в `_LLM_PROVIDERS = {..., "anthropic": _create_anthropic_llm}`
-3. Установить `SIMPLE_LLM_PROVIDER=anthropic` (и/или `COMPLEX_LLM_PROVIDER`) в `.env`
-
-Аналогичная схема для vector store — реализовать протокол `VectorStoreBackend` в `src/backends/`, зарегистрировать в фабрике.
-
----
-
-## Адаптация под свой домен
-
-Система настроена под российские нормативные документы, но доменные знания изолированы и легко заменяются.
-
-**Глоссарий терминов** (`config/term_glossary.yaml`) — маппинг неформальных аббревиатур на официальные полные названия, чтобы BM25 и векторный поиск находили проиндексированный текст. Расширение:
-
-```yaml
-terms:
-  "ваша аббревиатура":
-    official: "Полное официальное название из ваших документов"
-    source: "Ссылка на норматив (необязательно)"
-```
-
-Изменений в коде не нужно — правьте YAML и перезапускайте.
-
-**Промпты** (`prompts/`) — Jinja2-шаблоны через `PromptManager`, версионированные. Переключение активной версии через `prompts/registry.yaml`.
-
-**Корпус** — положите PDF в `source_docs/` и запустите `python index.py`. Чанкер и embeddings языконезависимы.
-
----
-
 ## Статус проекта
 
-**Портфельный MVP завершён 11.09.2026.** Развёрнутое приложение, offline eval,
-терминальный контракт triage, учёт цены каждого запроса и онлайн-мониторинг составляют
-завершённый демонстрационный объём. Оставшиеся идеи — необязательные post-MVP
-эксперименты, а не блокеры релиза.
+**Портфельный MVP завершён 11.09.2026.** Сделано:
 
-- ✅ V7 LangGraph-пайплайн — все ноды, детерминированный роутинг (verifier/rewriter убраны — insufficient triage ведёт сразу в rag_complex)
-- ✅ Гибридный retrieval — BM25 + семантический, двухэтапный (simple/complex path)
-- ✅ Детерминированный гейт достаточности — hard-gate по трём метрикам, без LLM в роутинге
-- ✅ Структурированный triage gap — триаж отдаёт типизированный пробел и закрывает его дозапросом в хвост до эскалации (issue #13)
-- ✅ Domain gate — опциональный pre-retrieval OOS-фильтр через cosine similarity к центроиду корпуса
-- ✅ HybridChunker — структурно-ориентированный чанкинг по разделам/статьям документов
-- ✅ Контекстное embedding — заголовок родительского раздела добавляется к вектору чанка
-- ✅ Раскрытие перекрёстных ссылок — автоматически подтягивает упомянутые пункты (напр., «пункт 46») из того же источника
-- ✅ Multi-query расширение — LLM генерирует варианты запроса, слияние через RRF
-- ✅ Версионированные промпты — Jinja2-шаблоны, реестр сокращён до 3 активных семейств; `generate_answer` v8 (anti-sycophancy + value↔condition)
-- ✅ Offline eval — golden dataset + тест-набор для retrieval из 90 вопросов практиков, цена и латентность на запрос
-- ✅ Онлайн-мониторинг — каждый запрос строкой в Postgres (цена, латентность, маршрут, токены, `source`), дашборд Grafana, 👍/👎 под ответом; весь стек — один `docker compose up`
-- ✅ Q&A подразделений — отдельный стек для вопросов об объекте подразделения поверх внешних и внутренних норм плюс структурированный профиль объекта; типизированный лист, детерминированные гейты цитат и `unknown`-полей; дефолт `v2`
-- ✅ Задеплоен на VPS (порт 8502, Streamlit)
+- **LangGraph-пайплайн с гейтом доказательств** — детерминированный роутинг, hard-gate
+  достаточности по трём метрикам, структурированный triage gap, явный отказ
+- **Гибридный retrieval** — BM25 + векторы, реранк CrossEncoder, два этапа, с раскрытием
+  перекрёстных ссылок и расширением запроса через глоссарий и multi-query
+- **Режим с учётом объекта** — Q&A подразделений поверх внешних и внутренних норм плюс
+  типизированный профиль объекта, детерминированные гейты цитат и `unknown`-полей
+- **Offline eval** — golden set и набор из 90 вопросов практиков для retrieval, раздельный
+  замер поиска и генерации, цена и латентность на запрос, отрицательные результаты сохранены
+- **Онлайн-телеметрия** — каждый запрос строкой в Postgres, дашборд Grafana, 👍/👎 под
+  ответом; весь стек — один `docker compose up`
 
-Необязательный post-MVP backlog: независимая валидация судьи, генерируемая таблица
-сравнений, разделение ошибок retrieval и generation и эксперимент с нарезкой таблиц и
-заголовков. См. [docs/roadmap.md](./docs/roadmap.md); результаты, отклонённые варианты и
-ограничения доказательности — в [отчёте по eval](./docs/evaluation/README.md).
+Задеплоено на VPS (Streamlit, порт 8502). Полный список реализованного и необязательный
+post-MVP backlog (независимая валидация судьи, разделение ошибок retrieval и generation,
+эксперимент с нарезкой таблиц и заголовков) — в [docs/roadmap.md](./docs/roadmap.md);
+результаты, отклонённые варианты и ограничения доказательности — в
+[отчёте по eval](./docs/evaluation/README.md).
 
 ---
 
