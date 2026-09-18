@@ -12,6 +12,7 @@ from src.department_qa.view import (
     ANSWERED_BANNER,
     basis_cards,
     basis_lines,
+    clarification_fallback,
     evidence_cards,
     profile_caption,
     status_banner,
@@ -219,6 +220,38 @@ def test_evidence_cards_keep_type_locator_and_retrieval_score():
 def test_evidence_card_falls_back_to_source_as_title():
     ev = Evidence(id="int_001", level="internal", text="x", source="inst.md")
     assert evidence_cards(_response(evidence=[ev]))[0].title == "inst.md"
+
+
+@pytest.mark.unit
+def test_clarification_fallback_splits_norms_facts_and_questions():
+    response = _response(
+        status="needs_context",
+        reason_codes=["applicability_unclear"],
+        external_basis=[Basis(statement="Порог 50 человек", evidence_ids=["ext_001"])],
+        internal_basis=[
+            Basis(statement="Осмотр по инструкции", evidence_ids=["int_001"])
+        ],
+        object_facts=[
+            ObjectFact(statement="24 сотрудника", evidence_ids=["obj_f_missing"])
+        ],
+        clarifying_questions=["Какова численность людей в здании?"],
+    )
+    fallback = clarification_fallback(response)
+
+    assert [(c.statement, c.title, c.locator) for c in fallback.requirements] == [
+        ("Порог 50 человек", "ППР № 1479", "п. 60"),
+        ("Осмотр по инструкции", "Инструкция по содержанию ТС ППЗ", None),
+    ]
+    assert [c.statement for c in fallback.facts] == ["24 сотрудника"]
+    assert fallback.questions == ["Какова численность людей в здании?"]
+
+
+@pytest.mark.unit
+def test_clarification_fallback_empty_when_nothing_to_show():
+    fallback = clarification_fallback(_response(status="needs_context"))
+    assert fallback.requirements == []
+    assert fallback.facts == []
+    assert fallback.questions == []
 
 
 @pytest.mark.unit

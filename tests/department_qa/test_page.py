@@ -349,6 +349,30 @@ def test_clarification_shows_question_and_answer_buttons(monkeypatch, tmp_path):
         assert label in labels
 
 
+def test_clarification_shows_norms_and_what_to_clarify(monkeypatch, tmp_path):
+    response = _low_confidence_response("needs_context", ["applicability_unclear"])
+    response.clarifying_questions = ["Какова численность людей в здании?"]
+    response.external_basis = [
+        Basis(statement="Порог 50 человек", evidence_ids=["ext_001"])
+    ]
+    response.internal_basis = [
+        Basis(statement="Осмотр по инструкции", evidence_ids=["int_001"])
+    ]
+    at = _submit(monkeypatch, tmp_path, response)
+
+    assert not at.exception
+    subheaders = [h.value for h in at.subheader]
+    assert "Что говорят требования" in subheaders
+
+    body = " ".join(m.value for m in at.markdown)
+    assert "Порог 50 человек" in body
+    assert "Осмотр по инструкции" in body
+    assert "Какова численность людей в здании?" in body
+    # the model draft and its applied conclusions stay hidden
+    assert ANSWER not in body
+    assert "Ответ" not in subheaders
+
+
 def _conflict_response() -> DepartmentResponse:
     return DepartmentResponse(
         status="needs_review",

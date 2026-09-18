@@ -34,6 +34,7 @@ from src.department_qa.service import answer_question  # noqa: E402
 from src.department_qa.view import (  # noqa: E402
     basis_cards,
     build_reasoning_chains,
+    clarification_fallback,
     compact_profile,
     evidence_cards,
     presentation_status,
@@ -188,6 +189,29 @@ def _render_clarification(response) -> None:
     )
 
 
+def _render_cards(cards) -> None:
+    for card in cards:
+        st.markdown(f"- {card.statement}")
+        meta = " · ".join(part for part in (card.title, card.locator) if part)
+        if meta:
+            st.caption(meta)
+
+
+def _render_clarification_context(response) -> None:
+    """Spec §13.2: name what the norms say and what still has to be clarified.
+
+    The model draft and applied conclusions stay hidden: they may rest on facts
+    the object sheet marks unknown.
+    """
+    fallback = clarification_fallback(response)
+    if fallback.requirements:
+        st.subheader("Что говорят требования")
+        _render_cards(fallback.requirements)
+    if fallback.facts:
+        st.subheader("Что известно об объекте")
+        _render_cards(fallback.facts)
+
+
 def _render_conflict(response) -> None:
     """P1 (spec §16): show the clashing bases; only called on a real conflict."""
     groups = (
@@ -219,6 +243,7 @@ def _render_result(entry: dict) -> None:
     _TONE[status.tone](f"**{status.title}**\n\n{status.detail}")
 
     if status.code == "clarification_required":
+        _render_clarification_context(response)
         _render_clarification(response)
     if status.code == "conflict":
         _render_conflict(response)

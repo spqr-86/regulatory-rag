@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional, Sequence
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.department_qa.contract import (
     AppliedConclusion,
@@ -135,6 +135,21 @@ class BasisCard(BaseModel):
     statement: str
     title: str = ""
     locator: Optional[str] = None
+
+
+class ClarificationFallback(BaseModel):
+    """What the screen shows when the answer needs context (spec §13.2).
+
+    Instead of abstaining silently, the screen names what the norms say
+    (``requirements``), what is already known about the object (``facts``) and
+    what has to be clarified for a conclusion (``questions``). The model draft
+    and its applied conclusions are deliberately absent: they may rest on facts
+    the sheet marks unknown.
+    """
+
+    requirements: list[BasisCard] = Field(default_factory=list)
+    facts: list[BasisCard] = Field(default_factory=list)
+    questions: list[str] = Field(default_factory=list)
 
 
 def _ui_status(status: Status, reason_codes: Sequence[str]) -> UiStatus:
@@ -388,6 +403,21 @@ def basis_cards(
                 )
             )
     return cards
+
+
+def clarification_fallback(response: DepartmentResponse) -> ClarificationFallback:
+    """Norm requirements, known object facts and open questions (spec §13.2).
+
+    Sources for requirements and facts are resolved from stored evidence, as in
+    :func:`basis_cards`; ``questions`` are passed through verbatim.
+    """
+    return ClarificationFallback(
+        requirements=basis_cards(
+            response.external_basis + response.internal_basis, response.evidence
+        ),
+        facts=basis_cards(response.object_facts, response.evidence),
+        questions=list(response.clarifying_questions),
+    )
 
 
 def profile_caption(response: DepartmentResponse) -> str:
