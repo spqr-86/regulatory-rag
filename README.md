@@ -76,6 +76,33 @@ your own. Exact counts: [FACTS § corpus](./docs/reference/FACTS.md#corpus).
 
 ---
 
+## Demo
+
+![Department Q&A and monitoring walkthrough](./docs/assets/demo/demo.gif)
+
+From a question to a gated answer:
+
+1. **Ask** — the Streamlit UI returns an answer with citations, the route it took
+   (`simple` / `complex`) and the resolved prompt versions.
+
+   ![Q&A with citations](./docs/assets/demo/ui-answer.png)
+
+2. **Department Q&A** — an object sheet is passed as a typed profile, not retrieved: the
+   answer separates object facts from applied conclusions and stays conditional when a
+   required field is `unknown`.
+
+   ![Department Q&A over a typed object profile](./docs/assets/demo/ui-department-qa.png)
+
+3. **Monitor** — with the stack up and `V7_TELEMETRY_WRITER=postgres`, every query becomes a
+   row (cost, latency, route, tokens, 👍/👎) on the Grafana dashboard.
+
+   ![Grafana dashboard: cost, routes, p50/p95, 👎 rate](./docs/assets/demo/grafana-queries.png)
+
+Launching the monitoring stack:
+[how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md).
+
+---
+
 ## Metrics
 
 | Metric | Value | Measured on |
