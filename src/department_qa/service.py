@@ -50,10 +50,20 @@ logger = structlog.get_logger()
 SearchFn = Callable[..., list[dict]]
 ModelFn = Callable[[str], ModelAnswerV1]
 VerifierFn = Callable[[str], VerificationResult]
+ProgressFn = Callable[[str], None]
 
 PROMPT_ID = "department_answer"
 VERIFY_PROMPT_ID = "department_verify"
 TOP_K_PER_LEVEL = 8
+
+# Real backend stages reported to the UI (spec streamlit-portfolio-demo §11);
+# no invented stages. A stage is emitted only when it actually runs.
+STAGE_RETRIEVAL_STARTED = "retrieval_started"
+STAGE_RETRIEVAL_COMPLETED = "retrieval_completed"
+STAGE_GENERATION_STARTED = "generation_started"
+STAGE_GENERATION_COMPLETED = "generation_completed"
+STAGE_VERIFICATION_STARTED = "verification_started"
+STAGE_VERIFICATION_COMPLETED = "verification_completed"
 
 _NEXT_STEP: dict[str, str] = {
     "answered": "",
@@ -114,6 +124,7 @@ def answer_question(
     prompt_version: Optional[str] = None,
     verifier_fn: Optional[VerifierFn] = None,
     verify_prompt_version: str = "v1",
+    progress_fn: Optional[ProgressFn] = None,
 ) -> DepartmentResponse:
     trace_id = uuid.uuid4().hex
     base = {
@@ -123,6 +134,17 @@ def answer_question(
         "profile_as_of_date": profile.as_of_date if profile else None,
         "profile_sha256": profile.content_sha256 if profile else None,
     }
+
+    def _emit(stage: str) -> None:
+        # A broken UI callback must never turn a valid answer into a failure.
+        if progress_fn is None:
+            return
+        try:
+            progress_fn(stage)
+        except Exception as exc:
+            logger.warning(
+                "department_qa.progress_failed", trace_id=trace_id, error=str(exc)
+            )
 
     def _fail(reason: str) -> DepartmentResponse:
         return DepartmentResponse(
@@ -142,6 +164,7 @@ def answer_question(
         return _fail("profile_mismatch")
 
     ext_filter, int_filter = build_scope_filters(unit_id)
+    _emit(STAGE_RETRIEVAL_STARTED)
     try:
         external = _to_evidence(
             search_fn(question, filters=ext_filter, top_k=TOP_K_PER_LEVEL),
@@ -158,6 +181,7 @@ def answer_question(
             "department_qa.retrieval_failed", trace_id=trace_id, error=str(exc)
         )
         return _fail("retrieval_failed")
+    _emit(STAGE_RETRIEVAL_COMPLETED)
 
     objects = profile_evidence(profile) if profile else []
     ordered = external + internal + objects
@@ -177,6 +201,7 @@ def answer_question(
         typed_fields=typed_fields_prompt_lines(profile) if profile else [],
     )
     try:
+        _emit(STAGE_GENERATION_STARTED)
         prompt = (prompts or PromptManager()).render(
             PROMPT_ID, version=prompt_version, **prompt_vars.model_dump()
         )
@@ -186,7 +211,9 @@ def answer_question(
             "department_qa.generation_failed", trace_id=trace_id, error=str(exc)
         )
         return _fail("generation_failed")
+    _emit(STAGE_GENERATION_COMPLETED)
 
+    _emit(STAGE_VERIFICATION_STARTED)
     status, reasons = decide(
         model_answer, evidence, profile_as_of=profile.as_of_date if profile else None
     )
@@ -219,6 +246,7 @@ def answer_question(
             )
             status = "needs_review"
             reasons = ["verification_failed"]
+    _emit(STAGE_VERIFICATION_COMPLETED)
     logger.info(
         "department_qa.answer",
         trace_id=trace_id,

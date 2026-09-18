@@ -65,6 +65,13 @@ _SOURCE_TYPE = {
     "object": "профиль объекта",
 }
 
+# Spec §11: only stages that really run, mapped to user-facing labels.
+_PROGRESS_LABELS = {
+    "retrieval_started": "Поиск требований",
+    "generation_started": "Формирование ответа по найденным основаниям",
+    "verification_started": "Проверка доказательств",
+}
+
 
 @st.cache_resource(show_spinner=False)
 def load_department_stack():
@@ -146,6 +153,26 @@ def _render_technical(response, latency_s) -> None:
             st.markdown(f"**{label}:** {value}")
 
 
+def _render_clarification(response) -> None:
+    """P0a (spec §13.2): show the clarifying question(s); continuation is out of P0."""
+    questions = response.clarifying_questions
+    if not questions:
+        return
+    for i, question in enumerate(questions):
+        st.markdown(question)
+        for column, label in zip(st.columns(3), ("Да", "Нет", "Не знаю")):
+            column.button(
+                label,
+                key=f"clarify_{i}_{label}",
+                disabled=True,
+                use_container_width=True,
+            )
+    st.caption(
+        "Уточнение и повторный запрос появятся в следующей версии: снимок объекта "
+        "остаётся неизменным."
+    )
+
+
 def _render_result(entry: dict) -> None:
     response = entry["response"]
     st.divider()
@@ -154,6 +181,9 @@ def _render_result(entry: dict) -> None:
 
     status = presentation_status(response)
     _TONE[status.tone](f"**{status.title}**\n\n{status.detail}")
+
+    if status.code == "clarification_required":
+        _render_clarification(response)
 
     # Spec §13.3/§32.5: never show a confident answer when evidence is lacking.
     if status.code == "sufficient":
@@ -232,7 +262,13 @@ question = st.text_input(
 submit = st.button("Спросить", type="primary")
 
 if (submit or example_clicked) and question.strip():
-    with st.spinner("Поиск требований…"):
+    with st.status("Обработка запроса…", expanded=True) as progress:
+
+        def on_progress(stage: str) -> None:
+            label = _PROGRESS_LABELS.get(stage)
+            if label:
+                progress.write(label)
+
         started = time.perf_counter()
         response = answer_question(
             question.strip(),
@@ -242,8 +278,10 @@ if (submit or example_clicked) and question.strip():
             snapshot_id=manifest.snapshot_id,
             profile=profile,
             prompt_version=config.prompt_version,
+            progress_fn=on_progress,
         )
         latency_s = time.perf_counter() - started
+        progress.update(label="Готово", state="complete", expanded=False)
     st.session_state["last_answer"] = {
         "question": question.strip(),
         "unit_id": unit,

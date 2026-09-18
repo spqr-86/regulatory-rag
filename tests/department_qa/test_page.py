@@ -297,3 +297,53 @@ def test_low_confidence_never_shows_confident_answer(monkeypatch, tmp_path, resp
 
     body = " ".join(m.value for m in at.markdown)
     assert ANSWER not in body
+
+
+def test_submit_shows_real_progress_stages(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    monkeypatch.setattr(wiring, "build_department_stack", _fake_stack)
+
+    def fake_answer(*args, progress_fn=None, **kwargs):
+        for stage in (
+            "retrieval_started",
+            "retrieval_completed",
+            "generation_started",
+            "generation_completed",
+            "verification_started",
+            "verification_completed",
+        ):
+            if progress_fn is not None:
+                progress_fn(stage)
+        return _answered_response()
+
+    monkeypatch.setattr("src.department_qa.service.answer_question", fake_answer)
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+    at.text_input[0].set_value("Как часто требуется проверка?").run()
+    [b for b in at.button if b.label == "Спросить"][0].click().run()
+
+    assert not at.exception
+    assert len(at.status) == 1
+    body = " ".join(m.value for m in at.markdown)
+    for label in (
+        "Поиск требований",
+        "Формирование ответа по найденным основаниям",
+        "Проверка доказательств",
+    ):
+        assert label in body
+
+
+def test_clarification_shows_question_and_answer_buttons(monkeypatch, tmp_path):
+    response = _low_confidence_response("needs_context", ["applicability_unclear"])
+    response.clarifying_questions = [
+        "Есть ли на объекте круглосуточное пребывание людей?"
+    ]
+    at = _submit(monkeypatch, tmp_path, response)
+
+    assert not at.exception
+    body = " ".join(m.value for m in at.markdown)
+    assert "Есть ли на объекте круглосуточное пребывание людей?" in body
+
+    labels = [b.label for b in at.button]
+    for label in ("Да", "Нет", "Не знаю"):
+        assert label in labels

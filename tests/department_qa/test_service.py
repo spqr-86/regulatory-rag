@@ -81,6 +81,43 @@ def test_evidence_keeps_retrieval_score():
 
 
 @pytest.mark.unit
+def test_progress_reports_real_stages_in_order():
+    stages: list[str] = []
+    answer_question(
+        "Как часто?", "unit_1", FakeSearch(), _model(GOOD), progress_fn=stages.append
+    )
+    assert stages == [
+        "retrieval_started",
+        "retrieval_completed",
+        "generation_started",
+        "generation_completed",
+        "verification_started",
+        "verification_completed",
+    ]
+
+
+@pytest.mark.unit
+def test_progress_stops_at_retrieval_failure():
+    stages: list[str] = []
+    result = answer_question(
+        "q", "unit_1", FakeSearch(fail=True), _model(GOOD), progress_fn=stages.append
+    )
+    assert result.status == "failed"
+    assert stages == ["retrieval_started"]
+
+
+@pytest.mark.unit
+def test_progress_callback_error_does_not_break_answer():
+    def boom(stage: str) -> None:
+        raise RuntimeError("ui gone")
+
+    result = answer_question(
+        "Как часто?", "unit_1", FakeSearch(), _model(GOOD), progress_fn=boom
+    )
+    assert result.status == "answered"
+
+
+@pytest.mark.unit
 def test_retrieval_error_is_failed_not_empty():
     model = _model(GOOD)
     result = answer_question("q", "unit_1", FakeSearch(fail=True), model)
