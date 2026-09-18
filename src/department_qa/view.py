@@ -1,19 +1,47 @@
 """Pure view helpers for the department Q&A screen — no Streamlit imports.
 
 # ANCHOR: department answer view
-# Role: turn DepartmentResponse into banner kind/text, basis/object-fact/applied
-#   lines and the object profile caption (spec §10, object-profile §2.0/§2.4).
-# Titles and locators come from stored evidence, never from model text.
+# Role: turn DepartmentResponse into the portfolio presentation model (spec
+#   streamlit-portfolio-demo §5, §9, §14, §15, §18): one UI status, compact
+#   profile, reasoning chains, evidence cards and technical rows. Also keeps the
+#   earlier banner/basis helpers used by the department page (spec department-qa
+#   §10, object-profile §2.0/§2.4).
+# Titles and locators come from stored evidence, never from model text; technical
+#   reason codes never reach the user-facing title/detail.
 """
 
 from __future__ import annotations
 
-from typing import Literal, Sequence
+from typing import Literal, Optional, Sequence
 
-from src.department_qa.contract import AppliedConclusion, Basis, Evidence, ObjectFact
+from pydantic import BaseModel
+
+from src.department_qa.contract import (
+    AppliedConclusion,
+    Basis,
+    Evidence,
+    Level,
+    ObjectFact,
+    Status,
+)
+from src.department_qa.object_profile import ObjectProfile
 from src.department_qa.service import DepartmentResponse
 
 BannerKind = Literal["success", "info", "warning", "error"]
+
+# UI status shown to the visitor; backend Status stays unchanged (spec §5).
+UiStatus = Literal[
+    "sufficient",
+    "clarification_required",
+    "insufficient_evidence",
+    "conflict",
+    "out_of_scope",
+    "failed",
+]
+Tone = Literal["success", "info", "warning", "error"]
+
+# Spec §5 / §32.5: reason-code priority is fixed here and covered by tests.
+_CONFLICT_REASONS = frozenset({"possible_mismatch", "verification_contradiction"})
 
 # Spec object-profile §2.0: answered means citations were checked, not the meaning.
 ANSWERED_BANNER = (
@@ -34,6 +62,249 @@ _REASON_TEXT = {
     "applicability_unclear": "Уточните вопрос: ответ зависит от условий, которых в нём нет.",
     "profile_mismatch": "Сведения объекта относятся к другому подразделению — ответ не строился.",
 }
+
+_STATUS_TEXT: dict[UiStatus, tuple[Tone, str, str]] = {
+    "sufficient": (
+        "success",
+        "Доказательств достаточно",
+        "Ответ основан на нормативных источниках, локальных актах и данных подразделения.",
+    ),
+    "clarification_required": (
+        "warning",
+        "Нужно уточнение",
+        "Для проверки применимости требования не хватает данных об объекте.",
+    ),
+    "insufficient_evidence": (
+        "warning",
+        "Недостаточно оснований для надёжного ответа",
+        "Система не нашла достаточно подтверждений и не стала формировать уверенный вывод.",
+    ),
+    "conflict": (
+        "error",
+        "Обнаружено расхождение",
+        "Требуется проверка специалистом.",
+    ),
+    "out_of_scope": (
+        "info",
+        "Запрос вне области базы знаний",
+        "Доступные источники не покрывают этот вопрос.",
+    ),
+    "failed": (
+        "error",
+        "Не удалось получить ответ",
+        "Это техническая ошибка, а не отсутствие документа.",
+    ),
+}
+
+
+class PresentationStatus(BaseModel):
+    """One user-facing evidence status derived from the backend response."""
+
+    code: UiStatus
+    tone: Tone
+    title: str
+    detail: str
+
+
+class ReasoningChain(BaseModel):
+    """Fact -> requirement -> conclusion, built from an applied conclusion."""
+
+    fact: str
+    requirement: str
+    conclusion: str
+
+
+class EvidenceCard(BaseModel):
+    """One cited source as shown in the sources expander (spec §18)."""
+
+    id: str
+    title: str
+    source_type: Level
+    locator: Optional[str] = None
+    excerpt: str = ""
+    retrieval_score: Optional[float] = None
+
+
+def _ui_status(status: Status, reason_codes: Sequence[str]) -> UiStatus:
+    if status == "answered":
+        return "sufficient"
+    if status == "out_of_scope":
+        return "out_of_scope"
+    if status == "needs_context":
+        return "clarification_required"
+    if status == "failed":
+        return "failed"
+    # needs_review: a real conflict outranks a missing source.
+    if _CONFLICT_REASONS.intersection(reason_codes):
+        return "conflict"
+    return "insufficient_evidence"
+
+
+def _insufficient_detail(reason_codes: Sequence[str]) -> str:
+    if "internal_evidence_missing" in reason_codes:
+        return "Не найден локальный акт, регулирующий этот вопрос."
+    if "external_evidence_missing" in reason_codes:
+        return "В законодательстве не найдено подтверждения требования."
+    if "applied_without_norm" in reason_codes:
+        return "Вывод об объекте сделан без ссылки на норму."
+    return _STATUS_TEXT["insufficient_evidence"][2]
+
+
+def presentation_status(response: DepartmentResponse) -> PresentationStatus:
+    """Backend status + reason_codes -> one UI status with user-facing text."""
+    code = _ui_status(response.status, response.reason_codes)
+    tone, title, detail = _STATUS_TEXT[code]
+    if code == "insufficient_evidence":
+        detail = _insufficient_detail(response.reason_codes)
+    return PresentationStatus(code=code, tone=tone, title=title, detail=detail)
+
+
+def _plural(n: int, one: str, few: str, many: str) -> str:
+    n = abs(int(n)) % 100
+    if 11 <= n <= 19:
+        return many
+    n %= 10
+    if n == 1:
+        return one
+    if 2 <= n <= 4:
+        return few
+    return many
+
+
+def _known(value: object) -> bool:
+    return value not in ("unknown", "not_applicable")
+
+
+def compact_profile(profile: Optional[ObjectProfile]) -> list[str]:
+    """The few typed fields that explain a unit at a glance (spec §9).
+
+    Unknown and not-applicable fields are omitted: they add noise, not context.
+    """
+    if profile is None:
+        return []
+    f = profile.typed_fields
+    out: list[str] = []
+
+    if _known(f.people_in_object_zone):
+        n = f.people_in_object_zone
+        out.append(f"{n} {_plural(n, 'сотрудник', 'сотрудника', 'сотрудников')}")
+    if _known(f.people_on_floor_total):
+        n = f.people_on_floor_total
+        out.append(f"на этаже {n} {_plural(n, 'человек', 'человека', 'человек')}")
+    if _known(f.people_in_building_total):
+        n = f.people_in_building_total
+        out.append(f"в здании {n} {_plural(n, 'человек', 'человека', 'человек')}")
+    if _known(f.permanent_workplaces_on_floor):
+        n = f.permanent_workplaces_on_floor
+        out.append(
+            f"{n} {_plural(n, 'рабочее место', 'рабочих места', 'рабочих мест')} на этаже"
+        )
+    if _known(f.evacuation_plan_present):
+        out.append(
+            "план эвакуации есть"
+            if f.evacuation_plan_present
+            else "план эвакуации не разработан"
+        )
+    if _known(f.room_categories):
+        out.append("категории помещений: " + "; ".join(f.room_categories))
+    if _known(f.aupt_present):
+        out.append("АУПТ есть" if f.aupt_present else "АУПТ отсутствует")
+    if _known(f.extinguishers_total):
+        n = f.extinguishers_total
+        out.append(f"{n} {_plural(n, 'огнетушитель', 'огнетушителя', 'огнетушителей')}")
+    if _known(f.outside_ladder_last_test_date):
+        out.append(f"лестница испытана {f.outside_ladder_last_test_date:%d.%m.%Y}")
+    return out
+
+
+def _statements_by_evidence(
+    items: Sequence[Basis | ObjectFact],
+) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for item in items:
+        for eid in item.evidence_ids:
+            out.setdefault(eid, item.statement)
+    return out
+
+
+def _compose(
+    ids: Sequence[str], statements: dict[str, str], by_id: dict[str, Evidence]
+) -> str:
+    parts: list[str] = []
+    for eid in ids:
+        text = statements.get(eid)
+        if text is None:
+            found = by_id.get(eid)
+            text = found.text if found else ""
+        if text:
+            parts.append(text)
+    return " · ".join(parts)
+
+
+def build_reasoning_chains(response: DepartmentResponse) -> list[ReasoningChain]:
+    """Applied conclusions -> Fact / Requirement / Conclusion, deterministically.
+
+    Object ids map to the citing object-fact statement (fallback: evidence text,
+    e.g. a typed ``obj_f_*`` field); norm ids map to the citing basis statement
+    (fallback: evidence text).
+    """
+    by_id = {e.id: e for e in response.evidence}
+    fact_statements = _statements_by_evidence(response.object_facts)
+    norm_statements = _statements_by_evidence(
+        response.external_basis + response.internal_basis
+    )
+    chains: list[ReasoningChain] = []
+    for applied in response.applied_conclusions:
+        obj_ids = [e for e in applied.evidence_ids if e.startswith("obj_")]
+        norm_ids = [e for e in applied.evidence_ids if e.startswith(("ext_", "int_"))]
+        chains.append(
+            ReasoningChain(
+                fact=_compose(obj_ids, fact_statements, by_id),
+                requirement=_compose(norm_ids, norm_statements, by_id),
+                conclusion=applied.statement,
+            )
+        )
+    return chains
+
+
+def evidence_cards(response: DepartmentResponse) -> list[EvidenceCard]:
+    """Cited sources with type, locator, excerpt and retrieval score (spec §18)."""
+    return [
+        EvidenceCard(
+            id=e.id,
+            title=e.title or e.source,
+            source_type=e.level,
+            locator=e.locator,
+            excerpt=e.text,
+            retrieval_score=e.retrieval_score,
+        )
+        for e in response.evidence
+    ]
+
+
+def technical_details(
+    response: DepartmentResponse,
+    *,
+    model_name: str = "",
+    latency_s: Optional[float] = None,
+) -> list[tuple[str, str]]:
+    """Label/value rows for the collapsed technical block (spec §14).
+
+    Only values that are actually known are returned; routing and cost are
+    deliberately absent (department_qa has no route; cost is P2).
+    """
+    rows: list[tuple[str, str]] = []
+    if model_name:
+        rows.append(("LLM", model_name))
+    rows.append(("Retrieval", "dense + BM25 → RRF"))
+    n = len(response.evidence)
+    rows.append(
+        ("Used as evidence", f"{n} {_plural(n, 'фрагмент', 'фрагмента', 'фрагментов')}")
+    )
+    if latency_s is not None:
+        rows.append(("Latency", f"{latency_s:.1f} с"))
+    rows.append(("Trace ID", response.trace_id))
+    return rows
 
 
 def status_banner(response: DepartmentResponse) -> tuple[BannerKind, str]:

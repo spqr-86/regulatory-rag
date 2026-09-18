@@ -74,6 +74,13 @@ def test_two_scoped_searches_and_answered_response():
 
 
 @pytest.mark.unit
+def test_evidence_keeps_retrieval_score():
+    result = answer_question("Как часто?", "unit_1", FakeSearch(), _model(GOOD))
+    assert result.evidence[0].retrieval_score == 0.7
+    assert result.evidence[1].retrieval_score == 0.7
+
+
+@pytest.mark.unit
 def test_retrieval_error_is_failed_not_empty():
     model = _model(GOOD)
     result = answer_question("q", "unit_1", FakeSearch(fail=True), model)

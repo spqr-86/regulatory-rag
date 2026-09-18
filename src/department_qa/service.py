@@ -97,6 +97,7 @@ def _to_evidence(passages: list[dict], prefix: str, level) -> list[Evidence]:
                 locator=meta.get("locator") or meta.get("parent_section"),
                 document_id=meta.get("document_id"),
                 chunk_id=meta.get("chunk_id", p.get("chunk_id")),
+                retrieval_score=p.get("score"),
             )
         )
     return out
