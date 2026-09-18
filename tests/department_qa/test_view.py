@@ -10,9 +10,13 @@ from src.department_qa.contract import Basis, Evidence, ObjectFact
 from src.department_qa.service import DepartmentResponse
 from src.department_qa.view import (
     ANSWERED_BANNER,
+    basis_cards,
     basis_lines,
+    evidence_cards,
     profile_caption,
     status_banner,
+    technical_details,
+    unit_name,
 )
 
 EVIDENCE = [
@@ -92,6 +96,29 @@ def test_basis_lines_empty_level_says_not_found():
 
 
 @pytest.mark.unit
+def test_basis_cards_resolve_statement_with_title_and_locator():
+    response = _response(
+        external_basis=[Basis(statement="Осмотр по паспорту", evidence_ids=["ext_001"])]
+    )
+    cards = basis_cards(response.external_basis, response.evidence)
+    assert [(c.statement, c.title, c.locator) for c in cards] == [
+        ("Осмотр по паспорту", "ППР № 1479", "п. 60")
+    ]
+
+
+@pytest.mark.unit
+def test_basis_cards_keep_statement_when_source_is_not_in_evidence():
+    response = _response(
+        internal_basis=[Basis(statement="Внутреннее правило", evidence_ids=["int_x"])]
+    )
+    cards = basis_cards(response.internal_basis, response.evidence)
+    assert cards == [basis_cards(response.internal_basis, [])[0]]
+    assert cards[0].statement == "Внутреннее правило"
+    assert cards[0].title == ""
+    assert cards[0].locator is None
+
+
+@pytest.mark.unit
 def test_object_fact_lines_resolve_section_locator():
     obj = Evidence(
         id="obj_s5",
@@ -136,3 +163,79 @@ def test_profile_caption(as_of, sha, expected):
         profile_caption(_response(profile_as_of_date=as_of, profile_sha256=sha))
         == expected
     )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "title, unit_id, expected",
+    [
+        (
+            "Лист особенностей объекта защиты — офис (демонстрационные данные)",
+            "unit_office",
+            "Офис",
+        ),
+        (
+            "Лист особенностей объекта защиты — диспетчерский центр (демонстрационные данные)",
+            "unit_dispatch",
+            "Диспетчерский центр",
+        ),
+        ("", "unit_x", "unit_x"),
+    ],
+)
+def test_unit_name_is_short_human_name_from_sheet_title(title, unit_id, expected):
+    assert unit_name(title, unit_id) == expected
+
+
+@pytest.mark.unit
+def test_evidence_cards_keep_type_locator_and_retrieval_score():
+    external = Evidence(
+        id="ext_001",
+        level="external",
+        text="raw chunk",
+        source="ppr.pdf",
+        title="ППР № 1479",
+        locator="п. 60",
+        retrieval_score=0.42,
+    )
+    obj = Evidence(
+        id="obj_s7",
+        level="object",
+        text="raw object",
+        source="list.md",
+        title="Лист объекта",
+    )
+    cards = evidence_cards(_response(evidence=[external, obj]))
+
+    assert [c.id for c in cards] == ["ext_001", "obj_s7"]
+    assert cards[0].source_type == "external"
+    assert cards[0].locator == "п. 60"
+    assert cards[0].excerpt == "raw chunk"
+    assert cards[0].retrieval_score == 0.42
+    assert cards[1].source_type == "object"
+    assert cards[1].retrieval_score is None
+
+
+@pytest.mark.unit
+def test_evidence_card_falls_back_to_source_as_title():
+    ev = Evidence(id="int_001", level="internal", text="x", source="inst.md")
+    assert evidence_cards(_response(evidence=[ev]))[0].title == "inst.md"
+
+
+@pytest.mark.unit
+def test_technical_details_list_known_values_and_omit_unknown():
+    rows = dict(
+        technical_details(_response(), model_name="deepseek/v4.1-flash", latency_s=3.84)
+    )
+    assert rows["LLM"] == "deepseek/v4.1-flash"
+    assert rows["Retrieval"] == "dense + BM25 → RRF"
+    assert rows["Used as evidence"] == "2 фрагмента"
+    assert rows["Latency"] == "3.8 с"
+    assert rows["Trace ID"] == "t"
+    assert "Route" not in rows and "Cost" not in rows
+
+
+@pytest.mark.unit
+def test_technical_details_omit_model_and_latency_when_unknown():
+    rows = dict(technical_details(_response()))
+    assert "LLM" not in rows and "Latency" not in rows
+    assert rows["Trace ID"] == "t"

@@ -49,6 +49,8 @@ class Evidence(BaseModel):
     locator: Optional[str] = None
     document_id: Optional[str] = None
     chunk_id: Optional[int] = None
+    # Hybrid retrieval score (RRF); None for object-profile evidence, which is not a hit.
+    retrieval_score: Optional[float] = None
     # Only typed object fields (obj_f_*) carry a state; sections and chunks don't.
     field_state: Optional[FieldState] = None
 
