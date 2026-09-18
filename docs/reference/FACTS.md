@@ -12,7 +12,8 @@
 - simple: `openrouter` / `deepseek/deepseek-v4.1-flash`  (`SIMPLE_LLM_PROVIDER`, `SIMPLE_MODEL_NAME`)
   — showcase default since 17.09.2026, chosen by `eval/runs/object_profile_traps_2026-09-17/summary.md`;
   OSS/OpenAI alternative: `openai` / `gpt-4o-mini`
-- complex: `openai` / `gpt-4o`  (`COMPLEX_LLM_PROVIDER`, `COMPLEX_MODEL_NAME`)
+- complex: `openrouter` / `deepseek/deepseek-v4.1-flash`  (`COMPLEX_LLM_PROVIDER`, `COMPLEX_MODEL_NAME`)
+  — same model as simple since 18.09.2026; OSS/OpenAI alternative: `openai` / `gpt-4o`
 - judge (eval only): `gpt-4o`  (`JUDGE_MODEL_NAME`)
 - reranker: `crossencoder`  (`RERANKER_BACKEND`; alt: `flashrank`)
 - embeddings: `openai` / `text-embedding-3-small`

@@ -223,7 +223,7 @@ OpenAI на complex). Любой слой — LLM, embeddings, реранкер,
 | Слой | Технология |
 |------|-----------|
 | Оркестрация | LangGraph (V7 детерминированный граф) |
-| LLM | OpenRouter `deepseek/deepseek-v4.1-flash` (simple) + OpenAI `gpt-4o` (complex); OpenAI, Gemini, DeepSeek, OpenRouter настраиваются по путям |
+| LLM | OpenRouter `deepseek/deepseek-v4.1-flash` (оба пути); OpenAI, Gemini, DeepSeek, OpenRouter настраиваются по путям |
 | Embeddings | OpenAI text-embedding-3-small (локальные sentence-transformers опционально) |
 | Vector store | ChromaDB |
 | Переранжирование | CrossEncoder (sentence-transformers); FlashRank выбирается через `RERANKER_BACKEND` |

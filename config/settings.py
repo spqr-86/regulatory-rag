@@ -56,8 +56,8 @@ class Settings(BaseSettings):
     # see eval/runs/object_profile_traps_2026-09-17/summary.md. Override in .env freely.
     SIMPLE_LLM_PROVIDER: str = "openrouter"
     SIMPLE_MODEL_NAME: str = "deepseek/deepseek-v4.1-flash"
-    COMPLEX_LLM_PROVIDER: str = "openai"
-    COMPLEX_MODEL_NAME: str = "gpt-4o"
+    COMPLEX_LLM_PROVIDER: str = "openrouter"
+    COMPLEX_MODEL_NAME: str = "deepseek/deepseek-v4.1-flash"
     # Eval judge — independent from pipeline provider
     JUDGE_LLM_PROVIDER: str = "openai"
     JUDGE_MODEL_NAME: str = "gpt-4o"

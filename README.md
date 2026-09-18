@@ -224,7 +224,7 @@ shows cost, 👍/👎 rate, routes and p50/p95. Without the stack nothing breaks
 | Layer | Technology |
 |-------|-----------|
 | Orchestration | LangGraph (V7 deterministic graph) |
-| LLM | OpenRouter `deepseek/deepseek-v4.1-flash` (simple) + OpenAI `gpt-4o` (complex); OpenAI, Gemini, DeepSeek, OpenRouter configurable per path |
+| LLM | OpenRouter `deepseek/deepseek-v4.1-flash` (both paths); OpenAI, Gemini, DeepSeek, OpenRouter configurable per path |
 | Embeddings | OpenAI text-embedding-3-small (local sentence-transformers optional) |
 | Vector store | ChromaDB |
 | Reranking | CrossEncoder (sentence-transformers); FlashRank selectable |

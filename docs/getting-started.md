@@ -3,8 +3,10 @@
 ## Requirements
 
 - Python 3.11+ (developed on 3.13)
-- OpenAI API key — used for embeddings (`text-embedding-3-small`), generation
-  (`gpt-4o-mini` / `gpt-4o` by default) and the eval judge (`gpt-4o`)
+- OpenAI API key — used for embeddings (`text-embedding-3-small`) and the eval judge
+  (`gpt-4o`)
+- OpenRouter API key — used for generation on both paths
+  (`deepseek/deepseek-v4.1-flash` by default)
 - Gemini / DeepSeek API key — only if you switch `SIMPLE/COMPLEX_LLM_PROVIDER`
 
 ## Install
@@ -28,11 +30,11 @@ OPENAI_API_KEY=your_openai_key
 Optional overrides (defaults are in `config/settings.py` and `src/v7/config.py`):
 
 ```env
-# LLM providers (default: openai)
-# SIMPLE_LLM_PROVIDER=openai
-# SIMPLE_MODEL_NAME=gpt-4o-mini
-# COMPLEX_LLM_PROVIDER=openai
-# COMPLEX_MODEL_NAME=gpt-4o
+# LLM providers (default: openrouter/deepseek-v4.1-flash on both paths)
+# SIMPLE_LLM_PROVIDER=openrouter
+# SIMPLE_MODEL_NAME=deepseek/deepseek-v4.1-flash
+# COMPLEX_LLM_PROVIDER=openrouter
+# COMPLEX_MODEL_NAME=deepseek/deepseek-v4.1-flash
 
 # ChromaDB path (default: ./chroma_db)
 # CHROMA_DB_PATH=./chroma_db

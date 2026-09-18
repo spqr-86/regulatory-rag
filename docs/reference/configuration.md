@@ -14,8 +14,9 @@ LLM and vector store are accessed through factory layers (`src/infra/llm_factory
 | Vector store | Chroma | `VECTOR_STORE` | Qdrant, pgvector |
 | Embeddings | OpenAI, local (sentence-transformers), hf_api | `EMBEDDING_PROVIDER` | — |
 
-The showcase default is a two-provider split: OpenRouter `deepseek/deepseek-v4.1-flash` on
-the simple path, OpenAI `gpt-4o` on the complex path.
+The showcase default runs OpenRouter `deepseek/deepseek-v4.1-flash` on both paths since
+18.09.2026 (simple path picked it first, complex followed); embeddings and the eval judge
+stay on OpenAI.
 
 **Fully local embeddings** (LLM still over an API):
 

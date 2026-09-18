@@ -136,15 +136,22 @@ suite stayed green at 230 tests. Pipeline latency is currently 9.71s
 **Options.** (a) One model for everything. (b) A cheap model on the simple path, a stronger
 model only on the complex path.
 
-**Choice.** `gpt-4o-mini` on the simple path, `gpt-4o` on the complex path
+**Choice.** The mechanism supports (b) — two independent model slots
 ([FACTS](../reference/FACTS.md#models)), wired through the LLM factory so either is swappable
-per path via `.env`.
+per path via `.env`. Since 18.09.2026 the showcase default runs one cheap model,
+OpenRouter `deepseek/deepseek-v4.1-flash`, on **both** paths: it passed all four trap-set
+questions that weaker models failed, so the stronger slot no longer bought accuracy. The
+two-tier split is still one `.env` change away (`COMPLEX_LLM_PROVIDER` / `COMPLEX_MODEL_NAME`).
 
-**Why.** The fast path handles the majority of queries at a fraction of the cost; the
-expensive model is reserved for the harder minority that actually routes to `rag_complex`.
+**Why.** The fast path handles the majority of queries at a fraction of the cost. When a
+single cheap model clears the complex-path traps, running it on both paths is simpler and
+cheaper than paying for a stronger model on the minority; the split remains available when
+the complex path needs a model that the cheap one cannot match.
 
-**Evidence.** ~$0.0102 per query (`benchmarks/cps_2026-05-22.json`, N=10), complex-path rate
-0.241 (latest eval) — i.e. ~76% of queries never touch the expensive model.
+**Evidence.** ~$0.0102 per query under the earlier two-tier setup
+(`benchmarks/cps_2026-05-22.json`, N=10), complex-path rate 0.241 (latest eval) — i.e. ~76%
+of queries never touch the complex path. Trap-set comparison:
+`eval/runs/object_profile_traps_2026-09-17/summary.md`.
 
 ---
 
