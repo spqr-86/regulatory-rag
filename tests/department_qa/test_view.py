@@ -15,6 +15,7 @@ from src.department_qa.view import (
     profile_caption,
     status_banner,
     technical_details,
+    unit_name,
 )
 
 EVIDENCE = [
@@ -138,6 +139,27 @@ def test_profile_caption(as_of, sha, expected):
         profile_caption(_response(profile_as_of_date=as_of, profile_sha256=sha))
         == expected
     )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "title, unit_id, expected",
+    [
+        (
+            "Лист особенностей объекта защиты — офис (демонстрационные данные)",
+            "unit_office",
+            "Офис",
+        ),
+        (
+            "Лист особенностей объекта защиты — диспетчерский центр (демонстрационные данные)",
+            "unit_dispatch",
+            "Диспетчерский центр",
+        ),
+        ("", "unit_x", "unit_x"),
+    ],
+)
+def test_unit_name_is_short_human_name_from_sheet_title(title, unit_id, expected):
+    assert unit_name(title, unit_id) == expected
 
 
 @pytest.mark.unit

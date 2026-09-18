@@ -175,6 +175,19 @@ def _known(value: object) -> bool:
     return value not in ("unknown", "not_applicable")
 
 
+def unit_name(title: str, unit_id: str = "") -> str:
+    """Short human-readable unit name from the object sheet title (spec §8).
+
+    ``"Лист особенностей объекта защиты — офис (демонстрационные данные)"`` ->
+    ``"Офис"``. Falls back to ``unit_id`` when the title carries no name.
+    """
+    name = title.split("—", 1)[1] if "—" in title else title
+    name = name.split("(", 1)[0].strip(" .—-")
+    if not name:
+        return unit_id
+    return name[0].upper() + name[1:]
+
+
 def compact_profile(profile: Optional[ObjectProfile]) -> list[str]:
     """The few typed fields that explain a unit at a glance (spec §9).
 
