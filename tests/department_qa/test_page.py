@@ -147,6 +147,29 @@ def test_initial_screen_shows_shell_and_no_debug(monkeypatch, tmp_path):
     assert "Данные: дата заполнения не указана" in body
 
 
+def test_cached_stack_rebuilt_when_hot_reload_changes_key(monkeypatch, tmp_path):
+    """Streamlit evicts local modules on any file change; a new stack_cache_key
+    must bypass the cached stack instead of failing on stale class objects."""
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    builds = []
+
+    def fake_build():
+        builds.append(1)
+        return _fake_stack()
+
+    monkeypatch.setattr(wiring, "build_department_stack", fake_build)
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+    assert not at.exception
+    assert len(builds) == 1
+
+    monkeypatch.setattr(wiring, "stack_cache_key", lambda: (123, 456))
+    at.run()
+
+    assert not at.exception
+    assert len(builds) == 2
+
+
 @pytest.mark.parametrize(
     "exc",
     [

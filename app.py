@@ -41,7 +41,10 @@ from src.department_qa.view import (  # noqa: E402
     technical_details,
     unit_name,
 )
-from src.department_qa.wiring import build_department_stack  # noqa: E402
+from src.department_qa.wiring import (  # noqa: E402
+    build_department_stack,
+    stack_cache_key,
+)
 from src.ui_feedback import render_feedback  # noqa: E402
 
 st.set_page_config(
@@ -90,7 +93,9 @@ _PROGRESS_LABELS = {
 
 
 @st.cache_resource(show_spinner=False)
-def load_department_stack():
+def load_department_stack(cache_key):
+    # cache_key is stack_cache_key(): it changes when Streamlit hot-reloads local
+    # modules, so the stale cached stack is not reused across a reload.
     return build_department_stack()
 
 
@@ -270,7 +275,7 @@ if not settings.CORPUS_MANIFEST_PATH or not os.path.exists(
     st.stop()
 
 try:
-    stack = load_department_stack()
+    stack = load_department_stack(stack_cache_key())
 except (RuntimeError, ObjectProfileError) as exc:  # fail-fast config errors, shown
     st.error(str(exc))
     st.stop()

@@ -102,6 +102,27 @@ def ensure_store_matches(
         )
 
 
+def stack_cache_key() -> tuple[int, ...]:
+    """Streamlit cache key that changes when local modules are hot-reloaded.
+
+    Streamlit's source watcher evicts *every* watched local module on any file
+    change (streamlit/watcher/local_sources_watcher.py, "Delete all watched
+    modules"). A stack kept by ``st.cache_resource`` then holds instances of the
+    old classes while re-imported modules define new ones, so the first
+    cross-module pydantic check fails — e.g. ``PromptVars.object_sections``
+    rejects ``ObjectSection`` instances built from the evicted module. The old
+    classes stay alive inside the cached stack, so their ids cannot be reused:
+    a changed id means "modules were reloaded, rebuild the stack".
+    """
+    from src.department_qa import contract, object_profile
+
+    return (
+        id(contract.ObjectSection),
+        id(contract.Evidence),
+        id(object_profile.ObjectProfile),
+    )
+
+
 def make_model_fn(
     llm,
     schema: type[BaseModel] = ModelAnswer,

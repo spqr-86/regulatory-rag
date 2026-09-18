@@ -16,6 +16,7 @@ from src.department_qa.wiring import (
     ensure_store_matches,
     make_hybrid_search_fn,
     make_model_fn,
+    stack_cache_key,
 )
 from src.v7.scope_filter import build_scope_filters
 
@@ -60,6 +61,22 @@ def _structured(responses):
 
 
 GOOD = ModelAnswer(answer="ok")
+
+
+@pytest.mark.unit
+def test_stack_cache_key_changes_when_contract_class_is_reloaded(monkeypatch):
+    """Streamlit hot-reload evicts modules; the key must change so the cached
+    stack is rebuilt instead of serving stale ObjectSection instances."""
+    from src.department_qa import contract
+
+    before = stack_cache_key()
+    monkeypatch.setattr(contract, "ObjectSection", type("ObjectSection", (), {}))
+    assert stack_cache_key() != before
+
+
+@pytest.mark.unit
+def test_stack_cache_key_is_stable_without_reload():
+    assert stack_cache_key() == stack_cache_key()
 
 
 @pytest.mark.unit
