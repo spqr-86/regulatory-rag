@@ -41,10 +41,25 @@ from src.department_qa.view import (  # noqa: E402
     unit_name,
 )
 from src.department_qa.wiring import build_department_stack  # noqa: E402
+from src.ui_feedback import render_feedback  # noqa: E402
 
 st.set_page_config(
     page_title="Regulatory Compliance Assistant", page_icon="🧭", layout="wide"
 )
+
+# Spec §25/§7: light, calm, generous whitespace, one accent, consistent radius.
+_CSS = """
+<style>
+  .block-container { max-width: 980px; padding-top: 2.5rem; padding-bottom: 4rem; }
+  div[data-testid="stAlert"] { border-radius: 8px; }
+  div[data-testid="stExpander"] {
+    border: 1px solid rgba(49, 51, 63, 0.12); border-radius: 8px;
+  }
+  h1, h2, h3 { letter-spacing: -0.01em; }
+  hr { margin: 1.8rem 0; }
+</style>
+"""
+st.markdown(_CSS, unsafe_allow_html=True)
 
 _EXAMPLES = [
     "Какие требования применимы?",
@@ -173,6 +188,27 @@ def _render_clarification(response) -> None:
     )
 
 
+def _render_conflict(response) -> None:
+    """P1 (spec §16): show the clashing bases; only called on a real conflict."""
+    groups = (
+        ("Внешнее требование", response.external_basis),
+        ("Локальный акт", response.internal_basis),
+    )
+    groups = [(label, items) for label, items in groups if items]
+    if not groups:
+        return
+    st.subheader("Обнаружено расхождение")
+    for label, items in groups:
+        st.markdown(f"**{label}**")
+        for card in basis_cards(items, response.evidence):
+            st.markdown(f"- {card.statement}")
+            meta = " · ".join(part for part in (card.title, card.locator) if part)
+            if meta:
+                st.caption(meta)
+    st.markdown("**Как обработано**")
+    st.markdown("Требуется проверка специалистом.")
+
+
 def _render_result(entry: dict) -> None:
     response = entry["response"]
     st.divider()
@@ -184,6 +220,8 @@ def _render_result(entry: dict) -> None:
 
     if status.code == "clarification_required":
         _render_clarification(response)
+    if status.code == "conflict":
+        _render_conflict(response)
 
     # Spec §13.3/§32.5: never show a confident answer when evidence is lacking.
     if status.code == "sufficient":
@@ -195,6 +233,7 @@ def _render_result(entry: dict) -> None:
 
     _render_sources(response)
     _render_technical(response, entry.get("latency_s"))
+    render_feedback(response.trace_id)
 
 
 if not settings.CORPUS_MANIFEST_PATH or not os.path.exists(

@@ -347,3 +347,65 @@ def test_clarification_shows_question_and_answer_buttons(monkeypatch, tmp_path):
     labels = [b.label for b in at.button]
     for label in ("Да", "Нет", "Не знаю"):
         assert label in labels
+
+
+def _conflict_response() -> DepartmentResponse:
+    return DepartmentResponse(
+        status="needs_review",
+        reason_codes=["possible_mismatch"],
+        trace_id="t",
+        answer=ANSWER,
+        evidence=EVIDENCE,
+        external_basis=[
+            Basis(statement="Проверка не реже раза в год", evidence_ids=["ext_001"])
+        ],
+        internal_basis=[
+            Basis(statement="Осмотр по инструкции", evidence_ids=["int_001"])
+        ],
+    )
+
+
+def test_conflict_shows_clashing_bases(monkeypatch, tmp_path):
+    at = _submit(monkeypatch, tmp_path, _conflict_response())
+
+    assert not at.exception
+    subheaders = [h.value for h in at.subheader]
+    assert "Обнаружено расхождение" in subheaders
+
+    body = " ".join(m.value for m in at.markdown)
+    assert "Проверка не реже раза в год" in body
+    assert "Осмотр по инструкции" in body
+    assert "Требуется проверка специалистом." in body
+    assert ANSWER not in body
+
+
+def test_insufficient_evidence_has_no_conflict_block(monkeypatch, tmp_path):
+    at = _submit(
+        monkeypatch,
+        tmp_path,
+        _low_confidence_response("needs_review", ["internal_evidence_missing"]),
+    )
+
+    assert not at.exception
+    assert "Обнаружено расхождение" not in [h.value for h in at.subheader]
+
+
+class _FakeFeedbackWriter:
+    def __init__(self):
+        self.votes = []
+
+    def record(self, query_id, verdict, comment=None):
+        self.votes.append((query_id, verdict, comment))
+
+
+def test_feedback_buttons_show_and_record_when_writer_available(monkeypatch, tmp_path):
+    fake = _FakeFeedbackWriter()
+    monkeypatch.setattr("src.ui_feedback.get_feedback_writer", lambda: fake)
+
+    at = _submit(monkeypatch, tmp_path, _answered_response())
+
+    labels = [b.label for b in at.button]
+    assert "👍" in labels and "👎" in labels
+
+    [b for b in at.button if b.label == "👍"][0].click().run()
+    assert fake.votes == [("t", 1, None)]
