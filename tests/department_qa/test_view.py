@@ -10,6 +10,7 @@ from src.department_qa.contract import Basis, Evidence, ObjectFact
 from src.department_qa.service import DepartmentResponse
 from src.department_qa.view import (
     ANSWERED_BANNER,
+    basis_cards,
     basis_lines,
     evidence_cards,
     profile_caption,
@@ -92,6 +93,29 @@ def test_basis_lines_resolve_titles_from_stored_evidence():
 @pytest.mark.unit
 def test_basis_lines_empty_level_says_not_found():
     assert basis_lines([], EVIDENCE) == []
+
+
+@pytest.mark.unit
+def test_basis_cards_resolve_statement_with_title_and_locator():
+    response = _response(
+        external_basis=[Basis(statement="Осмотр по паспорту", evidence_ids=["ext_001"])]
+    )
+    cards = basis_cards(response.external_basis, response.evidence)
+    assert [(c.statement, c.title, c.locator) for c in cards] == [
+        ("Осмотр по паспорту", "ППР № 1479", "п. 60")
+    ]
+
+
+@pytest.mark.unit
+def test_basis_cards_keep_statement_when_source_is_not_in_evidence():
+    response = _response(
+        internal_basis=[Basis(statement="Внутреннее правило", evidence_ids=["int_x"])]
+    )
+    cards = basis_cards(response.internal_basis, response.evidence)
+    assert cards == [basis_cards(response.internal_basis, [])[0]]
+    assert cards[0].statement == "Внутреннее правило"
+    assert cards[0].title == ""
+    assert cards[0].locator is None
 
 
 @pytest.mark.unit

@@ -125,6 +125,18 @@ class EvidenceCard(BaseModel):
     retrieval_score: Optional[float] = None
 
 
+class BasisCard(BaseModel):
+    """One basis/object fact under "На чём основан ответ" (spec §16).
+
+    The statement is the model's claim; title and locator are resolved from the
+    stored evidence it cites, never from model text.
+    """
+
+    statement: str
+    title: str = ""
+    locator: Optional[str] = None
+
+
 def _ui_status(status: Status, reason_codes: Sequence[str]) -> UiStatus:
     if status == "answered":
         return "sufficient"
@@ -348,6 +360,34 @@ def basis_lines(
             refs.append(f"[{eid}] {label}".strip())
         lines.append(f"{item.statement} — {'; '.join(refs)}")
     return lines
+
+
+def basis_cards(
+    items: Sequence[Basis | ObjectFact | AppliedConclusion],
+    evidence: Sequence[Evidence],
+) -> list[BasisCard]:
+    """Basis/fact items -> statement with each cited source's title and locator.
+
+    Titles and locators come from stored evidence, never from model text. An item
+    citing several sources yields one card per source; an item citing nothing
+    yields a statement-only card.
+    """
+    by_id = {e.id: e for e in evidence}
+    cards: list[BasisCard] = []
+    for item in items:
+        refs = [by_id[eid] for eid in item.evidence_ids if eid in by_id]
+        if not refs:
+            cards.append(BasisCard(statement=item.statement))
+            continue
+        for ref in refs:
+            cards.append(
+                BasisCard(
+                    statement=item.statement,
+                    title=ref.title or ref.source,
+                    locator=ref.locator,
+                )
+            )
+    return cards
 
 
 def profile_caption(response: DepartmentResponse) -> str:

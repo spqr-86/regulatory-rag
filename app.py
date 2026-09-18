@@ -1,11 +1,14 @@
 """Regulatory Compliance Assistant — department Q&A portfolio screen.
 
-Spec streamlit-portfolio-demo §5–§10: the root screen is the Department Q&A
-first-contact view (header, unit selector, compact profile, examples, one input).
-The generic Regulatory RAG chat is the secondary line on ``pages/2_Общий_поиск.py``.
+Spec streamlit-portfolio-demo §5–§18: the root screen is the Department Q&A
+first-contact view (header, unit selector, compact profile, examples, one input)
+and, after a request, the structured result screen (answer, reasoning chain,
+bases, sources, technical details). The generic Regulatory RAG chat is the
+secondary line on ``pages/2_Общий_поиск.py``.
 """
 
 import os
+import time
 
 from dotenv import load_dotenv
 
@@ -29,8 +32,12 @@ from src.department_qa.object_profile import (  # noqa: E402
 )
 from src.department_qa.service import answer_question  # noqa: E402
 from src.department_qa.view import (  # noqa: E402
+    basis_cards,
+    build_reasoning_chains,
     compact_profile,
+    evidence_cards,
     presentation_status,
+    technical_details,
     unit_name,
 )
 from src.department_qa.wiring import build_department_stack  # noqa: E402
@@ -50,6 +57,12 @@ _TONE = {
     "info": st.info,
     "warning": st.warning,
     "error": st.error,
+}
+
+_SOURCE_TYPE = {
+    "external": "внешний",
+    "internal": "локальный",
+    "object": "профиль объекта",
 }
 
 
@@ -72,6 +85,67 @@ def _render_profile_detail(profile) -> None:
             st.markdown(f"**{field.label}:** {field.value}")
 
 
+def _render_reasoning(response) -> None:
+    chains = build_reasoning_chains(response)
+    if not chains:
+        return
+    st.subheader("Почему такой вывод")
+    for i, chain in enumerate(chains):
+        if i:
+            st.divider()
+        blocks = []
+        if chain.fact:
+            blocks.append(f"**Факт**\n\n{chain.fact}")
+        if chain.requirement:
+            blocks.append(f"**Требование**\n\n{chain.requirement}")
+        blocks.append(f"**Вывод**\n\n{chain.conclusion}")
+        st.markdown("\n\n↓\n\n".join(blocks))
+
+
+def _render_bases(response) -> None:
+    groups = (
+        ("Внешнее требование", response.external_basis),
+        ("Локальный акт", response.internal_basis),
+        ("Факт подразделения", response.object_facts),
+    )
+    groups = [(label, items) for label, items in groups if items]
+    if not groups:
+        return
+    st.subheader("На чём основан ответ")
+    for label, items in groups:
+        st.markdown(f"**{label}**")
+        for card in basis_cards(items, response.evidence):
+            st.markdown(f"- {card.statement}")
+            meta = " · ".join(part for part in (card.title, card.locator) if part)
+            if meta:
+                st.caption(meta)
+
+
+def _render_sources(response) -> None:
+    cards = evidence_cards(response)
+    if not cards:
+        return
+    with st.expander(f"Источники, на которые опирается ответ ({len(cards)})"):
+        for card in cards:
+            st.markdown(f"**{card.title}**")
+            meta = [f"Тип: {_SOURCE_TYPE[card.source_type]}"]
+            if card.locator:
+                meta.append(card.locator)
+            if card.retrieval_score is not None:
+                meta.append(f"Retrieval score: {card.retrieval_score}")
+            st.caption(" · ".join(meta))
+            st.markdown(card.excerpt)
+
+
+def _render_technical(response, latency_s) -> None:
+    rows = technical_details(
+        response, model_name=settings.SIMPLE_MODEL_NAME, latency_s=latency_s
+    )
+    with st.expander("Технические детали"):
+        for label, value in rows:
+            st.markdown(f"**{label}:** {value}")
+
+
 def _render_result(entry: dict) -> None:
     response = entry["response"]
     st.divider()
@@ -81,9 +155,16 @@ def _render_result(entry: dict) -> None:
     status = presentation_status(response)
     _TONE[status.tone](f"**{status.title}**\n\n{status.detail}")
 
-    if status.code == "sufficient" and response.answer:
-        st.subheader("Ответ")
-        st.markdown(response.answer)
+    # Spec §13.3/§32.5: never show a confident answer when evidence is lacking.
+    if status.code == "sufficient":
+        if response.answer:
+            st.subheader("Ответ")
+            st.markdown(response.answer)
+        _render_reasoning(response)
+        _render_bases(response)
+
+    _render_sources(response)
+    _render_technical(response, entry.get("latency_s"))
 
 
 if not settings.CORPUS_MANIFEST_PATH or not os.path.exists(
@@ -152,6 +233,7 @@ submit = st.button("Спросить", type="primary")
 
 if (submit or example_clicked) and question.strip():
     with st.spinner("Поиск требований…"):
+        started = time.perf_counter()
         response = answer_question(
             question.strip(),
             unit,
@@ -161,10 +243,12 @@ if (submit or example_clicked) and question.strip():
             profile=profile,
             prompt_version=config.prompt_version,
         )
+        latency_s = time.perf_counter() - started
     st.session_state["last_answer"] = {
         "question": question.strip(),
         "unit_id": unit,
         "response": response,
+        "latency_s": latency_s,
     }
 
 if last := st.session_state.get("last_answer"):

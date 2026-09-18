@@ -1,7 +1,8 @@
 """Root screen (app.py): portfolio shell and stack errors shown, not tracebacks.
 
-Spec streamlit-portfolio-demo §5–§10: initial screen only — header, unit selector,
-compact profile, example buttons, one input. Backend is stubbed; no API calls.
+Spec streamlit-portfolio-demo §5–§18: initial screen and the structured result
+screen (answer, reasoning, bases, sources, technical details). Backend is
+stubbed; no API calls.
 """
 
 from pathlib import Path
@@ -12,11 +13,13 @@ from streamlit.testing.v1 import AppTest
 
 from config.settings import settings
 from src.department_qa import wiring
+from src.department_qa.contract import AppliedConclusion, Basis, Evidence, ObjectFact
 from src.department_qa.object_profile import (
     ObjectProfile,
     ObjectProfileError,
     TypedObjectFields,
 )
+from src.department_qa.service import DepartmentResponse
 from src.department_qa.wiring import DepartmentStack, ModeConfig
 from src.indexing.manifest import Manifest
 
@@ -164,3 +167,133 @@ def test_page_shows_stack_error_instead_of_traceback(monkeypatch, tmp_path, exc)
     assert not at.exception
     assert len(at.error) == 1
     assert str(exc) in at.error[0].value
+
+
+EVIDENCE = [
+    Evidence(
+        id="ext_001",
+        level="external",
+        text="п. 60 ППР",
+        source="ppr.pdf",
+        title="ППР № 1479",
+        locator="п. 60",
+        retrieval_score=0.42,
+    ),
+    Evidence(
+        id="int_001",
+        level="internal",
+        text="раз в год",
+        source="inst.md",
+        title="Инструкция по содержанию СПЗ",
+        locator="п. 3.1",
+    ),
+    Evidence(
+        id="obj_f_people_in_object_zone",
+        level="object",
+        text="Людей в зоне объекта: 24",
+        source="office_list.md",
+        title="Лист объекта",
+        locator="Типизированное поле: Людей в зоне объекта",
+        field_state="known",
+    ),
+]
+
+ANSWER = "Плановая проверка проводится не реже одного раза в год."
+
+
+def _answered_response() -> DepartmentResponse:
+    return DepartmentResponse(
+        status="answered",
+        trace_id="t",
+        answer=ANSWER,
+        evidence=EVIDENCE,
+        object_facts=[
+            ObjectFact(
+                statement="24 сотрудника",
+                evidence_ids=["obj_f_people_in_object_zone"],
+            )
+        ],
+        external_basis=[
+            Basis(statement="Проверка не реже раза в год", evidence_ids=["ext_001"])
+        ],
+        internal_basis=[
+            Basis(statement="Осмотр по инструкции", evidence_ids=["int_001"])
+        ],
+        applied_conclusions=[
+            AppliedConclusion(
+                statement="Требуется ежегодная проверка",
+                evidence_ids=["obj_f_people_in_object_zone", "ext_001"],
+            )
+        ],
+    )
+
+
+def _low_confidence_response(status: str, reasons: list[str]) -> DepartmentResponse:
+    return DepartmentResponse(
+        status=status,
+        reason_codes=reasons,
+        trace_id="t",
+        answer=ANSWER,
+        evidence=EVIDENCE,
+    )
+
+
+def _submit(monkeypatch, tmp_path, response: DepartmentResponse) -> AppTest:
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    monkeypatch.setattr(wiring, "build_department_stack", _fake_stack)
+    monkeypatch.setattr(
+        "src.department_qa.service.answer_question", lambda *a, **k: response
+    )
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+    at.text_input[0].set_value("Как часто требуется проверка?").run()
+    [b for b in at.button if b.label == "Спросить"][0].click().run()
+    return at
+
+
+def test_answered_shows_result_screen(monkeypatch, tmp_path):
+    at = _submit(monkeypatch, tmp_path, _answered_response())
+
+    assert not at.exception
+    subheaders = [h.value for h in at.subheader]
+    for expected in (
+        "Ваш вопрос",
+        "Ответ",
+        "Почему такой вывод",
+        "На чём основан ответ",
+    ):
+        assert expected in subheaders
+
+    body = " ".join(m.value for m in at.markdown)
+    assert ANSWER in body
+    assert "24 сотрудника" in body
+    assert "Проверка не реже раза в год" in body
+    assert "Требуется ежегодная проверка" in body
+    assert "ППР № 1479" in body
+
+    labels = [e.label for e in at.expander]
+    assert "Источники, на которые опирается ответ (3)" in labels
+    assert "Технические детали" in labels
+
+    assert "Доказательств достаточно" in at.success[0].value
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        _low_confidence_response("needs_review", ["internal_evidence_missing"]),
+        _low_confidence_response("needs_context", ["applicability_unclear"]),
+        _low_confidence_response("out_of_scope", []),
+        _low_confidence_response("failed", ["retrieval_failed"]),
+    ],
+)
+def test_low_confidence_never_shows_confident_answer(monkeypatch, tmp_path, response):
+    at = _submit(monkeypatch, tmp_path, response)
+
+    assert not at.exception
+    subheaders = [h.value for h in at.subheader]
+    for forbidden in ("Ответ", "Почему такой вывод", "На чём основан ответ"):
+        assert forbidden not in subheaders
+
+    body = " ".join(m.value for m in at.markdown)
+    assert ANSWER not in body
