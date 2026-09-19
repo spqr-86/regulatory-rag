@@ -36,29 +36,40 @@ what each metric actually denominates are in [Metrics](#metrics).
 
 ## How it works
 
+**Indexing**
+
+```mermaid
+flowchart LR
+    Docs[PDF / DOCX] --> Parse[Docling + HybridChunker]
+    Parse --> Embed[Embeddings]
+    Embed --> Store[(ChromaDB)]
+```
+
+**Request flow**
+
 ```mermaid
 flowchart TD
-    subgraph Ingestion
-        Docs[PDF / DOCX] --> Docling[Docling Parser]
-        Docling --> Split[HybridChunker max_tokens=400, merge_peers]
-        Split --> Embed[OpenAI Embeddings]
-        Embed --> DB[(ChromaDB)]
-    end
+    Q[Query] --> Gate{Intent / domain gate}
 
-    subgraph V7 [V7 LangGraph Pipeline]
-        Q[Query] --> Gate{intent_gate + domain gate}
-        Gate -->|noise / out-of-scope| End[END / abstain]
-        Gate -->|in-domain| Router[router + glossary + multi-query]
-        Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
-        Simple --> Triage{evaluate_triage hard gate + gap}
-        Triage -->|sufficient| Gen[generate_answer]
-        Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
-        Complex --> Eval[evaluate_complex]
-        Eval -->|pass| Gen
-        Eval -->|fail| Abstain[abstain]
-        Gen --> Answer[Answer + sources]
-    end
+    Gate -->|noise or out of domain| End[END]
+    Gate -->|in domain| Router{Route / expand query}
+
+    Router -->|ambiguous| Clarify[Ask for clarification]
+    Clarify --> End
+
+    Router -->|ready| Fast[Fast retrieval<br/>Hybrid + CrossEncoder]
+    Fast --> Triage{Evidence sufficient?}
+
+    Triage -->|yes| Answer[Generate answer<br/>with citations]
+    Triage -->|retry deeper| Deep[Deep retrieval<br/>larger top-K + MMR]
+    Triage -->|abstain| Abstain[Abstain]
+
+    Deep --> Check{Evidence sufficient?}
+    Check -->|yes| Answer
+    Check -->|no| Abstain
 ```
+
+The diagram intentionally stays at graph level; the exact node-by-node flow and evaluator internals are in [architecture](./docs/explanation/architecture.md).
 
 Key design decisions:
 - **No LLM routing** — all branching uses deterministic score thresholds, so the same query

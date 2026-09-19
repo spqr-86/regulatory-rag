@@ -36,29 +36,40 @@ faithfulness **0.891** · answer relevance **0.879** · **~$0.0039/запрос*
 
 ## Как работает
 
+**Индексация**
+
+```mermaid
+flowchart LR
+    Docs[PDF / DOCX] --> Parse[Docling + HybridChunker]
+    Parse --> Embed[Embeddings]
+    Embed --> Store[(ChromaDB)]
+```
+
+**Обработка запроса**
+
 ```mermaid
 flowchart TD
-    subgraph Ingestion
-        Docs[PDF / DOCX] --> Docling[Docling Parser]
-        Docling --> Split[HybridChunker max_tokens=400, merge_peers]
-        Split --> Embed[OpenAI Embeddings]
-        Embed --> DB[(ChromaDB)]
-    end
+    Q[Запрос] --> Gate{Intent / domain gate}
 
-    subgraph V7 [V7 LangGraph Pipeline]
-        Q[Query] --> Gate{intent_gate + domain gate}
-        Gate -->|noise / out-of-scope| End[END / abstain]
-        Gate -->|in-domain| Router[router + glossary + multi-query]
-        Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
-        Simple --> Triage{evaluate_triage hard gate + gap}
-        Triage -->|sufficient| Gen[generate_answer]
-        Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
-        Complex --> Eval[evaluate_complex]
-        Eval -->|pass| Gen
-        Eval -->|fail| Abstain[abstain]
-        Gen --> Answer[Answer + sources]
-    end
+    Gate -->|шум или вне домена| End[END]
+    Gate -->|в домене| Router{Маршрут / расширение запроса}
+
+    Router -->|неоднозначный| Clarify[Запросить уточнение]
+    Clarify --> End
+
+    Router -->|готов| Fast[Быстрый retrieval<br/>Hybrid + CrossEncoder]
+    Fast --> Triage{Доказательств достаточно?}
+
+    Triage -->|да| Answer[Сгенерировать ответ<br/>с источниками]
+    Triage -->|искать глубже| Deep[Глубокий retrieval<br/>увеличенный top-K + MMR]
+    Triage -->|отказ| Abstain[Abstain]
+
+    Deep --> Check{Доказательств достаточно?}
+    Check -->|да| Answer
+    Check -->|нет| Abstain
 ```
+
+Схема намеренно показывает уровень графа; точный node-by-node flow и внутренности evaluator-ов — в [описании архитектуры](./docs/explanation/architecture.md).
 
 Ключевые проектные решения:
 - **LLM не решает, куда идти** — все ветвления по детерминированным порогам, один и тот же
