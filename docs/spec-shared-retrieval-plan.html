@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Общий поиск Generic и Department — минимальная спецификация</title>
+<style>
+:root{font:17px/1.6 system-ui,sans-serif;color:#172735;background:#f3f5f7;color-scheme:light}
+body{max-width:1000px;margin:auto;padding:28px 20px 64px}
+article{background:white;padding:36px;border-radius:12px}
+h1,h2,h3{line-height:1.25}h2{margin-top:2em}
+a{color:#145fa0}code{font-size:.88em;overflow-wrap:anywhere}
+pre{padding:18px;background:#eff3f6;overflow-x:auto;line-height:1.5}
+pre code{overflow-wrap:normal}
+table{width:100%;border-collapse:collapse;font-size:.92em}
+th,td{padding:10px;border:1px solid #d3dce3;text-align:left;vertical-align:top}th{background:#eff3f6}
+.note{border-left:4px solid #28799a;padding:10px 18px;background:#eef7fa}
+.status{color:#526271}.table{overflow-x:auto}li{margin:.35em 0}
+@media(max-width:700px){body{padding:10px}article{padding:18px}table{min-width:580px}}
+@media print{body,article{padding:0;background:white}pre{white-space:pre-wrap}h2{break-after:avoid}}
+</style>
+</head>
+<body><article>
+<h1>Общий поиск для Generic RAG и Department Q&amp;A</h1>
+<p class="status">Редакция 4 · 19.09.2026 · общий поиск с ограниченной параллельностью · сверено с кодом e9f5cb4. Заменяет редакцию 3. Реализация ещё не выполнена.</p>
+<p>Сделать существующий поиск simple → complex доступным обоим сценариям. Department задаёт корпуса и подразделение, получает проверенные нормативные фрагменты, отдельно добавляет профиль объекта и формирует один ответ. Generic сохраняет свой действующий маршрут и формат ответа.</p>
+<p class="note">Это ограниченный рефактор с одной новой возможностью: Department получает существующий углублённый поиск. Одного извлечения vector + BM25 в общую функцию недостаточно. Нужно переиспользовать также проверки достаточности, переход в complex и упаковку контекста. Новая универсальная retrieval-платформа для этого не требуется.</p>
+<p><a href="superpowers/plans/2026-09-19-shared-scoped-retrieval.md">Пошаговый план реализации</a> · <a href="#flow">Путь запроса</a> · <a href="#acceptance">Приёмка</a> · <a href="#later">Потом, если понадобится</a></p>
+
+<h2>1. Анализ подхода</h2>
+<p>В <a href="../src/department_qa/wiring.py">Department wiring</a> есть отдельный hybrid search, а <a href="../src/v7/graph.py">Generic-граф</a> уже содержит simple, triage, complex и проверку final_context. Польза объединения — доступ Department к этим возможностям и одно место для исправлений retrieval. Улучшение качества и ускорение пока не доказаны.</p>
+<div class="table"><table>
+<thead><tr><th>Подход</th><th>Оценка</th></tr></thead><tbody>
+<tr><td>Объединить только hybrid-функцию</td><td>Самая маленькая правка, но Department остаётся без автоматического complex. Не выполняет обсуждённый сценарий.</td></tr>
+<tr><td>Переиспользовать retrieval-часть существующего графа</td><td>Выбран для этой редакции. Те же узлы и переходы, но возможность остановиться до генерации. Корпуса обрабатываются отдельно и параллельно, с ограниченным доступом к общей модели reranker.</td></tr>
+<tr><td>Новый coordinator, объединённый rerank и новый plan</td><td>Большая миграция ради пока не измеренного выигрыша. Перенесено в «потом».</td></tr>
+</tbody></table></div>
+<p>Упрощение имеет цену: обе ветви могут выполнить complex и вызвать reranker дважды. Раздельные проверки также могут оказаться слишком строгими для короткого ЛНА. Эти риски проверяются небольшим scoped-набором до переключения UI. Обещания «небольшая правка только одной функции» и «точно станет быстрее» исключены.</p>
+
+<h2 id="flow">2. Как идёт запрос</h2>
+<pre><code>Вопрос + corpora + unit_id + include_object_profile
+  ↓
+Проверка параметров и профиля
+  ↓
+Для выбранных корпусов ПАРАЛЛЕЛЬНО (максимум две ветви):
+  scoped simple
+    → pack → проверка достаточности
+      → достаточно: сохранить final_context
+      → нужно продолжить: scoped complex → pack → проверка
+      → отказ/ошибка: сохранить причину
+  ↓
+Готовый блок закона + готовый блок ЛНА
+  + профиль объекта, если включён
+  ↓
+Один structured generation call
+  ↓
+Проверка цитат и статуса ответа</code></pre>
+<p>Глубина определяется отдельно для каждого корпуса: например, закон — simple, ЛНА — complex. Повторный complex для того же корпуса не запускается. Обычный Generic проходит тот же retrieval-сегмент один раз на своём настроенном корпусе, затем вызывает свой generator.</p>
+<p>Результаты двух корпусов не соревнуются в global top-K. Они сохраняются отдельными блоками до prompt. Незапрошенная ветвь не выполняется. Если общего пригодного нормативного контекста нет, generation не вызывается.</p>
+
+<h2>3. Минимальные контракты</h2>
+<pre><code>RequestContext(
+    corpora=("external", "internal"),
+    unit_id="unit_moscow",
+    include_object_profile=True,
+)
+
+retrieve_context(
+    question=question,
+    filters=compiled_scope,
+    runtime=bound_runtime,
+    pack_limits=limits,
+) -> ScopedRetrievalResult</code></pre>
+<p><code>retrieve_context</code> — тонкий вход в retrieval-часть существующего графа; не новая реализация алгоритма. Его результат: final_context, outcome (ready / empty / insufficient / clarification / failed), route/reason, attempts и elapsed_ms. Для деградации сохраняется technical_failure. При неготовом контексте наружу не выдаётся сырой pool под видом final_context.</p>
+<p>Существующий <code>src.v7.state_types.RetrievalPlan</code> сохраняется: top-K, thresholds, MMR и прочие настройки работают как сейчас. RequestContext добавляется отдельно, переименования plan, RetrievalTuning и миграции старых eval-форматов нет. Параметры budget и corpus-local оценки передаются явно; корпуса не выбирает LLM.</p>
+<p>RequestContext проверяется на границе Department: corpora непустой и содержит только поддерживаемые значения; unit либо None, либо известный ID. Порядок результатов фиксирован: external, затем internal, независимо от порядка завершения ветвей. Include-profile требует соответствующий unit и доступный профиль. Ошибки ловятся до поиска. При false профиль исключён из prompt, evidence и метаданных ответа.</p>
+
+<h2>4. Scope и происхождение фрагментов</h2>
+<div class="table"><table>
+<thead><tr><th>Выбор</th><th>Разрешённый поиск</th></tr></thead><tbody>
+<tr><td>external; любой unit</td><td>Только external документы; подразделение не добавляет ЛНА</td></tr>
+<tr><td>internal; unit=None</td><td>Только общекорпоративные ЛНА</td></tr>
+<tr><td>internal; unit=A</td><td>Общекорпоративные ЛНА + ЛНА подразделения A</td></tr>
+<tr><td>external + internal</td><td>Две параллельные ветви с этими же правилами</td></tr>
+</tbody></table></div>
+<p>Используются существующие <code>source_type</code> и <code>audience</code> из <a href="../src/v7/scope_filter.py">scope_filter.py</a>. Фильтрация действует до top-K в vector и BM25, затем при section/source fetch, cross-reference, bbox-доборе, pack и fallback. Один и тот же scope передаётся явно; whitelist не может молча выбросить его обязательные поля. Дополнительные Generic filters только сужают выборку.</p>
+<p>Внутри одной ветви раскрытие ссылок остаётся в её корпусе и разрешённых документах. Новый межкорпусный resolver не добавляется. Неразрешённая ссылка остаётся в диагностике; она не даёт права ослабить фильтры.</p>
+<p>Department работает с V2-корпусом, где ObjectProfile исключён из индекса. Состав проверяется по manifest; старый V1-корпус с листами объектов не включается в новый production-путь. Исторические V1-артефакты сохраняются, сравнения выполняются старой версией кода.</p>
+<p>Generic продолжает работать с явно настроенной коллекцией и существующими фильтрами. Рефактор не навешивает новые metadata-фильтры на старый индекс и не объявляет неразмеченные документы external. Новый переключатель корпусов добавляется только в Department. Слияние индексов и миграция Generic metadata отложены.</p>
+<p>Сохраняются source, document_id, chunk_id, source_type и применимые unit/snapshot metadata. В Department merge/dedup/fetch опираются на документ, а не только текст или basename. Одинаковые номера чанков разных документов и одинаковый текст не склеиваются. Публичные MCP IDs не меняются. Legacy identity Generic остаётся совместимой; новый ключ применяется там, где есть полная metadata.</p>
+
+<h2>5. Переиспользование графа и изоляция ресурсов</h2>
+<p>У <code>build_graph</code> появляется retrieval-only режим с теми же узлами и условными переходами. На маршруте generate он заканчивается до вызова generator; clarification/abstain также возвращают состояние. Не использовать заглушку generator, которая может случайно дойти до LLM. Generic сохраняет полный граф.</p>
+<p>Generic сохраняет intent/domain gate, multi-query и свои visual callbacks. Department входит в router, не добавляя себе centroid domain gate; multi-query и visual enrichment в Department выключены, glossary и основные retrieval-операции общие. Это явные настройки bound runtime, не переключение process-global флагов.</p>
+<p>Для Department dual-corpus <code>require_multi_doc</code> внутри каждой ветви выключен: сравнение закона с ЛНА не требует двух документов внутри каждого корпуса. Наличие обеих основ проверяется после получения двух блоков. Single-corpus и Generic сохраняют текущую классификацию вопроса. Остальные пороги первоначально прежние; их изменение — отдельное решение по результатам проверки, не способ скрыть провал миграции.</p>
+<p>Vector backend, BM25Index, section/cross-ref callbacks и настройки привязаны к экземпляру графа. Department не должен вызывать глобальную переинициализацию Generic-поиска. Это обязательное условие корректности даже без параллельных ветвей: две страницы Streamlit уже могут обслуживать разные запросы. Достаточно простых зависимостей/замыканий; общий session manager и DI framework не нужны. Для переиспользования вектора добавляется небольшой request-local кеш точных query embeddings; фильтры, graph state и результаты всегда раздельные.</p>
+<p>Vector/BM25/RRF, section expansion, rerank, MMR, fallback и pack используют существующие реализации. Все scores сохраняют прежний смысл: distance преобразуется в vector similarity один раз, BM25/RRF/rerank не подменяют dense score в gate.</p>
+
+<h3 id="performance">5.1. Параллельность и оптимизации первого этапа</h3>
+<p>Две ветви запускаются в ограниченном общем executor, одна ветвь не создаёт вложенный пул. У каждого вызова свои state, pack cache и recorder; общие BM25/index snapshot доступны на чтение. Проверка backend на конкурентный доступ входит в integration gate. При необходимости блокируется только небезопасная backend-операция, а не весь поиск.</p>
+<p>Executor имеет конечный лимит workers и принятых задач; лимиты задаются конфигурацией. Общий retrieval deadline включает ожидание очереди и reranker. Перед каждой дорогой стадией проверяется оставшееся время. При ошибке одной обязательной ветви отменяются ещё не начавшиеся задачи, уже выполняющиеся проверяют cancellation между стадиями. Поздний результат не попадает в UI или другой запрос. Blocking-вызов нельзя обещать принудительно остановить: его собственный timeout ограничивает занятый worker; возврат ошибки не должен зависеть от ожидания shutdown нового пула.</p>
+<p>Начальные значения deadline выбираются по baseline и фиксируются до cutover. Существующие plan.timeout_ms не считать уже действующими end-to-end deadlines. Progress-события из workers передаются через очередь и отображаются только основным UI-потоком; worker не вызывает Streamlit и не дописывает результат в общий mutable список.</p>
+<div class="table"><table>
+<thead><tr><th>Делаем сейчас</th><th>Основание в коде и ограничение</th></tr></thead><tbody>
+<tr><td>Параллельные scoped-ветви</td><td>External и internal независимы. Сетевое ожидание может перекрываться; generation начинается после завершения обеих. В sequential режиме того же кода можно снять контрольный замер.</td></tr>
+<tr><td>Один embedding точного текста в Department-запросе</td><td>Text search Chroma каждый раз вызывает embed_query; добавляем адаптер поиска по готовому вектору. Ключ: точный подготовленный текст + embedding model/revision/dimension. Два concurrent запроса одного ключа разделяют одно вычисление; complex использует его повторно. Кеш исчезает после запроса. Ошибка общая для ожидающих; бесконтрольных повторов нет. Transport retry считается отдельно.</td></tr>
+<tr><td>Общая модель reranker, загрузка по необходимости</td><td>Сейчас init_v7_pipeline конструирует модель сразу. В новом runtime один ресурс на model/device/config внутри процесса, с защищённой ленивой инициализацией. Загрузка и predict сериализованы на этом ресурсе, включая запросы Generic. Две complex-ветви могут сделать два predict, но не одновременно на общей модели. Ожидание lock ограничено deadline; lock не охватывает vector/BM25/pack/generation.</td></tr>
+<tr><td>Один BM25 index на неизменяемый snapshot</td><td>Две ветви используют существующий индекс стека, не строят его на каждый запрос или corpus. При изменении snapshot пересобирается ресурс; фильтры и результаты не кешируются глобально.</td></tr>
+<tr><td>Ограниченный section fetch</td><td>Сейчас get_by_filter(limit=50) вычитывает все страницы, затем bridge берёт [:50]. Добавляем отдельный bounded fetch для section expansion: читается только тот же префикс в том же порядке. Полное чтение cross-ref/MCP сохраняется; нельзя менять смысл limit у существующего API.</td></tr>
+</tbody></table></div>
+<p>Department без multi-query использует один подготовленный glossary-текст, поэтому обычный dual-corpus запрос требует одно успешное вычисление embedding, даже при переходе в complex. Это не глобальный кеш ответа. Поиск с разными filters/top-K выполняется отдельно. Разные тексты/embedding spaces никогда не разделяют вектор; Generic domain gate и multi-query сохраняют прежнее поведение и не входят в этот invariant.</p>
+<p>В установленной Chroma-обёртке есть поиск по вектору; его raw score остаётся distance. Тест должен доказать одинаковые IDs/distances для text/by-vector поиска. Название метода с relevance_scores не является основанием повторно нормализовать score.</p>
+<p>Последовательный контроль использует тот же runtime с workers=1, параллельный — две разрешённые ветви. При отсутствии конкуренции время может приблизиться к максимуму длительностей двух ветвей вместо их суммы, но общий reranker и очередь ограничивают этот выигрыш. Поэтому сравниваются отдельно retrieval_ms и полное время ответа, cold/warm model и rerank_wait_ms.</p>
+<h2>6. Контекст, профиль и один ответ</h2>
+<p>Для Department остаётся ограничение до 8 нормативных passages на корпус — текущий <code>TOP_K_PER_LEVEL</code>. Ограничение применяется внутри pack до проверки достаточности. Кандидатов для поиска и rerank может быть больше. После ready нельзя обрезать или расширять этот контекст.</p>
+<p>Перед поиском рассчитывается доступный бюджет нормативного текста с учётом вопроса, инструкции, structured schema, целого профиля, запаса на ответ и schema retry. Для двух корпусов этот бюджет делится поровну; для одного он доступен целиком. Автоматическое перераспределение и подбор квот не реализуются. Если обязательный prompt не помещается, возвращается ошибка бюджета, без скрытой обрезки полей профиля.</p>
+<p>Готовые блоки складываются без общего ranking. Только перед prompt присваиваются ext_/int_ citation IDs; registry содержит именно отправленные фрагменты плюс включённый профиль. Проверка допустимых уровней цитат сохраняется.</p>
+<p>Новая версия Department prompt сообщает, какие корпуса запрошены и какие дали пригодный контекст. Валидатор требует основу только для запрошенного корпуса. Без профиля запрещены object_facts и выводы о применимости к конкретному объекту. Сохраняются проверки unknown-полей; они ловят известный класс нарушений, но не гарантируют семантическую правильность каждого вывода.</p>
+<p>Один финальный generation stage, существующий один schema retry. Транспортные retries — по существующим настройкам клиента. Экспериментальный verifier не включается в UI; основной сравнительный прогон выполняется без него. Generic prompt/модель и его generation не меняются.</p>
+
+<h2>7. Отказы и недостаточные данные</h2>
+<div class="table"><table>
+<thead><tr><th>Ситуация</th><th>Department</th></tr></thead><tbody>
+<tr><td>Невалидный context, профиль не найден или другого unit</td><td>failed + точная причина; поиск и generation не выполняются</td></tr>
+<tr><td>Router просит уточнить короткий вопрос</td><td>needs_context; generation=0</td></tr>
+<tr><td>Ошибка/timeout обязательного поиска либо scope violation</td><td>failed/retrieval_failed или scope_violation; generation=0. Ошибку нельзя выдать за empty</td></tr>
+<tr><td>Один corpus ready, другой успешно пуст или insufficient</td><td>Один ограниченный ответ по готовому блоку; missing-basis reason и не выше needs_review по полноте. Не утверждать, что соответствующей нормы нет</td></tr>
+<tr><td>Ни один corpus не дал ready-context</td><td>needs_review/insufficient_normative_evidence; generation=0</td></tr>
+<tr><td>Разрешённая текущей policy деградация BM25/expansion/rerank</td><td>Если контекст принят общим evaluator, возможен ограниченный ответ с needs_review/retrieval_degraded; если не принят — failed, generation=0</td></tr>
+<tr><td>Неизвестны нужные факты объекта</td><td>Существующий needs_context; поиск других корпусов автоматически не добавляется</td></tr>
+</tbody></table></div>
+<p>Приоритет статусов: технический fail/невалидные цитаты → failed; далее out_of_scope по контракту модели, needs_context по фактам, needs_review по нехватке основ/деградации, answered. Missing/degraded reasons добавляются кодом и не снимаются текстом модели. Generic сохраняет собственную текущую таблицу решений и fallback.</p>
+
+<h2>8. UI и минимальные измерения</h2>
+<p>Department получает выбор «Закон / ЛНА / Закон + ЛНА» и переключатель «Учитывать данные объекта». По умолчанию — оба корпуса, профиль включён при доступном выбранном объекте. Без профиля переключатель недоступен. Смена любого параметра context сбрасывает показ старого ответа. Существующая страница Generic сохраняется.</p>
+<p>В существующие логи/eval-записи добавляются requested corpora, unit, profile flag, для каждого корпуса route/reason и число final passages, retrieval_ms, queue_wait_ms, embedding computations/API attempts/cache hits, rerank calls/candidates, rerank_load_ms, rerank_wait_ms, rerank_predict_ms, llm_ms, total_ms. Незапрошенная ветвь помечается not_requested. Новая система telemetry, схема Postgres и Grafana-панели не требуются. Внутренние corpus-вызовы не записываются как отдельные пользовательские запросы Generic. Retrieval total — wall-clock от постановки до готовности/ошибки обеих ветвей, а не сумма их timings.</p>
+
+<h2 id="acceptance">9. Приёмка</h2>
+<ul>
+<li>☐ Generic и Department используют одни узлы поиска, pack и policy simple → complex; отдельный Department hybrid path удалён из production.</li>
+<li>☐ Generic на фиксированных результатах backend сохраняет route, scores, ordered final_context и fallback; действующие generation/UI/API контракты совместимы.</li>
+<li>☐ Department действительно может пройти simple → complex; retrieval-only ни разу не вызывает generator.</li>
+<li>☐ Для закона и ЛНА допустимы разные маршруты; их готовые блоки сохраняются отдельно и попадают в один ответ.</li>
+<li>☐ Scope соблюдается на vector/BM25/section/cross-ref/pack/fallback, включая совпадающие source/chunk IDs у разных подразделений.</li>
+<li>☐ ObjectProfile не ранжируется; false исключает его полностью; mismatch/unavailable проверяются до I/O.</li>
+<li>☐ Два графа с разными ресурсами не переключают друг другу store, BM25 или callbacks.</li>
+<li>☐ Corpus-specific проверка ответа, обработка отказов и сброс UI-context покрыты тестами.</li>
+<li>☐ Prompt содержит ровно проверенные passages; оба блока соблюдают общий бюджет; citation registry не содержит неотправленные candidates.</li>
+<li>☐ Scoped cases включают один короткий ЛНА, сравнение «один закон + один ЛНА», пустую ветвь и переход только одной ветви в complex.</li>
+<li>☐ Generic regression и Department pair/traps выполнены с зафиксированными baseline/config; новых scope/citation нарушений и запрещённых выводов нет. Изменения полезности ответов разобраны по вопросам.</li>
+<li>☐ Barrier-тест подтверждает перекрытие ветвей; один corpus не запускает вторую. Обратный порядок завершения не меняет порядок evidence и citation IDs.</li>
+<li>☐ Одна инициализация модели на общий ресурс; максимум один одновременный predict. Simple-путь не загружает reranker. BM25 не пересобирается на запрос.</li>
+<li>☐ Exact-text embedding вычисляется один раз на Department-запрос; обе ветви и complex его переиспользуют; разные ключи и запросы изолированы.</li>
+<li>☐ Bounded section fetch возвращает тот же префикс; API полного чтения не меняется. Нет лишнего чтения оставшихся страниц.</li>
+<li>☐ Deadline/переполнение очереди/ошибка ветви завершают запрос без generation; late results не изменяют UI, число workers/ожидающих задач ограничено.</li>
+<li>☐ Сняты три сопоставимых замера: старый pipeline, новый workers=1, новый parallel. Parallel и sequential дают одинаковый retrieval-контекст на fixed fixtures; real latency измерена отдельно от изменения качества Department.</li>
+</ul>
+<p>Небольшой scoped-набор проверяется до production cutover. Если общие thresholds систематически отвергают полезный контекст ЛНА, реализация не считается принятой: сначала разобрать причины, затем отдельной правкой согласовать corpus-настройки. Ослабление порогов ради зелёного eval и замена реального результата заглушкой запрещены.</p>
+
+<h2 id="later">10. Потом — только при подтверждённой необходимости</h2>
+<div class="table"><table>
+<thead><tr><th>Отложено</th><th>Что должно показать необходимость</th></tr></thead><tbody>
+<tr><td>Кеш embeddings между разными пользовательскими запросами; перенос reuse в Generic</td><td>Request-local reuse уже входит в текущую работу. Дальнейшее расширение — только при измеримой доле повторов и явной политике инвалидирования; учитывать domain gate и multi-query</td></tr>
+<tr><td>Больше двух ветвей, nested parallelism, одновременные predict или GPU</td><td>Текущие две ветви с сериализованным reranker не укладываются в измеренный бюджет ожидания; профиль показывает, какая стадия ограничивает результат</td></tr>
+<tr><td>Один объединённый CrossEncoder</td><td>Два rerank-вызова дают измеримый bottleneck; paired eval подтверждает сохранение обеих нормативных основ</td></tr>
+<tr><td>Динамические quotas и controlled global merge</td><td>Фиксированные отдельные блоки теряют важные evidence или расходуют бюджет впустую; есть конкретные размеченные случаи</td></tr>
+<tr><td>Новый RetrievalPlan, session cache и универсальный coordinator</td><td>Появились новые реальные сценарии, которые текущий граф и небольшой RequestContext не выражают без дублирования</td></tr>
+<tr><td>Объединение индексов, Generic corpus UI, миграция metadata</td><td>Нужен пользовательский сценарий совместного поиска в этих данных; заранее проверены состав коллекций и миграция</td></tr>
+<tr><td>Новая калибровка thresholds, multi-query в Department</td><td>Scoped eval показывает конкретные ложные отказы/промахи; это отдельный эксперимент, не скрытая часть рефактора</td></tr>
+<tr><td>Полная stage telemetry, распределённый scheduler и новые dashboards</td><td>Минимальных логов и ограниченного executor недостаточно для подтверждённой нагрузки. Базовые deadline/cancellation проверки входят в текущую работу</td></tr>
+<tr><td>LLM planner, multi-agent, retrieval microservice</td><td>Нового подтверждённого требования сейчас нет; не включать по умолчанию даже в следующую итерацию</td></tr>
+</tbody></table></div>
+<p>Не затрагиваются интерактивный «распрос», нормотворческая формализация, исправление chunking и замена моделей/базы. Отложенные пункты не блокируют принятие текущего объёма и не входят автоматически в следующий PR.</p>
+<p class="status">План предусматривает четыре последовательных PR с проверяемыми результатами. Этот документ задаёт объём будущей реализации; он не подтверждает уже работающий новый pipeline.</p>
+</article></body></html>
