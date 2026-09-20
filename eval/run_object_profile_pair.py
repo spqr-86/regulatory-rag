@@ -139,9 +139,11 @@ def run_mode(
         answer_question,
         answer_scoped_question,
     )
+    from src.v7.runner import default_writer
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    telemetry_writer = default_writer()
     records = []
     for q in questions:
         prompts: list[str] = []
@@ -183,6 +185,8 @@ def run_mode(
                 snapshot_id=stack.manifest.snapshot_id,
                 profiles=stack.config.profiles,
                 limits=getattr(stack, "service_limits", None) or ServiceLimits(),
+                writer=telemetry_writer,
+                source="eval",
             )
             # Preserve the historical meaning of search_calls (raw hybrid search
             # calls). The scoped graph records its own accepted attempts below.

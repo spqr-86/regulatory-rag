@@ -581,3 +581,128 @@ def test_scoped_timeout_returns_without_generation_or_waiting_for_worker():
     assert elapsed < 0.2
     assert (result.status, result.reason_codes) == ("failed", ["retrieval_timeout"])
     assert model.prompts == []
+
+
+class FakeWriter:
+    """Records every ``.write(event)`` call — no network, no database."""
+
+    def __init__(self) -> None:
+        self.events: list[dict] = []
+
+    def write(self, event: dict) -> None:
+        self.events.append(event)
+
+
+@pytest.mark.unit
+def test_scoped_request_writes_exactly_one_telemetry_row():
+    def retrieve(question, *, corpus, **kwargs):
+        return _retrieval(text=corpus)
+
+    writer = FakeWriter()
+    result = answer_scoped_question(
+        "q",
+        RequestContext(include_object_profile=False),
+        retrieve,
+        _model(GOOD),
+        known_units=set(),
+        writer=writer,
+    )
+    assert len(writer.events) == 1
+    assert writer.events[0]["query_id"] == result.trace_id
+
+
+@pytest.mark.unit
+def test_scoped_fail_path_writes_one_row_with_error_and_abstain_path():
+    writer = FakeWriter()
+    result = answer_scoped_question(
+        "q",
+        RequestContext(
+            corpora=("external",), unit_id="missing", include_object_profile=False
+        ),
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no retrieval")),
+        _model(GOOD),
+        known_units={"unit_1"},
+        writer=writer,
+    )
+    assert result.status == "failed"
+    assert len(writer.events) == 1
+    event = writer.events[0]
+    assert event["query_id"] == result.trace_id
+    assert event["error"] == "invalid_unit"
+    assert event["path"] == "abstain"
+
+
+@pytest.mark.unit
+def test_scoped_writer_none_is_a_noop():
+    def retrieve(question, *, corpus, **kwargs):
+        return _retrieval(text=corpus)
+
+    result = answer_scoped_question(
+        "q",
+        RequestContext(include_object_profile=False),
+        retrieve,
+        _model(GOOD),
+        known_units=set(),
+    )
+    assert result.status == "answered"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "status, route, expected_path",
+    [
+        ("failed", "simple", "abstain"),
+        ("needs_context", "simple", "clarify"),
+        ("answered", "complex", "complex"),
+        ("answered", "simple", "simple"),
+    ],
+)
+def test_scoped_telemetry_path_mapping(status, route, expected_path):
+    if status == "failed":
+        writer = FakeWriter()
+        answer_scoped_question(
+            "q",
+            RequestContext(
+                corpora=("external",),
+                unit_id="missing",
+                include_object_profile=False,
+            ),
+            lambda *a, **k: (_ for _ in ()).throw(AssertionError("no retrieval")),
+            _model(GOOD),
+            known_units={"unit_1"},
+            writer=writer,
+        )
+        assert writer.events[0]["path"] == expected_path
+        return
+
+    if status == "needs_context":
+        writer = FakeWriter()
+
+        def retrieve(question, *, corpus, **kwargs):
+            return _retrieval(outcome="clarification")
+
+        answer_scoped_question(
+            "q",
+            RequestContext(corpora=("external",), include_object_profile=False),
+            retrieve,
+            _model(GOOD),
+            known_units=set(),
+            writer=writer,
+        )
+        assert writer.events[0]["path"] == expected_path
+        return
+
+    writer = FakeWriter()
+
+    def retrieve(question, *, corpus, **kwargs):
+        return _retrieval(text=corpus, route=route)
+
+    answer_scoped_question(
+        "q",
+        RequestContext(include_object_profile=False),
+        retrieve,
+        _model(GOOD),
+        known_units=set(),
+        writer=writer,
+    )
+    assert writer.events[0]["path"] == expected_path

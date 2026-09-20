@@ -51,6 +51,7 @@ from src.department_qa.wiring import (  # noqa: E402
     stack_cache_key,
 )
 from src.ui_feedback import render_feedback  # noqa: E402
+from src.v7.runner import default_writer  # noqa: E402
 
 st.set_page_config(
     page_title="Regulatory Compliance Assistant", page_icon="🧭", layout="wide"
@@ -109,6 +110,12 @@ def load_department_stack(cache_key):
     # cache_key is stack_cache_key(): it changes when Streamlit hot-reloads local
     # modules, so the stale cached stack is not reused across a reload.
     return build_department_stack()
+
+
+@st.cache_resource(show_spinner=False)
+def get_telemetry_writer():
+    """One writer per Streamlit process, same pattern as pages/2_Общий_поиск.py."""
+    return default_writer()
 
 
 def _unit_names(manifest) -> dict[str, str]:
@@ -391,6 +398,7 @@ if (submit or example_clicked) and question.strip():
             context,
             stack.retrieve_fn,
             stack.model_fn,
+            writer=get_telemetry_writer(),
             **scoped_kwargs,
         )
         latency_s = time.perf_counter() - started

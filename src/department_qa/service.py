@@ -20,7 +20,7 @@ from __future__ import annotations
 import uuid
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 import threading
 import time
 from typing import Callable, Optional
@@ -50,6 +50,7 @@ from src.department_qa.object_profile import (
     typed_fields_prompt_lines,
 )
 from src.infra.prompt_manager import PromptManager
+from src.v7 import telemetry
 from src.v7.scope_filter import build_scope_filters
 from src.v7.retrieval import RequestEmbeddingMemo, ScopedRetrievalResult
 
@@ -238,6 +239,8 @@ def answer_scoped_question(
     limits: ServiceLimits = ServiceLimits(),
     executor: Optional[BoundedRetrievalExecutor] = None,
     progress_fn: Optional[ProgressFn] = None,
+    writer: Optional[telemetry.EventWriter] = None,
+    source: telemetry.Source = "ui",
 ) -> DepartmentResponse:
     """Run selected corpora concurrently, then perform exactly one generation."""
     started = time.monotonic()
@@ -261,6 +264,50 @@ def answer_scoped_question(
                 "department_qa.progress_failed", trace_id=trace_id, error=str(exc)
             )
 
+    def record(
+        response: DepartmentResponse, *, error: Optional[str] = None
+    ) -> DepartmentResponse:
+        """Write exactly one ``queries`` row for this request (spec: internal
+        per-corpus retrieval calls never become their own row — this is the one
+        row per Department request the plan restores, not a second telemetry
+        path; ``writer=None`` is the existing no-op convention from
+        ``run_query``'s ``_record``)."""
+        if writer is None:
+            return response
+        if response.status == "failed":
+            path: telemetry.Path_ = "abstain"
+        elif response.status == "needs_context":
+            path = "clarify"
+        else:
+            has_complex_route = any(
+                trace.get("route") == "complex"
+                for trace in response.retrieval_trace.values()
+            )
+            path = "complex" if has_complex_route else "simple"
+        event = {
+            "query_id": response.trace_id,
+            "run_id": None,
+            "ts": datetime.now(timezone.utc),
+            "source": source,
+            "question": question,
+            "path": path,
+            "answer_len": len(response.answer or ""),
+            "n_passages": len(response.evidence),
+            "n_passages_found": sum(
+                trace.get("final_passages", 0)
+                for trace in response.retrieval_trace.values()
+            ),
+            "latency_ms": int(response.total_ms),
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0,
+            "models": [],
+            "unpriced_models": [],
+            "error": error,
+        }
+        telemetry.write_event(writer, event)
+        return response
+
     def fail(reason: str, **extra) -> DepartmentResponse:
         logger.warning(
             "department_qa.scoped_failed",
@@ -269,14 +316,17 @@ def answer_scoped_question(
             requested_corpora=context.corpora,
             total_ms=round((time.monotonic() - started) * 1000, 1),
         )
-        return DepartmentResponse(
-            status="failed",
-            reason_codes=[reason],
-            next_step=_NEXT_STEP["failed"],
-            total_ms=(time.monotonic() - started) * 1000,
-            retrieval_stats={"embedding": embedding_memo.stats()},
-            **base,
-            **extra,
+        return record(
+            DepartmentResponse(
+                status="failed",
+                reason_codes=[reason],
+                next_step=_NEXT_STEP["failed"],
+                total_ms=(time.monotonic() - started) * 1000,
+                retrieval_stats={"embedding": embedding_memo.stats()},
+                **base,
+                **extra,
+            ),
+            error=reason,
         )
 
     if context.unit_id is not None and context.unit_id not in known_units:
@@ -402,15 +452,17 @@ def answer_scoped_question(
             total_ms=round(elapsed_ms, 1),
             embedding=embedding_memo.stats(),
         )
-        return DepartmentResponse(
-            status=status,
-            reason_codes=reasons,
-            next_step=_NEXT_STEP[status],
-            retrieval_trace=traces,
-            retrieval_stats={"embedding": embedding_memo.stats()},
-            retrieval_ms=(time.monotonic() - retrieval_started) * 1000,
-            total_ms=elapsed_ms,
-            **base,
+        return record(
+            DepartmentResponse(
+                status=status,
+                reason_codes=reasons,
+                next_step=_NEXT_STEP[status],
+                retrieval_trace=traces,
+                retrieval_stats={"embedding": embedding_memo.stats()},
+                retrieval_ms=(time.monotonic() - retrieval_started) * 1000,
+                total_ms=elapsed_ms,
+                **base,
+            )
         )
 
     external = _to_evidence(
@@ -499,37 +551,39 @@ def answer_scoped_question(
         total_ms=round(total_ms, 1),
         embedding=embedding_memo.stats(),
     )
-    return DepartmentResponse(
-        answer="" if status == "out_of_scope" else answer.answer,
-        external_basis=[] if status == "out_of_scope" else answer.external_basis,
-        internal_basis=[] if status == "out_of_scope" else answer.internal_basis,
-        object_facts=(
-            [] if status == "out_of_scope" else getattr(answer, "object_facts", [])
-        ),
-        applied_conclusions=(
-            []
-            if status == "out_of_scope"
-            else getattr(answer, "applied_conclusions", [])
-        ),
-        status=status,
-        reason_codes=reasons,
-        clarifying_questions=(
-            [] if status == "out_of_scope" else answer.clarifying_questions
-        ),
-        next_step=_NEXT_STEP[status],
-        evidence=(
-            []
-            if status == "out_of_scope"
-            else [item for item in ordered if item.id in cited]
-        ),
-        profile_as_of_date=profile.as_of_date if profile else None,
-        profile_sha256=profile.content_sha256 if profile else None,
-        retrieval_trace=traces,
-        retrieval_stats={"embedding": embedding_memo.stats()},
-        retrieval_ms=llm_started * 1000 - retrieval_started * 1000,
-        llm_ms=llm_ms,
-        total_ms=total_ms,
-        **base,
+    return record(
+        DepartmentResponse(
+            answer="" if status == "out_of_scope" else answer.answer,
+            external_basis=[] if status == "out_of_scope" else answer.external_basis,
+            internal_basis=[] if status == "out_of_scope" else answer.internal_basis,
+            object_facts=(
+                [] if status == "out_of_scope" else getattr(answer, "object_facts", [])
+            ),
+            applied_conclusions=(
+                []
+                if status == "out_of_scope"
+                else getattr(answer, "applied_conclusions", [])
+            ),
+            status=status,
+            reason_codes=reasons,
+            clarifying_questions=(
+                [] if status == "out_of_scope" else answer.clarifying_questions
+            ),
+            next_step=_NEXT_STEP[status],
+            evidence=(
+                []
+                if status == "out_of_scope"
+                else [item for item in ordered if item.id in cited]
+            ),
+            profile_as_of_date=profile.as_of_date if profile else None,
+            profile_sha256=profile.content_sha256 if profile else None,
+            retrieval_trace=traces,
+            retrieval_stats={"embedding": embedding_memo.stats()},
+            retrieval_ms=llm_started * 1000 - retrieval_started * 1000,
+            llm_ms=llm_ms,
+            total_ms=total_ms,
+            **base,
+        )
     )
 
 
