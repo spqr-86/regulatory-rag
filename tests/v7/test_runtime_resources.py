@@ -89,12 +89,18 @@ def test_runtime_builds_one_bm25_and_no_generation_clients(monkeypatch):
     from src.v7.retrieval import retrieve_context
     from unittest.mock import Mock
 
-    store = Mock()
-    store.get.return_value = {
-        "documents": ["медосмотр водителей", "пожарная безопасность"],
-        "metadatas": [{"source": "A"}, {"source": "B"}],
-    }
-    store.similarity_search_with_score.return_value = []
+    class RawChromaStore:
+        def get(self, *, include):
+            assert include == ["metadatas", "documents"]
+            return {
+                "documents": ["медосмотр водителей", "пожарная безопасность"],
+                "metadatas": [{"source": "A"}, {"source": "B"}],
+            }
+
+        def similarity_search_with_score(self, query, *, k, filter):
+            return []
+
+    store = RawChromaStore()
     index = Mock()
     index.search.return_value = []
     factory = Mock(return_value=index)
