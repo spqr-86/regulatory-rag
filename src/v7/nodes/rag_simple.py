@@ -11,6 +11,7 @@ from typing import Callable, List, Optional
 from src.v7.config import v7_config
 from src.v7.hard_gates import compute_attempt_metrics, validate_filters
 from src.v7.nlp_core import bm25_search, passage_identity, rrf_merge
+from src.v7.scope_filter import matches_filter
 from src.v7.state_types import RAGState, RetrievalAttempt
 from src.v7.usage import LLM_USAGE_KEY, stamp_stage, unpack
 
@@ -90,6 +91,17 @@ def rag_simple(state: RAGState, *, dependencies=None) -> RAGState:
         for q in all_queries:
             v_res = vector_search(query=q, filters=safe_filters, top_k=plan["top_k"])
             b_res = lexical_search(query=q, filters=safe_filters, top_k=plan["top_k"])
+            if safe_filters:
+                v_res = [
+                    p
+                    for p in v_res
+                    if matches_filter(p.get("metadata") or {}, safe_filters)
+                ]
+                b_res = [
+                    p
+                    for p in b_res
+                    if matches_filter(p.get("metadata") or {}, safe_filters)
+                ]
             all_vector_lists.append(v_res)
             all_bm25_lists.append(b_res)
     except Exception as exc:  # noqa: BLE001 — failure is represented in graph state

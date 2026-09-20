@@ -51,6 +51,24 @@ def test_version_changes_with_query():
     )
 
 
+def test_version_changes_with_scope():
+    assert candidate_version(
+        [_p(1)], PLAN, "q", {"audience": "unit_1"}
+    ) != candidate_version([_p(1)], PLAN, "q", {"audience": "unit_2"})
+
+
+def test_pack_passes_scope_to_expander():
+    seen = []
+
+    def expander(passages, query, filters):
+        seen.append(filters)
+        return passages
+
+    scope = {"source_type": "internal", "audience": {"$in": ["company", "unit_1"]}}
+    pc.pack_context([_p(1)], "q", PLAN, crossref_expander=expander, filters=scope)
+    assert seen == [scope]
+
+
 def test_pack_runs_expander_once_per_version():
     calls = []
 

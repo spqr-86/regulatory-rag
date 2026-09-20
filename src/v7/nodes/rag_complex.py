@@ -6,6 +6,7 @@ from __future__ import annotations
 # Input: request state/dependencies. Output: complex attempt under its own plan.
 
 import logging
+import inspect
 from typing import Callable, List, Optional
 
 from src.v7.config import v7_config
@@ -14,6 +15,7 @@ from src.v7.nlp_core import bm25_search, rrf_merge
 from src.v7.nodes.utils import make_retrieval_id
 from src.v7.state_types import RAGState, RetrievalAttempt, RetrievalPlan
 from src.v7.reranker import RerankerError
+from src.v7.scope_filter import matches_filter
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +116,12 @@ def rag_complex(state: RAGState, *, dependencies=None) -> RAGState:
             filters=safe_filters,
             top_k=slow_plan["top_k"],
         )
+        if safe_filters:
+            vector_results = [
+                p
+                for p in vector_results
+                if matches_filter(p.get("metadata") or {}, safe_filters)
+            ]
     except Exception as exc:  # noqa: BLE001 — failure is represented in graph state
         logger.warning("rag_complex: retrieval failed: %s", exc)
         retrieval_error = True
@@ -129,6 +137,12 @@ def rag_complex(state: RAGState, *, dependencies=None) -> RAGState:
             if not retrieval_error
             else []
         )
+        if safe_filters:
+            bm25_results = [
+                p
+                for p in bm25_results
+                if matches_filter(p.get("metadata") or {}, safe_filters)
+            ]
     except Exception as exc:  # a missing BM25 index must not kill the slow path
         logger.warning("bm25_search failed, complex pool stays dense-only: %s", exc)
         bm25_results = []
@@ -145,7 +159,21 @@ def rag_complex(state: RAGState, *, dependencies=None) -> RAGState:
     # Section-aware expansion: fetch all chunks from the same section as the top anchor.
     # Helps for queries where the answer is scattered across multiple paragraphs of one section.
     if section_fetch is not None and passages:
-        extra = section_fetch(passages)
+        parameters = inspect.signature(section_fetch).parameters.values()
+        accepts_filters = "filters" in inspect.signature(
+            section_fetch
+        ).parameters or any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters)
+        extra = (
+            section_fetch(passages, filters=safe_filters)
+            if accepts_filters
+            else section_fetch(passages)
+        )
+        if safe_filters:
+            extra = [
+                p
+                for p in extra
+                if matches_filter(p.get("metadata") or {}, safe_filters)
+            ]
         if extra:
             seen_texts = {p.get("text", "") for p in passages}
             for p in extra:

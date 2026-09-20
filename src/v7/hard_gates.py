@@ -32,6 +32,19 @@ def validate_filters(filters: Optional[dict]) -> Optional[dict]:
     return {k: v for k, v in filters.items() if k in ALLOWED_FILTER_KEYS}
 
 
+def validate_scope_filters(filters: dict) -> dict:
+    """Validate caller-owned scope without silently widening retrieval."""
+    if not filters:
+        raise ValueError("scope filters are required")
+    unknown = set(filters) - ALLOWED_FILTER_KEYS
+    if unknown:
+        raise ValueError(f"unsupported scope filter keys: {sorted(unknown)}")
+    for key, value in filters.items():
+        if isinstance(value, dict) and set(value) != {"$in"}:
+            raise ValueError(f"unsupported scope filter operator for {key}: {value}")
+    return dict(filters)
+
+
 # ─── sanitize_for_llm ─────────────────────────────────────────────────────
 
 

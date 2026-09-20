@@ -38,6 +38,7 @@ from src.v7.runtime import (
     legacy_runtime_lock,
 )
 from src.v7.reranker import shared_reranker
+from src.v7.scope_filter import matches_filter
 from src.v7.usage import LLMUsage, usage_from_response
 from src.v7 import pack_context as pack_context_mod
 from src.v7.nodes import generate_answer as generate_answer_mod
@@ -250,6 +251,9 @@ def make_vector_search_fn(vector_store) -> Callable[..., List[dict]]:
             # ChromaDB returns L2 distance (0..inf). Convert to similarity (0..1).
             similarity = round(1.0 / (1.0 + distance), 4)
             meta = dict(doc.metadata)
+            if filters and not matches_filter(meta, filters):
+                logger.warning("vector_search dropped out-of-scope backend result")
+                continue
             passage = {
                 "text": doc.page_content,
                 "metadata": meta,
@@ -280,13 +284,16 @@ def make_section_fetch_fn(
     Returns passages not already in the input list.
     """
 
-    def _fetch_one_section(section: str, source: str) -> List[dict]:
+    def _fetch_one_section(
+        section: str, source: str, filters: dict | None
+    ) -> List[dict]:
         if not section or not source:
             return []
         try:
             if isinstance(vector_store, VectorStoreBackend):
                 docs = vector_store.get_by_filter_bounded(
                     {
+                        **(filters or {}),
                         "parent_section": section,
                         "source": source,
                     },
@@ -295,6 +302,7 @@ def make_section_fetch_fn(
                 return [
                     _doc_to_passage(d.page_content, dict(d.metadata or {}))
                     for d in docs
+                    if matches_filter(dict(d.metadata or {}), filters)
                 ]
             col = vector_store._collection
             results = col.get(
@@ -315,7 +323,9 @@ def make_section_fetch_fn(
             logger.warning("section_fetch failed: %s", exc)
             return []
 
-    def _fetch_section(passages: List[dict]) -> List[dict]:
+    def _fetch_section(
+        passages: List[dict], *, filters: dict | None = None
+    ) -> List[dict]:
         if not passages:
             return []
         seen_sections: set[tuple[str, str]] = set()
@@ -328,7 +338,7 @@ def make_section_fetch_fn(
             if not section or not source or key in seen_sections:
                 continue
             seen_sections.add(key)
-            out.extend(_fetch_one_section(section, source))
+            out.extend(_fetch_one_section(section, source, filters))
         return out
 
     return _fetch_section
@@ -534,9 +544,13 @@ def build_v7_runtime(
     crossref = None
     if isinstance(vector_store, VectorStoreBackend):
 
-        def crossref(passages, query):
+        def crossref(passages, query, filters=None):
             return expand_cross_references(
-                passages, vector_store, query=query, bm25_fn=lexical
+                passages,
+                vector_store,
+                query=query,
+                filters=filters,
+                bm25_fn=lexical,
             )
 
     return V7Runtime(
@@ -602,8 +616,12 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> V7Run
         # Единственная точка инжекта expander: pack_context (спек §1).
         if isinstance(vector_store, VectorStoreBackend):
             pack_context_mod.set_crossref_expander(
-                lambda passages, query: expand_cross_references(
-                    passages, vector_store, query=query, bm25_fn=lexical
+                lambda passages, query, filters=None: expand_cross_references(
+                    passages,
+                    vector_store,
+                    query=query,
+                    filters=filters,
+                    bm25_fn=lexical,
                 )
             )
             logger.info("v7 pack_context crossref expander injected successfully")

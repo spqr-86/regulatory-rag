@@ -68,6 +68,27 @@ def wired(monkeypatch):
 
 class TestHybridPool:
     @pytest.mark.unit
+    def test_filters_foreign_dense_bm25_and_section_results(self, monkeypatch):
+        own = _passage("own.md", 1)
+        own["metadata"].update(source_type="internal", audience="unit_1")
+        foreign = _passage("foreign.md", 2)
+        foreign["metadata"].update(source_type="internal", audience="unit_2")
+        monkeypatch.setattr(rc, "_vector_search", lambda **kw: [foreign, own])
+        monkeypatch.setattr(rc, "bm25_search", lambda **kw: [foreign, own])
+        monkeypatch.setattr(rc, "_section_fetch_fn", lambda passages: [foreign])
+        monkeypatch.setattr(rc, "_rerank_fn", None)
+        state = _make_state(
+            filters={
+                "source_type": "internal",
+                "audience": {"$in": ["company", "unit_1"]},
+            }
+        )
+
+        passages = rag_complex(state)["retrieval_attempts"][0]["passages"]
+
+        assert {p["metadata"]["audience"] for p in passages} == {"unit_1"}
+
+    @pytest.mark.unit
     def test_bm25_only_chunk_enters_pool(self, wired):
         """Чанк, который находит только BM25, обязан попасть в пул кандидатов."""
         result = rag_complex(_make_state())

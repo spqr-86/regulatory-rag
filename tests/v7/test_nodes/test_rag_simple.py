@@ -59,6 +59,37 @@ class TestRagSimple:
         assert "attempt_plan" in attempt
         assert attempt["metrics"]["retrieval_type"] == "hybrid_rrf"
 
+    @pytest.mark.unit
+    def test_filters_foreign_results_returned_by_callbacks(self):
+        from src.v7.runtime import V7Runtime
+
+        own = {
+            "text": "own",
+            "score": 0.8,
+            "metadata": {"source_type": "internal", "audience": "unit_1"},
+        }
+        foreign = {
+            "text": "foreign",
+            "score": 0.9,
+            "metadata": {"source_type": "internal", "audience": "unit_2"},
+        }
+        runtime = V7Runtime(
+            vector_search=lambda **kwargs: [foreign, own],
+            bm25_search=lambda **kwargs: [foreign, own],
+        )
+        state = _make_state(
+            filters={
+                "source_type": "internal",
+                "audience": {"$in": ["company", "unit_1"]},
+            }
+        )
+
+        passages = rag_simple(state, dependencies=runtime)["retrieval_attempts"][0][
+            "passages"
+        ]
+
+        assert {p["text"] for p in passages} == {"own"}
+
 
 class TestBm25GuaranteeIdentity:
     """The BM25 top-3 guarantee must key on passage identity, not the bare

@@ -49,7 +49,9 @@ def evaluate_triage(state: RAGState, *, dependencies=None) -> RAGState:
 
     if dependencies is None:
         enriched = enrich_passages(raw)
-        packed = pack_context(enriched, active_q, dict(plan))
+        packed = pack_context(
+            enriched, active_q, dict(plan), filters=state.get("filters")
+        )
     else:
         enriched = enrich_passages(raw, visual_proof_fn=dependencies.visual_proof)
         packed = pack_context(
@@ -57,6 +59,7 @@ def evaluate_triage(state: RAGState, *, dependencies=None) -> RAGState:
             active_q,
             dict(plan),
             crossref_expander=dependencies.crossref_expander,
+            filters=state.get("filters"),
         )
     verdict = validate_context(
         packed["final_context"],

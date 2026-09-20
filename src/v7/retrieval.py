@@ -14,6 +14,7 @@ from functools import partial
 from typing import Literal
 
 from src.v7.graph import build_graph
+from src.v7.hard_gates import validate_scope_filters
 from src.v7.runtime import V7Runtime
 from src.v7.reranker import SharedReranker
 
@@ -60,6 +61,7 @@ def retrieve_context(
     *,
     runtime: V7Runtime,
     filters: dict | None = None,
+    strict_scope: bool = False,
     deadline: float | None = None,
 ) -> ScopedRetrievalResult:
     """Invoke the shared graph with one isolated request state.
@@ -68,6 +70,8 @@ def retrieve_context(
     admission/cancellation budget is implemented at the service boundary.
     """
     started = time.monotonic()
+    if strict_scope:
+        filters = validate_scope_filters(filters or {})
     if deadline is not None and isinstance(runtime.rerank, SharedReranker):
         runtime = replace(runtime, rerank=partial(runtime.rerank, deadline=deadline))
     state = (
