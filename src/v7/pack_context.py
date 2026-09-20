@@ -10,6 +10,7 @@ import hashlib
 import inspect
 import json
 import logging
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
 from src.v7.config import v7_config
@@ -38,6 +39,16 @@ _crossref_expander: Optional[
 _UNSET = object()
 
 
+@dataclass(frozen=True)
+class PackLimits:
+    max_passages: int
+    token_budget: int
+
+    def __post_init__(self) -> None:
+        if self.max_passages <= 0 or self.token_budget <= 0:
+            raise ValueError("pack limits must be positive")
+
+
 def set_crossref_expander(
     fn: Optional[Callable[[List[dict], str, Optional[dict]], List[dict]]],
 ) -> None:
@@ -51,7 +62,11 @@ def set_crossref_expander(
 
 
 def candidate_version(
-    passages: List[dict], plan: dict, query: str, filters: dict | None = None
+    passages: List[dict],
+    plan: dict,
+    query: str,
+    filters: dict | None = None,
+    limits: PackLimits | None = None,
 ) -> str:
     """Стабильный ключ версии кандидата.
 
@@ -65,12 +80,25 @@ def candidate_version(
     )
     plan_snapshot = json.dumps(plan or {}, sort_keys=True, default=str)
     filter_snapshot = json.dumps(filters or {}, sort_keys=True, default=str)
+    limits_snapshot = json.dumps(
+        (
+            {
+                "max_passages": limits.max_passages,
+                "token_budget": limits.token_budget,
+            }
+            if limits
+            else {}
+        ),
+        sort_keys=True,
+    )
     raw = (
         _SEP.join(ids)
         + _SEP
         + plan_snapshot
         + _SEP
         + filter_snapshot
+        + _SEP
+        + limits_snapshot
         + _SEP
         + (query or "")
     )
@@ -137,6 +165,7 @@ def pack_context(
     cache: Optional[Dict[str, PackResult]] = None,
     crossref_expander=_UNSET,
     filters: dict | None = None,
+    limits: PackLimits | None = None,
 ) -> PackResult:
     """Упаковать кандидата в контекст, который увидит генератор.
 
@@ -147,7 +176,7 @@ def pack_context(
     if not passages:
         return {"final_context": [], "status": "ok", "dropped": 0}
 
-    key = candidate_version(passages, plan, query, filters)
+    key = candidate_version(passages, plan, query, filters, limits)
     if cache is not None and key in cache:
         return copy.deepcopy(cache[key])
 
@@ -178,9 +207,10 @@ def pack_context(
     packed = [{**p, "text": sanitize_for_llm(p.get("text", ""))} for p in working]
 
     n_before = len(packed)
-    packed = packed[: v7_config.MAX_CHUNKS_FOR_LLM]
+    max_passages = limits.max_passages if limits else v7_config.MAX_CHUNKS_FOR_LLM
+    packed = packed[:max_passages]
 
-    budget = v7_config.PACK_TOKEN_BUDGET
+    budget = limits.token_budget if limits else v7_config.PACK_TOKEN_BUDGET
     kept: List[dict] = []
     spent = 0
     for p in packed:

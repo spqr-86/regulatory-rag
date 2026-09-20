@@ -60,6 +60,7 @@ def evaluate_triage(state: RAGState, *, dependencies=None) -> RAGState:
             dict(plan),
             crossref_expander=dependencies.crossref_expander,
             filters=state.get("filters"),
+            limits=dependencies.pack_limits,
         )
     verdict = validate_context(
         packed["final_context"],

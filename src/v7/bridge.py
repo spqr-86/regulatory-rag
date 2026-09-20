@@ -515,6 +515,7 @@ def build_v7_runtime(
     visual_proof=None,
     generate_simple=None,
     generate_complex=None,
+    pack_limits=None,
 ) -> V7Runtime:
     """Bind an existing store and snapshot without initializing any LLM clients.
 
@@ -563,6 +564,7 @@ def build_v7_runtime(
         visual_proof=visual_proof,
         generate_simple=generate_simple,
         generate_complex=generate_complex,
+        pack_limits=pack_limits,
     )
 
 

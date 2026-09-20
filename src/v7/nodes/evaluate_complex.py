@@ -106,6 +106,7 @@ def _prepare(
         cache=cache,
         crossref_expander=dependencies.crossref_expander,
         filters=filters,
+        limits=dependencies.pack_limits,
     )
 
 

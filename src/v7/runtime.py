@@ -9,6 +9,8 @@ from dataclasses import dataclass
 import threading
 from typing import Callable
 
+from src.v7.pack_context import PackLimits
+
 
 def empty_search(*args, **kwargs) -> list[dict]:
     return []
@@ -26,6 +28,7 @@ class V7Runtime:
     visual_proof: Callable | None = None
     generate_simple: Callable | None = None
     generate_complex: Callable | None = None
+    pack_limits: PackLimits | None = None
 
 
 legacy_runtime_lock = threading.RLock()
