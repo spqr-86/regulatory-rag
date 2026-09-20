@@ -607,6 +607,9 @@ def _to_evidence(passages: list[dict], prefix: str, level) -> list[Evidence]:
     return out
 
 
+# Legacy v1-mode path: kept because eval/run_object_profile_pair.py's paired
+# comparison runs call it directly to reproduce the 15.09 baseline. app.py/UI
+# no longer call it — see answer_scoped_question.
 def answer_question(
     question: str,
     unit_id: Optional[str],

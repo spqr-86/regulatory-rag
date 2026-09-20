@@ -32,9 +32,6 @@ from src.department_qa.object_profile import (  # noqa: E402
 )
 from src.department_qa.contract import RequestContext  # noqa: E402
 
-# answer_question stays imported but unused here: a later task in this plan removes
-# the dead old path once nothing else calls it.
-from src.department_qa.service import answer_question  # noqa: E402,F401
 from src.department_qa.service import answer_scoped_question  # noqa: E402
 from src.department_qa.view import (  # noqa: E402
     basis_cards,
