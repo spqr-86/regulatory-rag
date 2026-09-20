@@ -14,6 +14,7 @@ from src.department_qa.contract import (
     ModelAnswer,
     ModelAnswerV1,
     ObjectFact,
+    RequestContext,
     applied_on_unknown_fields,
     check_citations,
     cited_ids,
@@ -44,6 +45,36 @@ EVIDENCE = {
     ),
 }
 DATED = date(2026, 9, 1)
+
+
+@pytest.mark.unit
+def test_request_context_uses_stable_corpus_order():
+    context = RequestContext(corpora=("internal", "external"))
+    assert context.corpora == ("external", "internal")
+
+
+@pytest.mark.unit
+def test_request_context_rejects_empty_or_duplicate_corpora():
+    with pytest.raises(ValueError, match="at least one"):
+        RequestContext(corpora=())
+    with pytest.raises(ValueError, match="duplicates"):
+        RequestContext(corpora=("external", "external"))
+
+
+@pytest.mark.unit
+def test_scoped_decision_requires_basis_for_requested_corpus_even_for_object_facts():
+    answer = ModelAnswer(
+        answer="На объекте есть АПС.",
+        object_facts=[ObjectFact(statement="Есть АПС", evidence_ids=["obj_s3"])],
+    )
+    assert decide(
+        answer,
+        EVIDENCE,
+        profile_as_of=DATED,
+        requested_corpora=("external",),
+        include_object_profile=True,
+        require_corpus_basis=True,
+    ) == ("needs_review", ["external_evidence_missing"])
 
 
 def _answer(ext=("ext_001",), internal=("int_001",), **kw) -> ModelAnswer:

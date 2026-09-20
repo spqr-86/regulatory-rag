@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import date
+import threading
+import time
 
 import pytest
 
@@ -12,10 +14,16 @@ from src.department_qa.contract import (
     ModelAnswer,
     ObjectFact,
     ObjectSection,
+    RequestContext,
     VerificationResult,
 )
 from src.department_qa.object_profile import ObjectProfile, TypedObjectFields
-from src.department_qa.service import answer_question
+from src.department_qa.service import (
+    ServiceLimits,
+    answer_question,
+    answer_scoped_question,
+)
+from src.v7.retrieval import ScopedRetrievalResult
 from src.v7.scope_filter import build_scope_filters
 
 
@@ -424,3 +432,152 @@ def test_prompt_without_profile_says_why(unit_id, phrase):
     model = _model(GOOD)
     answer_question("q", unit_id, FakeSearch(), model, prompt_version="v2")
     assert phrase in model.prompts[0]
+
+
+def _retrieval(outcome="ready", text="норма", route="simple"):
+    context = (
+        [_passage(text, f"{text}.md", document_id=text, chunk_id=1)]
+        if outcome == "ready"
+        else []
+    )
+    return ScopedRetrievalResult(
+        final_context=context,
+        outcome=outcome,
+        route=route,
+        reason=None,
+        attempts=[{"route": route}],
+        elapsed_ms=1.0,
+        technical_failure=False,
+    )
+
+
+@pytest.mark.unit
+def test_scoped_invalid_context_performs_no_io():
+    calls = []
+
+    def retrieve(*args, **kwargs):
+        calls.append("retrieve")
+
+    model = _model(GOOD)
+    result = answer_scoped_question(
+        "q",
+        RequestContext(
+            corpora=("external",), unit_id="missing", include_object_profile=False
+        ),
+        retrieve,
+        model,
+        known_units={"unit_1"},
+    )
+    assert (result.status, result.reason_codes) == ("failed", ["invalid_unit"])
+    assert calls == [] and model.prompts == []
+
+
+@pytest.mark.unit
+def test_service_limits_reject_unbounded_or_invalid_values():
+    with pytest.raises(ValueError, match="max_workers"):
+        ServiceLimits(max_workers=0)
+    with pytest.raises(ValueError, match="max_pending"):
+        ServiceLimits(max_pending=-1)
+
+
+@pytest.mark.unit
+def test_scoped_single_corpus_does_not_start_other_branch():
+    calls = []
+
+    def retrieve(question, *, corpus, **kwargs):
+        calls.append(corpus)
+        return _retrieval(text=corpus)
+
+    external_only = ModelAnswer(
+        answer="закон",
+        external_basis=[Basis(statement="закон", evidence_ids=["ext_001"])],
+    )
+    result = answer_scoped_question(
+        "q",
+        RequestContext(corpora=("external",), include_object_profile=False),
+        retrieve,
+        _model(external_only),
+        known_units=set(),
+    )
+    assert calls == ["external"]
+    assert result.status == "answered"
+    assert [item.id for item in result.evidence] == ["ext_001"]
+    assert result.retrieval_trace["internal"] == {"outcome": "not_requested"}
+    assert result.retrieval_stats["embedding"] == {
+        "computations": 0,
+        "api_attempts": 0,
+        "cache_hits": 0,
+    }
+
+
+@pytest.mark.unit
+def test_scoped_dual_branches_overlap_and_keep_stable_evidence_order():
+    barrier = threading.Barrier(2)
+    release = threading.Event()
+
+    def retrieve(question, *, corpus, **kwargs):
+        barrier.wait(timeout=1)
+        if corpus == "external":
+            release.wait(timeout=1)
+        else:
+            release.set()
+        return _retrieval(
+            text=corpus, route="complex" if corpus == "internal" else "simple"
+        )
+
+    result = answer_scoped_question(
+        "q",
+        RequestContext(include_object_profile=False),
+        retrieve,
+        _model(GOOD),
+        known_units=set(),
+    )
+    assert result.status == "answered"
+    assert [item.id for item in result.evidence] == ["ext_001", "int_001"]
+    assert result.retrieval_trace["external"]["route"] == "simple"
+    assert result.retrieval_trace["internal"]["route"] == "complex"
+
+
+@pytest.mark.unit
+def test_scoped_missing_requested_branch_caps_status_at_needs_review():
+    def retrieve(question, *, corpus, **kwargs):
+        return _retrieval(text=corpus) if corpus == "external" else _retrieval("empty")
+
+    answer = ModelAnswer(
+        answer="ограниченный ответ",
+        external_basis=[Basis(statement="закон", evidence_ids=["ext_001"])],
+    )
+    result = answer_scoped_question(
+        "q",
+        RequestContext(include_object_profile=False),
+        retrieve,
+        _model(answer),
+        known_units=set(),
+    )
+    assert result.status == "needs_review"
+    assert "internal_evidence_missing" in result.reason_codes
+
+
+@pytest.mark.unit
+def test_scoped_timeout_returns_without_generation_or_waiting_for_worker():
+    release = threading.Event()
+
+    def retrieve(*args, **kwargs):
+        release.wait(timeout=1)
+        return _retrieval()
+
+    model = _model(GOOD)
+    started = time.monotonic()
+    result = answer_scoped_question(
+        "q",
+        RequestContext(corpora=("external",), include_object_profile=False),
+        retrieve,
+        model,
+        known_units=set(),
+        limits=ServiceLimits(retrieval_timeout_s=0.03),
+    )
+    elapsed = time.monotonic() - started
+    release.set()
+    assert elapsed < 0.2
+    assert (result.status, result.reason_codes) == ("failed", ["retrieval_timeout"])
+    assert model.prompts == []

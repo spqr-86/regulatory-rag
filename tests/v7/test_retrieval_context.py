@@ -120,3 +120,15 @@ def test_bound_graphs_keep_search_pack_and_generation_callbacks(monkeypatch):
         ]
         assert [f.result(timeout=10)["answer"] for f in futures] == ["A", "B"]
     assert {source for source, _ in calls} == {"A", "B"}
+
+
+def test_retrieval_context_can_disable_per_corpus_multi_doc_requirement():
+    from src.v7.retrieval import retrieve_context
+    from src.v7.runtime import V7Runtime
+
+    result = retrieve_context(
+        "Сравни требования закона и ЛНА",
+        runtime=V7Runtime(),
+        require_multi_doc=False,
+    )
+    assert result.attempts[0]["attempt_plan"]["require_multi_doc"] is False

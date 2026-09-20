@@ -22,6 +22,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 Level = Literal["external", "internal", "object"]
+Corpus = Literal["external", "internal"]
 Status = Literal["answered", "needs_context", "needs_review", "out_of_scope", "failed"]
 VerificationVerdict = Literal["none", "missing", "contradiction"]
 # State of a typed object field (spec typed-object-sheet §3): `unknown` is a
@@ -130,6 +131,34 @@ class PromptVars(BaseModel):
     typed_fields: list[TypedFieldLine] = Field(default_factory=list)
 
 
+class DepartmentPromptVarsV5(PromptVars):
+    """Prompt contract for the scoped retrieval service."""
+
+    requested_corpora: tuple[Corpus, ...]
+    corpus_outcomes: dict[Corpus, str]
+
+
+class RequestContext(BaseModel):
+    """Caller-selected Department scope; the model never chooses these fields."""
+
+    corpora: tuple[Corpus, ...] = ("external", "internal")
+    unit_id: Optional[str] = None
+    include_object_profile: bool = True
+
+    def model_post_init(self, __context) -> None:
+        if not self.corpora:
+            raise ValueError("at least one corpus is required")
+        if len(set(self.corpora)) != len(self.corpora):
+            raise ValueError("corpora must not contain duplicates")
+        object.__setattr__(
+            self,
+            "corpora",
+            tuple(
+                corpus for corpus in ("external", "internal") if corpus in self.corpora
+            ),
+        )
+
+
 def _facts(answer: ModelAnswerV1) -> list[ObjectFact]:
     return getattr(answer, "object_facts", [])
 
@@ -198,6 +227,9 @@ def decide(
     answer: ModelAnswerV1,
     evidence: dict[str, Evidence],
     profile_as_of: Optional[date] = None,
+    requested_corpora: tuple[Corpus, ...] = ("external", "internal"),
+    include_object_profile: Optional[bool] = None,
+    require_corpus_basis: bool = False,
 ) -> tuple[Status, list[str]]:
     if answer.out_of_scope:
         return "out_of_scope", []
@@ -225,9 +257,19 @@ def decide(
         reasons.append("applied_without_norm")
     if any(NORMATIVE_MARKERS.search(f.statement) for f in facts):
         reasons.append("object_fact_normative")
-    if not fact_only and not has_ext:
+    if include_object_profile is False and cites_object:
+        reasons.append("object_profile_not_requested")
+    if (
+        (require_corpus_basis or not fact_only)
+        and "external" in requested_corpora
+        and not has_ext
+    ):
         reasons.append("external_evidence_missing")
-    if not fact_only and not has_int:
+    if (
+        (require_corpus_basis or not fact_only)
+        and "internal" in requested_corpora
+        and not has_int
+    ):
         reasons.append("internal_evidence_missing")
     if cites_object and profile_as_of is None:
         reasons.append("object_profile_undated")

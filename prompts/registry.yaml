@@ -22,6 +22,7 @@ department_answer:
     v2: "agents/department_answer_v2.j2"
     v3: "agents/department_answer_v3.j2"
     v4: "agents/department_answer_v4.j2"
+    v5: "agents/department_answer_v5.j2"
 
 department_verify:
   active_version: "v1"

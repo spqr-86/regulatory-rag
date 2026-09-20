@@ -80,6 +80,10 @@ below. `v2` is kept unchanged so the 2026-09-15 paired run can be re-rendered.
 | `v1` | `./chroma_db_dept` | `department_demo` (sheets in the index) | not loaded, `profile=None` | `department_answer` v1 | `ModelAnswerV1` |
 | `v2` | `./chroma_db_dept_v2` | `department_demo_v2` (sheets excluded, `role: object_profile`) | `load_profiles` | `department_answer` v4 | `ModelAnswer` |
 
+Scoped Department service (Issue #58) uses `department_answer` v5 and the same V2
+manifest/index through the retrieval-only V7 graph. Historical v1/v2 pair artifacts
+keep their recorded prompt versions; the UI remains on the legacy bundle until cutover.
+
 Two Chroma paths exist because `index.py` deletes the whole `CHROMA_DB_PATH` folder before
 writing (not just the collection) — building `department_demo_v2` into `chroma_db_dept` would
 wipe v1. Both stores are gitignored (`chroma_db*/`).

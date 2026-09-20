@@ -14,7 +14,8 @@ from eval.run_object_profile_pair import (
     run_mode,
     select_questions,
 )
-from src.department_qa.contract import ModelAnswer
+from src.department_qa.contract import Basis, ModelAnswer
+from src.v7.retrieval import ScopedRetrievalResult
 
 
 def _settings(**overrides):
@@ -77,6 +78,60 @@ def test_run_mode_writes_one_record_per_question(tmp_path):
     # (real behaviour of src/department_qa/service.py, not asserted empty by the brief).
     assert [p["hits"] for p in saved["search_calls"]] == [[], []]
     assert saved["evidence_ids"] == []
+
+
+@pytest.mark.unit
+def test_scoped_run_records_v5_trace_without_redefining_search_calls(tmp_path):
+    def retrieve(question, *, corpus, **kwargs):
+        passages = (
+            [
+                {
+                    "text": "Пункт 60",
+                    "score": 0.8,
+                    "metadata": {
+                        "source": "ppr.md",
+                        "document_id": "ppr",
+                        "chunk_id": 1,
+                    },
+                }
+            ]
+            if corpus == "external"
+            else []
+        )
+        outcome = "ready" if passages else "empty"
+        return ScopedRetrievalResult(
+            final_context=passages,
+            outcome=outcome,
+            route="simple" if passages else None,
+            reason=None,
+            attempts=[{"stage": "simple", "passages": passages}],
+            elapsed_ms=1.0,
+            technical_failure=False,
+        )
+
+    stack = SimpleNamespace(
+        config=SimpleNamespace(mode="v2", prompt_version="v4", profiles={}),
+        manifest=SimpleNamespace(snapshot_id="snap"),
+        search_fn=lambda *a, **kw: pytest.fail("legacy search path used"),
+        retrieve_fn=retrieve,
+        known_units=set(),
+        service_limits=None,
+        model_fn=lambda prompt: ModelAnswer(
+            answer="По п. 60.",
+            external_basis=[Basis(statement="п. 60", evidence_ids=["ext_001"])],
+        ),
+    )
+    record = run_mode(
+        stack,
+        [{"n": 1, "unit_id": None, "question": "Как осматривать огнетушители?"}],
+        tmp_path,
+        [],
+    )[0]
+
+    assert record["prompt_version"] == "v5"
+    assert record["search_calls"] == []
+    assert set(record["retrieval_trace"]) == {"external", "internal"}
+    assert record["retrieval_stats"]["embedding"]["computations"] == 0
 
 
 def _capture_verifier_fn(monkeypatch):

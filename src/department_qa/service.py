@@ -18,7 +18,11 @@
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from dataclasses import dataclass
 from datetime import date
+import threading
+import time
 from typing import Callable, Optional
 
 import structlog
@@ -27,10 +31,13 @@ from pydantic import BaseModel, Field
 from src.department_qa.contract import (
     AppliedConclusion,
     Basis,
+    Corpus,
+    DepartmentPromptVarsV5,
     Evidence,
     ModelAnswerV1,
     ObjectFact,
     PromptVars,
+    RequestContext,
     Status,
     VerificationResult,
     cited_ids,
@@ -44,6 +51,7 @@ from src.department_qa.object_profile import (
 )
 from src.infra.prompt_manager import PromptManager
 from src.v7.scope_filter import build_scope_filters
+from src.v7.retrieval import RequestEmbeddingMemo, ScopedRetrievalResult
 
 logger = structlog.get_logger()
 
@@ -55,6 +63,7 @@ ProgressFn = Callable[[str], None]
 PROMPT_ID = "department_answer"
 VERIFY_PROMPT_ID = "department_verify"
 TOP_K_PER_LEVEL = 8
+SCOPED_PROMPT_VERSION = "v5"
 
 # Real backend stages reported to the UI (spec streamlit-portfolio-demo §11);
 # no invented stages. A stage is emitted only when it actually runs.
@@ -91,6 +100,437 @@ class DepartmentResponse(BaseModel):
     profile_as_of_date: Optional[date] = None
     profile_sha256: Optional[str] = None
     verification: Optional[VerificationResult] = None
+    requested_corpora: tuple[Corpus, ...] = Field(default_factory=tuple)
+    retrieval_trace: dict[str, dict] = Field(default_factory=dict)
+    retrieval_stats: dict[str, dict[str, int]] = Field(default_factory=dict)
+    retrieval_ms: float = 0.0
+    llm_ms: float = 0.0
+    total_ms: float = 0.0
+
+
+@dataclass(frozen=True)
+class ServiceLimits:
+    """Bounded shared executor and prompt budgets for the scoped path."""
+
+    retrieval_timeout_s: float = 30.0
+    prompt_token_budget: int = 70_000
+    response_reserve_tokens: int = 4_096
+    schema_retry_reserve_tokens: int = 4_096
+    max_workers: int = 4
+    max_pending: int = 8
+
+    def __post_init__(self) -> None:
+        if self.retrieval_timeout_s <= 0:
+            raise ValueError("retrieval_timeout_s must be positive")
+        if self.prompt_token_budget <= 0 or self.max_workers <= 0:
+            raise ValueError("prompt budget and max_workers must be positive")
+        if self.max_pending < 0:
+            raise ValueError("max_pending must not be negative")
+        if self.response_reserve_tokens < 0 or self.schema_retry_reserve_tokens < 0:
+            raise ValueError("token reserves must not be negative")
+
+
+class BoundedRetrievalExecutor:
+    """Process-wide pool with bounded admitted work and non-blocking failure return."""
+
+    def __init__(self, *, max_workers: int, max_pending: int) -> None:
+        self._pool = ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="department-retrieval"
+        )
+        self._slots = threading.BoundedSemaphore(max_workers + max_pending)
+
+    def submit(self, fn, /, *args, timeout: float, **kwargs) -> Future:
+        if not self._slots.acquire(timeout=max(0.0, timeout)):
+            raise TimeoutError("department retrieval queue is full")
+        try:
+            future = self._pool.submit(fn, *args, **kwargs)
+        except BaseException:
+            self._slots.release()
+            raise
+        future.add_done_callback(lambda _future: self._slots.release())
+        return future
+
+
+_EXECUTORS: dict[tuple[int, int], BoundedRetrievalExecutor] = {}
+_EXECUTORS_LOCK = threading.Lock()
+
+
+def _shared_executor(limits: ServiceLimits) -> BoundedRetrievalExecutor:
+    key = (limits.max_workers, limits.max_pending)
+    with _EXECUTORS_LOCK:
+        executor = _EXECUTORS.get(key)
+        if executor is None:
+            executor = BoundedRetrievalExecutor(
+                max_workers=limits.max_workers, max_pending=limits.max_pending
+            )
+            _EXECUTORS[key] = executor
+        return executor
+
+
+def _scope_for(corpus: Corpus, unit_id: Optional[str]) -> dict:
+    external, internal = build_scope_filters(unit_id)
+    return external if corpus == "external" else internal
+
+
+def _trace(result: ScopedRetrievalResult, queue_wait_ms: float) -> dict:
+    return {
+        "outcome": result.outcome,
+        "route": result.route,
+        "reason": result.reason,
+        "final_passages": len(result.final_context),
+        "attempts": result.attempts,
+        "retrieval_ms": result.elapsed_ms,
+        "queue_wait_ms": queue_wait_ms,
+        "technical_failure": result.technical_failure,
+    }
+
+
+def _normative_budget(
+    *,
+    question: str,
+    context: RequestContext,
+    profile: Optional[ObjectProfile],
+    prompts: PromptManager,
+    limits: ServiceLimits,
+) -> int:
+    """Reserve the complete fixed prompt/profile plus answer and schema retry."""
+    object_label, sections = profile_prompt_block(context.unit_id, profile)
+    fixed = DepartmentPromptVarsV5(
+        question=question,
+        unit_label=(
+            f"Подразделение: {context.unit_id}"
+            if context.unit_id
+            else "Подразделение не указано: доступны только общекорпоративные документы."
+        ),
+        external_evidence=[],
+        internal_evidence=[],
+        object_label=object_label,
+        object_sections=sections,
+        typed_fields=typed_fields_prompt_lines(profile) if profile else [],
+        requested_corpora=context.corpora,
+        corpus_outcomes={corpus: "pending" for corpus in context.corpora},
+    )
+    prompt = prompts.render(
+        PROMPT_ID, version=SCOPED_PROMPT_VERSION, **fixed.model_dump()
+    )
+    fixed_tokens = len(prompt) // 4
+    available = (
+        limits.prompt_token_budget
+        - fixed_tokens
+        - limits.response_reserve_tokens
+        - limits.schema_retry_reserve_tokens
+    )
+    if available <= 0:
+        raise ValueError("mandatory prompt exceeds token budget")
+    return available
+
+
+def answer_scoped_question(
+    question: str,
+    context: RequestContext,
+    retrieve_fn: Callable[..., ScopedRetrievalResult],
+    model_fn: ModelFn,
+    *,
+    known_units: set[str],
+    snapshot_id: Optional[str] = None,
+    prompts: Optional[PromptManager] = None,
+    profiles: Optional[dict[str, ObjectProfile]] = None,
+    limits: ServiceLimits = ServiceLimits(),
+    executor: Optional[BoundedRetrievalExecutor] = None,
+    progress_fn: Optional[ProgressFn] = None,
+) -> DepartmentResponse:
+    """Run selected corpora concurrently, then perform exactly one generation."""
+    started = time.monotonic()
+    trace_id = uuid.uuid4().hex
+    embedding_memo = RequestEmbeddingMemo()
+    profiles = profiles or {}
+    base = {
+        "trace_id": trace_id,
+        "snapshot_id": snapshot_id,
+        "unit_id": context.unit_id,
+        "requested_corpora": context.corpora,
+    }
+
+    def emit(stage: str) -> None:
+        if progress_fn is None:
+            return
+        try:
+            progress_fn(stage)
+        except Exception as exc:
+            logger.warning(
+                "department_qa.progress_failed", trace_id=trace_id, error=str(exc)
+            )
+
+    def fail(reason: str, **extra) -> DepartmentResponse:
+        logger.warning(
+            "department_qa.scoped_failed",
+            trace_id=trace_id,
+            reason=reason,
+            requested_corpora=context.corpora,
+            total_ms=round((time.monotonic() - started) * 1000, 1),
+        )
+        return DepartmentResponse(
+            status="failed",
+            reason_codes=[reason],
+            next_step=_NEXT_STEP["failed"],
+            total_ms=(time.monotonic() - started) * 1000,
+            retrieval_stats={"embedding": embedding_memo.stats()},
+            **base,
+            **extra,
+        )
+
+    if context.unit_id is not None and context.unit_id not in known_units:
+        return fail("invalid_unit")
+    profile = profiles.get(context.unit_id) if context.unit_id else None
+    if context.include_object_profile and profile is None:
+        return fail("profile_unavailable")
+    if profile is not None and profile.unit_id != context.unit_id:
+        return fail("profile_mismatch")
+    if not context.include_object_profile:
+        profile = None
+
+    manager = prompts or PromptManager()
+    try:
+        total_normative_budget = _normative_budget(
+            question=question,
+            context=context,
+            profile=profile,
+            prompts=manager,
+            limits=limits,
+        )
+    except ValueError:
+        return fail("prompt_budget_exceeded")
+    branch_budget = total_normative_budget // len(context.corpora)
+
+    deadline = started + limits.retrieval_timeout_s
+    retrieval_started = time.monotonic()
+    emit(STAGE_RETRIEVAL_STARTED)
+    pool = executor or _shared_executor(limits)
+    futures: dict[Future, tuple[Corpus, float]] = {}
+
+    def run_branch(corpus: Corpus, submitted: float):
+        queue_wait_ms = (time.monotonic() - submitted) * 1000
+        result = retrieve_fn(
+            question,
+            corpus=corpus,
+            filters=_scope_for(corpus, context.unit_id),
+            token_budget=branch_budget,
+            deadline=deadline,
+            embedding_memo=embedding_memo,
+            require_multi_doc=False if len(context.corpora) == 2 else None,
+        )
+        return result, queue_wait_ms
+
+    try:
+        for corpus in context.corpora:
+            submitted = time.monotonic()
+            future = pool.submit(
+                run_branch,
+                corpus,
+                submitted,
+                timeout=deadline - submitted,
+            )
+            futures[future] = (corpus, submitted)
+    except (TimeoutError, RuntimeError):
+        for future in futures:
+            future.cancel()
+        return fail("retrieval_overloaded")
+
+    results: dict[Corpus, ScopedRetrievalResult] = {}
+    traces: dict[str, dict] = {}
+    pending = set(futures)
+    fatal_reason: Optional[str] = None
+    while pending and fatal_reason is None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            fatal_reason = "retrieval_timeout"
+            break
+        done, pending = wait(pending, timeout=remaining, return_when=FIRST_COMPLETED)
+        if not done:
+            fatal_reason = "retrieval_timeout"
+            break
+        for future in done:
+            corpus, submitted = futures[future]
+            try:
+                result, queue_wait_ms = future.result()
+            except Exception:
+                fatal_reason = "retrieval_failed"
+                break
+            traces[corpus] = _trace(result, queue_wait_ms)
+            if result.outcome == "failed" or result.technical_failure:
+                fatal_reason = "retrieval_failed"
+                break
+            results[corpus] = result
+    traces = {
+        corpus: (
+            traces.get(corpus, {"outcome": "failed"})
+            if corpus in context.corpora
+            else {"outcome": "not_requested"}
+        )
+        for corpus in ("external", "internal")
+    }
+    if fatal_reason:
+        for future in pending:
+            future.cancel()
+        return fail(fatal_reason, retrieval_trace=traces)
+
+    ready = {
+        corpus: result
+        for corpus, result in results.items()
+        if result.outcome == "ready"
+    }
+    emit(STAGE_RETRIEVAL_COMPLETED)
+    if not ready:
+        reasons = (
+            ["retrieval_clarification"]
+            if any(r.outcome == "clarification" for r in results.values())
+            else ["insufficient_normative_evidence"]
+        )
+        status: Status = (
+            "needs_context"
+            if reasons[0] == "retrieval_clarification"
+            else "needs_review"
+        )
+        elapsed_ms = (time.monotonic() - started) * 1000
+        logger.info(
+            "department_qa.scoped_retrieval_incomplete",
+            trace_id=trace_id,
+            requested_corpora=context.corpora,
+            status=status,
+            reason_codes=reasons,
+            retrieval_ms=round((time.monotonic() - retrieval_started) * 1000, 1),
+            total_ms=round(elapsed_ms, 1),
+            embedding=embedding_memo.stats(),
+        )
+        return DepartmentResponse(
+            status=status,
+            reason_codes=reasons,
+            next_step=_NEXT_STEP[status],
+            retrieval_trace=traces,
+            retrieval_stats={"embedding": embedding_memo.stats()},
+            retrieval_ms=(time.monotonic() - retrieval_started) * 1000,
+            total_ms=elapsed_ms,
+            **base,
+        )
+
+    external = _to_evidence(
+        ready.get(
+            "external", ScopedRetrievalResult([], "empty", None, None, [], 0, False)
+        ).final_context,
+        "ext",
+        "external",
+    )
+    internal = _to_evidence(
+        ready.get(
+            "internal", ScopedRetrievalResult([], "empty", None, None, [], 0, False)
+        ).final_context,
+        "int",
+        "internal",
+    )
+    objects = profile_evidence(profile) if profile else []
+    ordered = external + internal + objects
+    registry = {item.id: item for item in ordered}
+    object_label, sections = profile_prompt_block(context.unit_id, profile)
+    prompt_vars = DepartmentPromptVarsV5(
+        question=question,
+        unit_label=(
+            f"Подразделение: {context.unit_id}"
+            if context.unit_id
+            else "Подразделение не указано: доступны только общекорпоративные документы."
+        ),
+        external_evidence=external,
+        internal_evidence=internal,
+        object_label=object_label,
+        object_sections=sections,
+        typed_fields=typed_fields_prompt_lines(profile) if profile else [],
+        requested_corpora=context.corpora,
+        corpus_outcomes={corpus: results[corpus].outcome for corpus in context.corpora},
+    )
+    prompt = manager.render(
+        PROMPT_ID, version=SCOPED_PROMPT_VERSION, **prompt_vars.model_dump()
+    )
+    if (
+        len(prompt) // 4
+        + limits.response_reserve_tokens
+        + limits.schema_retry_reserve_tokens
+        > limits.prompt_token_budget
+    ):
+        return fail("prompt_budget_exceeded", retrieval_trace=traces)
+    llm_started = time.monotonic()
+    emit(STAGE_GENERATION_STARTED)
+    try:
+        answer = model_fn(prompt)
+    except Exception:
+        return fail("generation_failed", retrieval_trace=traces)
+    llm_ms = (time.monotonic() - llm_started) * 1000
+    emit(STAGE_GENERATION_COMPLETED)
+    status, reasons = decide(
+        answer,
+        registry,
+        profile_as_of=profile.as_of_date if profile else None,
+        requested_corpora=context.corpora,
+        include_object_profile=context.include_object_profile,
+        require_corpus_basis=True,
+    )
+    missing = [
+        f"{corpus}_evidence_missing"
+        for corpus in context.corpora
+        if results[corpus].outcome != "ready"
+    ]
+    if missing and status not in {"failed", "out_of_scope", "needs_context"}:
+        status = "needs_review"
+        reasons = list(dict.fromkeys([*reasons, *missing]))
+    if reasons == ["citation_invalid"]:
+        return fail("citation_invalid", retrieval_trace=traces)
+    cited = cited_ids(answer)
+    total_ms = (time.monotonic() - started) * 1000
+    logger.info(
+        "department_qa.scoped_answer",
+        trace_id=trace_id,
+        requested_corpora=context.corpora,
+        status=status,
+        reason_codes=reasons,
+        corpus_routes={corpus: trace.get("route") for corpus, trace in traces.items()},
+        corpus_reasons={
+            corpus: trace.get("reason") for corpus, trace in traces.items()
+        },
+        retrieval_ms=round(llm_started - retrieval_started, 1),
+        llm_ms=round(llm_ms, 1),
+        total_ms=round(total_ms, 1),
+        embedding=embedding_memo.stats(),
+    )
+    return DepartmentResponse(
+        answer="" if status == "out_of_scope" else answer.answer,
+        external_basis=[] if status == "out_of_scope" else answer.external_basis,
+        internal_basis=[] if status == "out_of_scope" else answer.internal_basis,
+        object_facts=(
+            [] if status == "out_of_scope" else getattr(answer, "object_facts", [])
+        ),
+        applied_conclusions=(
+            []
+            if status == "out_of_scope"
+            else getattr(answer, "applied_conclusions", [])
+        ),
+        status=status,
+        reason_codes=reasons,
+        clarifying_questions=(
+            [] if status == "out_of_scope" else answer.clarifying_questions
+        ),
+        next_step=_NEXT_STEP[status],
+        evidence=(
+            []
+            if status == "out_of_scope"
+            else [item for item in ordered if item.id in cited]
+        ),
+        profile_as_of_date=profile.as_of_date if profile else None,
+        profile_sha256=profile.content_sha256 if profile else None,
+        retrieval_trace=traces,
+        retrieval_stats={"embedding": embedding_memo.stats()},
+        retrieval_ms=llm_started * 1000 - retrieval_started * 1000,
+        llm_ms=llm_ms,
+        total_ms=total_ms,
+        **base,
+    )
 
 
 def _to_evidence(passages: list[dict], prefix: str, level) -> list[Evidence]:

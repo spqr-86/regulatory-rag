@@ -30,6 +30,12 @@ from src.department_qa.object_profile import ObjectProfile, load_profiles
 from src.indexing.manifest import Manifest
 from src.v7.nlp_core import bm25_search, rrf_merge
 from src.v7.scope_filter import to_chroma_where
+from src.v7.pack_context import PackLimits
+from src.v7.retrieval import (
+    RequestEmbeddingMemo,
+    bind_request_embedding,
+    retrieve_context,
+)
 
 
 def make_hybrid_search_fn(
@@ -100,6 +106,45 @@ def ensure_store_matches(
             f"and CHROMA_COLLECTION_NAME={config.collection}; "
             f"got {chroma_db_path} / {collection}"
         )
+
+
+def ensure_manifest_matches(manifest: Manifest, store) -> None:
+    """Reject a Department store built from another snapshot or with profiles indexed."""
+    profile_files = set(manifest.object_profiles.values())
+    expected = {
+        metadata["document_id"]: metadata
+        for filename, metadata in manifest.documents.items()
+        if filename not in profile_files
+    }
+    actual_ids: set[str] = set()
+    seen = 0
+    for row in store.iter_all_documents():
+        seen += 1
+        metadata = row.get("metadata") or {}
+        if metadata.get("snapshot_id") != manifest.snapshot_id:
+            raise RuntimeError(
+                "Department index snapshot does not match the V2 manifest"
+            )
+        document_id = metadata.get("document_id")
+        if document_id in {
+            manifest.documents[name]["document_id"] for name in profile_files
+        }:
+            raise RuntimeError("Department V2 index contains an object profile")
+        expected_metadata = expected.get(document_id)
+        if expected_metadata is None:
+            raise RuntimeError(
+                "Department V2 index contains a document outside manifest"
+            )
+        for key in ("source_type", "unit_id", "audience", "organization_id"):
+            if key in expected_metadata and metadata.get(key) != expected_metadata[key]:
+                raise RuntimeError(
+                    f"Department V2 index metadata mismatch for {document_id}: {key}"
+                )
+        actual_ids.add(document_id)
+    if seen == 0:
+        raise RuntimeError("Department V2 index is empty")
+    if actual_ids != set(expected):
+        raise RuntimeError("Department V2 index document set does not match manifest")
 
 
 def stack_cache_key() -> tuple[int, ...]:
@@ -181,6 +226,9 @@ class DepartmentStack:
     model_fn: Callable[[str], ModelAnswerV1]
     verifier_fn: Callable[[str], VerificationResult]
     store: object
+    retrieve_fn: Optional[Callable] = None
+    known_units: set[str] = field(default_factory=set)
+    service_limits: object | None = None
 
 
 def build_department_stack(
@@ -189,10 +237,12 @@ def build_department_stack(
 ) -> DepartmentStack:
     """The only assembly of the department Q&A stack: Streamlit page and eval share it."""
     from config.settings import settings
-    from src.backends.vector_store import get_vector_store_backend
+    from src.backends.chroma_backend import ChromaBackend
+    from src.infra.llm_factory import get_embedding_model
     from src.indexing.manifest import load_manifest
     from src.infra.llm_factory import get_simple_llm
-    from src.v7.bridge import init_v7_pipeline
+    from src.v7.bridge import build_v7_runtime
+    from src.department_qa.service import ServiceLimits
 
     manifest = load_manifest(settings.CORPUS_MANIFEST_PATH)
     config = build_mode_config(
@@ -201,8 +251,50 @@ def build_department_stack(
     ensure_store_matches(
         config, settings.CHROMA_DB_PATH, settings.CHROMA_COLLECTION_NAME
     )
-    store = get_vector_store_backend(load_existing=True)
-    init_v7_pipeline(store)  # builds the BM25 index over the same collection
+    embeddings = get_embedding_model()
+    store = ChromaBackend(
+        path=config.chroma_db_path,
+        collection=config.collection,
+        embeddings=embeddings,
+    )
+    if config.mode == "v2":
+        ensure_manifest_matches(manifest, store)
+    runtime = build_v7_runtime(store)
+
+    def scoped_retrieve(
+        question: str,
+        *,
+        corpus: str,
+        filters: dict,
+        token_budget: int,
+        deadline: float,
+        embedding_memo: RequestEmbeddingMemo,
+        require_multi_doc: bool | None,
+    ):
+        scoped_runtime = bind_request_embedding(
+            runtime,
+            memo=embedding_memo,
+            space=f"{config.chroma_db_path}:{config.collection}",
+            embed=embeddings.embed_query,
+        )
+        from dataclasses import replace
+
+        scoped_runtime = replace(
+            scoped_runtime,
+            pack_limits=PackLimits(
+                max_passages=8,
+                token_budget=token_budget,
+            ),
+        )
+        return retrieve_context(
+            question,
+            runtime=scoped_runtime,
+            filters=filters,
+            strict_scope=True,
+            deadline=deadline,
+            require_multi_doc=require_multi_doc,
+        )
+
     llm = get_simple_llm()
     model_fn = make_model_fn(llm, schema=config.schema, recorder=recorder)
     verifier_fn = make_model_fn(
@@ -211,8 +303,19 @@ def build_department_stack(
     return DepartmentStack(
         config=config,
         manifest=manifest,
-        search_fn=make_hybrid_search_fn(store),
+        search_fn=make_hybrid_search_fn(store, runtime.bm25_search),
         model_fn=model_fn,
         verifier_fn=verifier_fn,
         store=store,
+        retrieve_fn=scoped_retrieve,
+        known_units={
+            metadata["unit_id"]
+            for metadata in manifest.documents.values()
+            if metadata.get("unit_id")
+        },
+        service_limits=ServiceLimits(
+            retrieval_timeout_s=settings.DEPARTMENT_RETRIEVAL_TIMEOUT_S,
+            max_workers=settings.DEPARTMENT_RETRIEVAL_WORKERS,
+            max_pending=settings.DEPARTMENT_RETRIEVAL_PENDING,
+        ),
     )

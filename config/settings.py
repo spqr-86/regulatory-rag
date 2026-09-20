@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     DEPARTMENT_V1_COLLECTION: str = "department_demo"
     DEPARTMENT_V2_CHROMA_DB_PATH: str = "./chroma_db_dept_v2"
     DEPARTMENT_V2_COLLECTION: str = "department_demo_v2"
+    DEPARTMENT_RETRIEVAL_TIMEOUT_S: float = 120.0
+    DEPARTMENT_RETRIEVAL_WORKERS: int = 4
+    DEPARTMENT_RETRIEVAL_PENDING: int = 8
     CHUNK_SIZE: int = 1200
     CACHE_DIR: str = "document_cache"
     CACHE_EXPIRE_DAYS: int = 7
