@@ -1,9 +1,9 @@
-"""Unit tests for v7 bridge.make_rerank_fn (CARD-5.3).
+"""Unit tests for the lazy shared FlashRank adapter.
 
-Verifies the thin adapter over langchain's FlashrankRerank:
+Verifies the adapter over ``flashrank.Ranker``:
 - vector_score is preserved on output (frozen pre-rerank)
 - top_n is respected
-- standard FlashrankRerank wiring is used (Ranker injected as client)
+- model construction is lazy and shared
 """
 
 from __future__ import annotations
@@ -21,15 +21,14 @@ def mock_ranker():
     ranker = MagicMock(spec=Ranker)
 
     def _rerank(request):
-        # FlashRank returns list of {id, score, text, meta} sorted by score desc.
+        # FlashRank returns scored passages sorted by score desc.
         # Mirror input passages but reverse order to prove the adapter respects
         # rerank-imposed ordering, not original passage order.
         results = []
         for p in reversed(request.passages):
             results.append(
                 {
-                    "id": p["id"],
-                    "score": 0.1 * (p["id"] + 1),
+                    "score": 0.1 * (len(results) + 1),
                     "text": p["text"],
                     "meta": p.get("meta", {}),
                 }
@@ -45,13 +44,12 @@ def test_make_rerank_fn_preserves_vector_score(mock_ranker):
 
     with patch("flashrank.Ranker", return_value=mock_ranker):
         rerank = bridge.make_rerank_fn(model_name="test-model", cache_dir="/tmp/x")
-
-    passages = [
-        {"text": "alpha", "metadata": {"source": "A"}, "score": 0.91},
-        {"text": "beta", "metadata": {"source": "B"}, "score": 0.42},
-        {"text": "gamma", "metadata": {"source": "C"}, "score": 0.77},
-    ]
-    result = rerank("query", passages, top_k=3)
+        passages = [
+            {"text": "alpha", "metadata": {"source": "A"}, "score": 0.91},
+            {"text": "beta", "metadata": {"source": "B"}, "score": 0.42},
+            {"text": "gamma", "metadata": {"source": "C"}, "score": 0.77},
+        ]
+        result = rerank("query", passages, top_k=3)
 
     assert len(result) == 3
     # vector_score must be the ORIGINAL pre-rerank score, never overwritten
@@ -73,10 +71,9 @@ def test_make_rerank_fn_respects_top_k(mock_ranker):
     from src.v7 import bridge
 
     with patch("flashrank.Ranker", return_value=mock_ranker):
-        rerank = bridge.make_rerank_fn()
-
-    passages = [{"text": f"p{i}", "metadata": {}, "score": 0.5} for i in range(10)]
-    result = rerank("q", passages, top_k=3)
+        rerank = bridge.make_rerank_fn(model_name="top-k-test")
+        passages = [{"text": f"p{i}", "metadata": {}, "score": 0.5} for i in range(10)]
+        result = rerank("q", passages, top_k=3)
     assert len(result) == 3
 
 
@@ -89,23 +86,15 @@ def test_make_rerank_fn_empty_passages(mock_ranker):
     mock_ranker.rerank.assert_not_called()
 
 
-def test_make_rerank_fn_uses_langchain_flashrank(mock_ranker):
-    """Adapter must delegate to langchain's FlashrankRerank, not roll its own."""
+def test_make_rerank_fn_loads_once_on_first_nonempty_call(mock_ranker):
+    """Constructing graphs is cheap; the shared model loads at first prediction."""
     from src.v7 import bridge
 
-    with (
-        patch("flashrank.Ranker", return_value=mock_ranker),
-        patch("langchain_community.document_compressors.FlashrankRerank") as mock_cls,
-    ):
-        instance = MagicMock()
-        instance.compress_documents.return_value = []
-        mock_cls.return_value = instance
-
-        rerank = bridge.make_rerank_fn()
+    with patch("flashrank.Ranker", return_value=mock_ranker) as ranker_cls:
+        rerank = bridge.make_rerank_fn(model_name="lazy-load-test")
+        assert ranker_cls.call_count == 0
+        assert rerank("query", [], top_k=2) == []
+        assert ranker_cls.call_count == 0
         rerank("query", [{"text": "x", "metadata": {}, "score": 0.5}], top_k=2)
-
-        mock_cls.assert_called_once()
-        kwargs = mock_cls.call_args.kwargs
-        assert kwargs.get("client") is mock_ranker
-        assert kwargs.get("top_n") == 2
-        instance.compress_documents.assert_called_once()
+        rerank("query", [{"text": "y", "metadata": {}, "score": 0.5}], top_k=2)
+        ranker_cls.assert_called_once()

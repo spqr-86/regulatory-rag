@@ -11,6 +11,9 @@ Limit: MAX_VISUAL_PROOFS per query (default 3).
 
 from __future__ import annotations
 
+# ANCHOR: enrich a branch-local passage copy using its bound visual callback.
+# Explicit None disables the callback even when legacy globals are configured.
+
 import logging
 from concurrent.futures import (
     ThreadPoolExecutor,
@@ -32,6 +35,7 @@ MAX_VISUAL_PROOFS = 3  # overridden in init if settings available
 # ─── DI interface ────────────────────────────────────────────────────────
 
 _visual_proof_fn: Optional[Callable[[str, int, list, str], str]] = None
+_UNSET = object()
 
 
 def set_visual_proof_fn(fn: Optional[Callable[[str, int, list, str], str]]) -> None:
@@ -63,13 +67,13 @@ def _needs_visual(passage: dict) -> bool:
 # ─── Node ─────────────────────────────────────────────────────────────────
 
 
-def enrich_passages(passages: List[dict]) -> List[dict]:
+def enrich_passages(passages: List[dict], *, visual_proof_fn=_UNSET) -> List[dict]:
     """Дописать визуальный разбор таблиц в пассажи без мутации входа.
 
     Вызывается до pack_context: визуальный анализ может ошибаться и расходует
     бюджет промпта, поэтому вердикт проверяет уже обогащённый текст.
     """
-    fn = _visual_proof_fn
+    fn = _visual_proof_fn if visual_proof_fn is _UNSET else visual_proof_fn
 
     if not fn or not passages:
         return passages

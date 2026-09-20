@@ -12,7 +12,12 @@ Source spec: docs/feature/migration-v7 (lines 350-779).
 
 from __future__ import annotations
 
+# ANCHOR: BM25 owns a detached corpus snapshot and returns independent passages.
+# Only shared morphological parsing is serialized; ranking remains read-only.
+
+import copy
 import re
+import threading
 from collections import Counter
 from typing import List, Optional
 
@@ -26,6 +31,13 @@ from src.v7.scope_filter import matches_filter
 # ─── Singleton morph analyzer ──────────────────────────────────────────────
 
 _morph = pymorphy3.MorphAnalyzer()
+_morph_lock = threading.Lock()
+
+
+def _parse_word(word):
+    with _morph_lock:
+        return _morph.parse(word)
+
 
 # ─── Stop words (frozenset for O(1) lookups) ──────────────────────────────
 
@@ -112,7 +124,7 @@ def extract_keywords(text: str) -> set[str]:
         word = token.text.lower()
         if len(word) < 3 or not re.match(r"[а-яёa-z]", word):
             continue
-        parsed = _morph.parse(word)
+        parsed = _parse_word(word)
         lemma = parsed[0].normal_form if parsed else word
         if lemma not in STOP_WORDS:
             lemmas.add(lemma)
@@ -155,7 +167,7 @@ def _lemmatize_for_bm25(text: str) -> List[str]:
         word = token.text.lower()
         if len(word) < 2 or not re.match(r"[а-яёa-z0-9]", word):
             continue
-        parsed = _morph.parse(word)
+        parsed = _parse_word(word)
         lemma = parsed[0].normal_form if parsed else word
         tokens.append(lemma)
     return tokens
@@ -170,8 +182,8 @@ class BM25Index:
     """
 
     def __init__(self, passages: List[dict]) -> None:
-        self._passages = passages
-        corpus = [_lemmatize_for_bm25(p.get("text", "")) for p in passages]
+        self._passages = copy.deepcopy(passages)
+        corpus = [_lemmatize_for_bm25(p.get("text", "")) for p in self._passages]
         self._bm25 = BM25Okapi(corpus)
 
     def search(
@@ -195,7 +207,7 @@ class BM25Index:
         candidates.sort(key=lambda x: x[1], reverse=True)
         results = []
         for idx, score in candidates[:top_k]:
-            p = dict(self._passages[idx])
+            p = copy.deepcopy(self._passages[idx])
             s = float(score)
             p["bm25_score"] = round(s, 4)
             # Squash raw BM25 score into [0, 1] for the display/label field.

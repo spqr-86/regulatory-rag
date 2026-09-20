@@ -10,6 +10,9 @@ cached for the duration of one call so each source is scanned at most once.
 
 from __future__ import annotations
 
+# ANCHOR: all source fetches and lexical lookups use this call's bound corpus.
+# Legacy callers may omit bm25_fn; graph runtime factories always supply it.
+
 import re
 import time
 
@@ -89,6 +92,8 @@ def expand_cross_references(
     backend,
     query: str = "",
     filters: dict | None = None,
+    *,
+    bm25_fn=None,
 ) -> list[dict]:
     """Fetch chunks linked to the found passages via cross-references.
 
@@ -105,6 +110,8 @@ def expand_cross_references(
     """
     if not passages:
         return passages
+
+    lexical_search = bm25_search if bm25_fn is None else bm25_fn
 
     existing_texts = {p["text"] for p in passages}
     extra: list[dict] = []
@@ -192,7 +199,7 @@ def expand_cross_references(
             unique_sources = {
                 p.get("metadata", {}).get("source", "") for p in passages
             } - {""}
-            bm25_results = bm25_search(query, filters=filters, top_k=30)
+            bm25_results = lexical_search(query, filters=filters, top_k=30)
             for r in bm25_results:
                 if r.get("metadata", {}).get("source") in unique_sources:
                     text = r.get("text", "")

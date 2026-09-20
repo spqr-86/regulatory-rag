@@ -7,6 +7,9 @@ conditional edge по route_decision.
 
 from __future__ import annotations
 
+# ANCHOR: preserve the simple decision table while binding enrichment and pack I/O.
+# Input: simple attempt/dependencies. Output: the existing terminal contract or escalation.
+
 from typing import cast
 
 from src.v7.config import v7_config
@@ -19,7 +22,7 @@ from src.v7.state_types import RAGState, RetrievalPlan
 from src.v7.validate import required_obligations, validate_context
 
 
-def evaluate_triage(state: RAGState) -> RAGState:
+def evaluate_triage(state: RAGState, *, dependencies=None) -> RAGState:
     query = state.get("query", "")
     active_q = state.get("active_query", query)
     required = required_obligations(query)
@@ -44,8 +47,17 @@ def evaluate_triage(state: RAGState) -> RAGState:
     raw = last.get("passages", [])
     retrieval_error = bool(last.get("retrieval_error"))
 
-    enriched = enrich_passages(raw)
-    packed = pack_context(enriched, active_q, dict(plan))
+    if dependencies is None:
+        enriched = enrich_passages(raw)
+        packed = pack_context(enriched, active_q, dict(plan))
+    else:
+        enriched = enrich_passages(raw, visual_proof_fn=dependencies.visual_proof)
+        packed = pack_context(
+            enriched,
+            active_q,
+            dict(plan),
+            crossref_expander=dependencies.crossref_expander,
+        )
     verdict = validate_context(
         packed["final_context"],
         query,

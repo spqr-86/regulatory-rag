@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+# ANCHOR: evaluate the existing candidate queue using graph-bound pack callbacks.
+# The cache and candidate snapshots belong to this invocation only.
+
 from typing import Any, Dict, List, cast
 
 import structlog
@@ -71,7 +74,7 @@ def _candidates(state: RAGState) -> List[Candidate]:
     return out
 
 
-def _prepare(cand: Candidate, cache: Dict[str, Any]) -> PackResult:
+def _prepare(cand: Candidate, cache: Dict[str, Any], dependencies=None) -> PackResult:
     """Enrich and pack a candidate, unless it is an already packed snapshot."""
     if cand.get("packed"):
         return {
@@ -79,11 +82,22 @@ def _prepare(cand: Candidate, cache: Dict[str, Any]) -> PackResult:
             "status": cand.get("pack_status", "ok"),
             "dropped": 0,
         }
-    enriched = enrich_passages(cand["passages"])
-    return pack_context(enriched, cand["active_query"], cand["plan"], cache=cache)
+    if dependencies is None:
+        enriched = enrich_passages(cand["passages"])
+        return pack_context(enriched, cand["active_query"], cand["plan"], cache=cache)
+    enriched = enrich_passages(
+        cand["passages"], visual_proof_fn=dependencies.visual_proof
+    )
+    return pack_context(
+        enriched,
+        cand["active_query"],
+        cand["plan"],
+        cache=cache,
+        crossref_expander=dependencies.crossref_expander,
+    )
 
 
-def evaluate_complex(state: RAGState) -> RAGState:
+def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
     query = state.get("query", "")
     active_q = state.get("active_query", query)
     required = required_obligations(query)
@@ -113,7 +127,7 @@ def evaluate_complex(state: RAGState) -> RAGState:
 
     for i, cand in enumerate(candidates):
         is_last = i == len(candidates) - 1
-        packed = _prepare(cand, cache)
+        packed = _prepare(cand, cache, dependencies)
         if packed["status"] == "degraded":
             technical = True
         verdict = validate_context(

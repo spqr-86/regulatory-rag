@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# ANCHOR: default cached store for legacy callers; explicit bound loading for
+# multiple collection/path/embedding spaces without process-global cache aliasing.
+
 import datetime
 import json
 import os
@@ -111,16 +114,30 @@ def create_vector_store(chunks: List[Document]) -> Chroma:
 @lru_cache(maxsize=1)
 def load_vector_store() -> Chroma:
     """Load existing Chroma collection (singleton — cached per process)."""
-    if not os.path.isdir(settings.CHROMA_DB_PATH):
-        raise FileNotFoundError(f"Chroma DB not found: {settings.CHROMA_DB_PATH}")
+    return load_bound_vector_store(
+        path=settings.CHROMA_DB_PATH,
+        collection=settings.CHROMA_COLLECTION_NAME,
+        embeddings=get_embedding_model(),
+    )
 
-    embeddings = get_embedding_model()
-    vs = _create_chroma_instance(embeddings)
+
+def load_bound_vector_store(*, path: str, collection: str, embeddings) -> Chroma:
+    """Load only the supplied existing store; lifetime belongs to its runtime."""
+    if not path or not collection or embeddings is None:
+        raise ValueError("path, collection and embeddings are required")
+    if not os.path.isdir(path):
+        raise FileNotFoundError(f"Chroma DB not found: {path}")
+    vs = Chroma(
+        collection_name=collection,
+        embedding_function=embeddings,
+        persist_directory=path,
+        create_collection_if_not_exists=False,
+    )
 
     count = vs._collection.count()
     if count == 0:
         raise ValueError(
-            f"Chroma DB is empty (0 documents): {settings.CHROMA_DB_PATH}. "
+            f"Chroma DB is empty (0 documents): {path}. "
             "Run 'python index.py' to index documents."
         )
     logger.info(f"Chroma DB loaded: {count} documents")

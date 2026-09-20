@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 # ─── DI: expander инжектится один раз при старте (bridge.init_v7_pipeline) ───
 
 _crossref_expander: Optional[Callable[[List[dict], str], List[dict]]] = None
+_UNSET = object()
 
 
 def set_crossref_expander(
@@ -120,6 +121,7 @@ def pack_context(
     plan: dict,
     *,
     cache: Optional[Dict[str, PackResult]] = None,
+    crossref_expander=_UNSET,
 ) -> PackResult:
     """Упаковать кандидата в контекст, который увидит генератор.
 
@@ -137,9 +139,10 @@ def pack_context(
     status: PackStatus = "ok"
     working = copy.deepcopy(passages)
 
-    if _crossref_expander is not None:
+    expander = _crossref_expander if crossref_expander is _UNSET else crossref_expander
+    if expander is not None:
         try:
-            expanded = list(_crossref_expander(copy.deepcopy(working), query))
+            expanded = list(expander(copy.deepcopy(working), query))
             if expanded:
                 working = _merge_new_at_tail(working, expanded)
         except Exception as exc:  # noqa: BLE001 — живой запрос не должен умирать

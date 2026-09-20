@@ -78,7 +78,7 @@ def _last_stage(state: RAGState) -> str:
 # ─── Node ─────────────────────────────────────────────────────────────────
 
 
-def generate_answer(state: RAGState) -> RAGState:
+def generate_answer(state: RAGState, *, dependencies=None) -> RAGState:
     """Synthesise final answer from retrieved passages.
 
     Reads:  query, active_query, final_context, retrieval_attempts.
@@ -99,6 +99,12 @@ def generate_answer(state: RAGState) -> RAGState:
     fn: Optional[GenerateFn] = (
         _generate_fn_complex if stage == "complex" else _generate_fn_simple
     )
+    if dependencies is not None:
+        fn = (
+            dependencies.generate_complex
+            if stage == "complex"
+            else dependencies.generate_simple
+        )
     if fn is None:
         fn = _stub_generate
     answer, usages = unpack(fn(query, active_query, passages))

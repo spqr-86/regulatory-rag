@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+# ANCHOR: a backend owns one store; explicit loading never uses the default cache.
+
 from typing import Iterator
 
 from langchain_core.documents import Document
@@ -10,7 +12,36 @@ from langchain_core.documents import Document
 class ChromaBackend:
     """Implements VectorStoreBackend protocol over the legacy Chroma helpers."""
 
-    def __init__(self, load_existing: bool = True) -> None:
+    def __init__(
+        self,
+        load_existing: bool = True,
+        *,
+        path=None,
+        collection=None,
+        embeddings=None,
+        store=None,
+    ) -> None:
+        if store is not None:
+            if any(x is not None for x in (path, collection, embeddings)):
+                raise ValueError("supply either a store or explicit loading arguments")
+            self._vs = store
+            return
+        if any(x is not None for x in (path, collection, embeddings)):
+            if (
+                not load_existing
+                or path is None
+                or collection is None
+                or embeddings is None
+            ):
+                raise ValueError(
+                    "explicit loading requires path, collection and embeddings"
+                )
+            from src.indexing.vector_store import load_bound_vector_store
+
+            self._vs = load_bound_vector_store(
+                path=path, collection=collection, embeddings=embeddings
+            )
+            return
         if load_existing:
             from src.indexing.vector_store import load_vector_store
 
