@@ -5,7 +5,8 @@ import threading
 
 import pytest
 
-from src.v7.retrieval import RequestEmbeddingMemo
+from src.v7.retrieval import RequestEmbeddingMemo, bind_request_embedding
+from src.v7.runtime import V7Runtime
 
 
 @pytest.mark.unit
@@ -61,3 +62,46 @@ def test_failure_is_shared_without_retry_loop():
         with pytest.raises(RuntimeError, match="provider down"):
             memo.get_or_compute(space="a", text="q", embed=embed)
     assert calls == 1
+
+
+@pytest.mark.unit
+def test_bound_runtimes_share_vector_across_scopes_and_complex_search():
+    memo = RequestEmbeddingMemo()
+    embed_calls = []
+    searches = []
+
+    def embed(text):
+        embed_calls.append(text)
+        return [42.0]
+
+    def runtime_for(corpus):
+        def search(*, query, embedding, filters=None, top_k=12):
+            searches.append((corpus, query, embedding, filters, top_k))
+            return []
+
+        return bind_request_embedding(
+            V7Runtime(vector_search=search, complex_vector_search=search),
+            memo=memo,
+            space="embedding-model-v1",
+            embed=embed,
+        )
+
+    external = runtime_for("external")
+    internal = runtime_for("internal")
+
+    external.vector_search(
+        query="prepared question", filters={"corpus": "external"}, top_k=8
+    )
+    internal.vector_search(
+        query="prepared question", filters={"corpus": "internal"}, top_k=8
+    )
+    internal.complex_vector_search(
+        query="prepared question", filters={"corpus": "internal"}, top_k=24
+    )
+
+    assert embed_calls == ["prepared question"]
+    assert searches == [
+        ("external", "prepared question", [42.0], {"corpus": "external"}, 8),
+        ("internal", "prepared question", [42.0], {"corpus": "internal"}, 8),
+        ("internal", "prepared question", [42.0], {"corpus": "internal"}, 24),
+    ]

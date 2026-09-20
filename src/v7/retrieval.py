@@ -11,7 +11,7 @@ import threading
 import time
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Literal
+from typing import Callable, Literal
 
 from src.v7.graph import build_graph
 from src.v7.hard_gates import validate_scope_filters
@@ -54,6 +54,40 @@ class RequestEmbeddingMemo:
             except Exception as exc:
                 future.set_exception(exc)
         return future.result()
+
+
+def bind_request_embedding(
+    runtime: V7Runtime,
+    *,
+    memo: RequestEmbeddingMemo,
+    space: str,
+    embed: Callable[[str], list[float]],
+) -> V7Runtime:
+    """Bind one request-local embedding memo to all dense searches in a runtime.
+
+    Separate runtimes may share ``memo`` for concurrent corpus branches. Search
+    results remain corpus/filter specific; only the exact prepared query vector
+    is reused. Generic runtimes that do not opt in keep text-search semantics.
+    """
+
+    def with_embedding(search: Callable) -> Callable:
+        def _search(*, query: str, **kwargs):
+            embedding = memo.get_or_compute(space=space, text=query, embed=embed)
+            return search(query=query, embedding=embedding, **kwargs)
+
+        return _search
+
+    vector_search = with_embedding(runtime.vector_search)
+    complex_search = (
+        with_embedding(runtime.complex_vector_search)
+        if runtime.complex_vector_search is not None
+        else vector_search
+    )
+    return replace(
+        runtime,
+        vector_search=vector_search,
+        complex_vector_search=complex_search,
+    )
 
 
 def retrieve_context(

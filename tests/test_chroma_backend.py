@@ -30,6 +30,37 @@ def test_similarity_search_delegates():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("by_vector", [False, True])
+def test_similarity_search_normalizes_multi_condition_scope(by_vector):
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
+        mock_vs = MagicMock(spec=Chroma)
+        mock_vs.similarity_search_with_score.return_value = []
+        mock_vs.similarity_search_by_vector_with_relevance_scores.return_value = []
+        mock_load.return_value = mock_vs
+
+        from src.backends.chroma_backend import ChromaBackend
+
+        backend = ChromaBackend()
+        scope = {
+            "source_type": "internal",
+            "audience": {"$in": ["company", "unit_a"]},
+        }
+        if by_vector:
+            backend.similarity_search_by_vector_with_score([1.0], filter=scope)
+            call = mock_vs.similarity_search_by_vector_with_relevance_scores.call_args
+        else:
+            backend.similarity_search_with_score("q", filter=scope)
+            call = mock_vs.similarity_search_with_score.call_args
+
+        assert call.kwargs["filter"] == {
+            "$and": [
+                {"source_type": "internal"},
+                {"audience": {"$in": ["company", "unit_a"]}},
+            ]
+        }
+
+
+@pytest.mark.unit
 def test_iter_all_documents_yields_dicts():
     with patch("src.indexing.vector_store.load_vector_store") as mock_load:
         mock_vs = MagicMock(spec=Chroma)

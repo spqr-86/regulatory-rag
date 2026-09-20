@@ -59,15 +59,17 @@ class ChromaBackend:
     def similarity_search_with_score(
         self, query: str, k: int = 10, filter: dict | None = None
     ) -> list[tuple[Document, float]]:
-        return self._vs.similarity_search_with_score(query, k=k, filter=filter)
+        where = self._normalize_where(filter) if filter else None
+        return self._vs.similarity_search_with_score(query, k=k, filter=where)
 
     def similarity_search_by_vector_with_score(
         self, embedding: list[float], k: int = 10, filter: dict | None = None
     ) -> list[tuple[Document, float]]:
         # The installed langchain-chroma method calls these relevance scores,
         # but its implementation returns Chroma's raw distance (lower is better).
+        where = self._normalize_where(filter) if filter else None
         return self._vs.similarity_search_by_vector_with_relevance_scores(
-            embedding, k=k, filter=filter
+            embedding, k=k, filter=where
         )
 
     def add_texts(
