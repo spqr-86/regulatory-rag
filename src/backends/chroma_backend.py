@@ -59,7 +59,18 @@ class ChromaBackend:
     def similarity_search_with_score(
         self, query: str, k: int = 10, filter: dict | None = None
     ) -> list[tuple[Document, float]]:
-        return self._vs.similarity_search_with_score(query, k=k, filter=filter)
+        where = self._normalize_where(filter) if filter else None
+        return self._vs.similarity_search_with_score(query, k=k, filter=where)
+
+    def similarity_search_by_vector_with_score(
+        self, embedding: list[float], k: int = 10, filter: dict | None = None
+    ) -> list[tuple[Document, float]]:
+        # The installed langchain-chroma method calls these relevance scores,
+        # but its implementation returns Chroma's raw distance (lower is better).
+        where = self._normalize_where(filter) if filter else None
+        return self._vs.similarity_search_by_vector_with_relevance_scores(
+            embedding, k=k, filter=where
+        )
 
     def add_texts(
         self, texts: list[str], metadatas: list[dict] | None = None
@@ -99,20 +110,7 @@ class ChromaBackend:
         """
         from src.indexing.chroma_helpers import chroma_results_to_documents
 
-        # Chroma needs explicit $and wrapper for multi-condition filters
-        if len(where) > 1 or any(isinstance(v, dict) for v in where.values()):
-            conditions = []
-            for k, v in where.items():
-                if isinstance(v, dict):
-                    for op, val in v.items():
-                        conditions.append({k: {op: val}})
-                else:
-                    conditions.append({k: v})
-            chroma_where = (
-                {"$and": conditions} if len(conditions) > 1 else conditions[0]
-            )
-        else:
-            chroma_where = where
+        chroma_where = self._normalize_where(where)
 
         docs: list[Document] = []
         offset = 0
@@ -124,3 +122,28 @@ class ChromaBackend:
                 break
             offset += limit
         return docs
+
+    def get_by_filter_bounded(self, where: dict, max_results: int) -> list[Document]:
+        """Fetch one bounded prefix for section expansion."""
+        if max_results <= 0:
+            return []
+        from src.indexing.chroma_helpers import chroma_results_to_documents
+
+        result = self._vs.get(
+            where=self._normalize_where(where), limit=max_results, offset=0
+        )
+        return chroma_results_to_documents(result)[:max_results]
+
+    @staticmethod
+    def _normalize_where(where: dict) -> dict:
+        """Translate a flat filter to Chroma's explicit conjunction shape."""
+        if len(where) <= 1 and not any(isinstance(v, dict) for v in where.values()):
+            return where
+        conditions = []
+        for key, value in where.items():
+            if isinstance(value, dict):
+                for operator, operand in value.items():
+                    conditions.append({key: {operator: operand}})
+            else:
+                conditions.append({key: value})
+        return {"$and": conditions} if len(conditions) > 1 else conditions[0]

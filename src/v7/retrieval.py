@@ -6,12 +6,15 @@
 from __future__ import annotations
 
 import copy
+from concurrent.futures import Future
+import threading
 import time
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Literal
+from typing import Callable, Literal
 
 from src.v7.graph import build_graph
+from src.v7.hard_gates import validate_scope_filters
 from src.v7.runtime import V7Runtime
 from src.v7.reranker import SharedReranker
 
@@ -28,11 +31,71 @@ class ScopedRetrievalResult:
     clarification: str | None = None
 
 
+class RequestEmbeddingMemo:
+    """Request-local single-flight memo for exact prepared query embeddings."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._futures: dict[tuple[str, str], Future[list[float]]] = {}
+
+    def get_or_compute(self, *, space: str, text: str, embed) -> list[float]:
+        key = (space, text)
+        with self._lock:
+            future = self._futures.get(key)
+            if future is None:
+                future = Future()
+                self._futures[key] = future
+                owner = True
+            else:
+                owner = False
+        if owner:
+            try:
+                future.set_result(embed(text))
+            except Exception as exc:
+                future.set_exception(exc)
+        return future.result()
+
+
+def bind_request_embedding(
+    runtime: V7Runtime,
+    *,
+    memo: RequestEmbeddingMemo,
+    space: str,
+    embed: Callable[[str], list[float]],
+) -> V7Runtime:
+    """Bind one request-local embedding memo to all dense searches in a runtime.
+
+    Separate runtimes may share ``memo`` for concurrent corpus branches. Search
+    results remain corpus/filter specific; only the exact prepared query vector
+    is reused. Generic runtimes that do not opt in keep text-search semantics.
+    """
+
+    def with_embedding(search: Callable) -> Callable:
+        def _search(*, query: str, **kwargs):
+            embedding = memo.get_or_compute(space=space, text=query, embed=embed)
+            return search(query=query, embedding=embedding, **kwargs)
+
+        return _search
+
+    vector_search = with_embedding(runtime.vector_search)
+    complex_search = (
+        with_embedding(runtime.complex_vector_search)
+        if runtime.complex_vector_search is not None
+        else vector_search
+    )
+    return replace(
+        runtime,
+        vector_search=vector_search,
+        complex_vector_search=complex_search,
+    )
+
+
 def retrieve_context(
     question: str,
     *,
     runtime: V7Runtime,
     filters: dict | None = None,
+    strict_scope: bool = False,
     deadline: float | None = None,
 ) -> ScopedRetrievalResult:
     """Invoke the shared graph with one isolated request state.
@@ -41,6 +104,8 @@ def retrieve_context(
     admission/cancellation budget is implemented at the service boundary.
     """
     started = time.monotonic()
+    if strict_scope:
+        filters = validate_scope_filters(filters or {})
     if deadline is not None and isinstance(runtime.rerank, SharedReranker):
         runtime = replace(runtime, rerank=partial(runtime.rerank, deadline=deadline))
     state = (

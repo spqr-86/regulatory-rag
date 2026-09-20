@@ -19,6 +19,7 @@ import time
 import structlog
 
 from src.v7.nlp_core import bm25_search
+from src.v7.scope_filter import matches_filter
 
 logger = structlog.get_logger()
 
@@ -122,11 +123,16 @@ def expand_cross_references(
     def _get_source_docs(source: str) -> list:
         if source not in _source_docs_cache:
             try:
-                _source_docs_cache[source] = backend.get_by_filter(
+                fetched = backend.get_by_filter(
                     # Scope filter too: a same-named source must not bypass it.
                     where={**(filters or {}), "source": source},
                     limit=500,
                 )
+                _source_docs_cache[source] = [
+                    doc
+                    for doc in fetched
+                    if matches_filter(dict(doc.metadata or {}), filters)
+                ]
             except Exception as exc:
                 logger.warning(
                     "cross_ref source fetch failed", source=source, error=str(exc)
@@ -201,6 +207,8 @@ def expand_cross_references(
             } - {""}
             bm25_results = lexical_search(query, filters=filters, top_k=30)
             for r in bm25_results:
+                if not matches_filter(r.get("metadata") or {}, filters):
+                    continue
                 if r.get("metadata", {}).get("source") in unique_sources:
                     text = r.get("text", "")
                     if text and text not in existing_texts:

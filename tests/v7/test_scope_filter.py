@@ -8,6 +8,7 @@ import pytest
 from langchain_core.documents import Document
 
 from src.v7.scope_filter import build_scope_filters, matches_filter
+from src.v7.hard_gates import validate_scope_filters
 
 EXT = {"source": "ppr.pdf", "source_type": "external"}
 COMPANY = {"source": "prikaz.md", "source_type": "internal", "audience": "company"}
@@ -98,3 +99,61 @@ def test_chroma_where_wraps_multiple_conditions():
     }
     assert to_chroma_where({"source_type": "external"}) == {"source_type": "external"}
     assert to_chroma_where(None) is None
+
+
+@pytest.mark.unit
+def test_strict_scope_rejects_unknown_key_and_operator():
+    with pytest.raises(ValueError, match="unsupported scope filter keys"):
+        validate_scope_filters({"source_type": "internal", "tenant": "unit_1"})
+    with pytest.raises(ValueError, match="unsupported scope filter operator"):
+        validate_scope_filters({"audience": {"$ne": "unit_2"}})
+
+
+@pytest.mark.unit
+def test_section_fetch_passes_scope_to_bounded_backend():
+    from src.backends.vector_store import VectorStoreBackend
+    from src.v7.bridge import make_section_fetch_fn
+
+    _, internal = build_scope_filters("unit_1")
+    backend = MagicMock(spec=VectorStoreBackend)
+    backend.get_by_filter_bounded.return_value = []
+    fetch = make_section_fetch_fn(backend)
+
+    fetch(
+        [{"text": "anchor", "metadata": {"source": "same.md", "parent_section": "1"}}],
+        filters=internal,
+    )
+
+    where = backend.get_by_filter_bounded.call_args.args[0]
+    assert where == {
+        "source_type": "internal",
+        "audience": {"$in": ["company", "unit_1"]},
+        "parent_section": "1",
+        "source": "same.md",
+    }
+
+
+@pytest.mark.unit
+def test_backend_cannot_leak_foreign_unit_through_vector_or_section():
+    from src.backends.vector_store import VectorStoreBackend
+    from src.v7.bridge import make_section_fetch_fn, make_vector_search_fn
+
+    _, internal = build_scope_filters("unit_1")
+    backend = MagicMock(spec=VectorStoreBackend)
+    foreign = Document(page_content="foreign", metadata=dict(UNIT2))
+    backend.similarity_search_with_score.return_value = [(foreign, 0.1)]
+    backend.get_by_filter_bounded.return_value = [foreign]
+
+    assert make_vector_search_fn(backend)("q", filters=internal) == []
+    assert (
+        make_section_fetch_fn(backend)(
+            [
+                {
+                    "text": "anchor",
+                    "metadata": {"source": "same.md", "parent_section": "1"},
+                }
+            ],
+            filters=internal,
+        )
+        == []
+    )

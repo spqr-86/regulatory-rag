@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import inspect
 import json
 import logging
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
 from src.v7.config import v7_config
@@ -31,12 +33,24 @@ logger = logging.getLogger(__name__)
 
 # ─── DI: expander инжектится один раз при старте (bridge.init_v7_pipeline) ───
 
-_crossref_expander: Optional[Callable[[List[dict], str], List[dict]]] = None
+_crossref_expander: Optional[
+    Callable[[List[dict], str, Optional[dict]], List[dict]]
+] = None
 _UNSET = object()
 
 
+@dataclass(frozen=True)
+class PackLimits:
+    max_passages: int
+    token_budget: int
+
+    def __post_init__(self) -> None:
+        if self.max_passages <= 0 or self.token_budget <= 0:
+            raise ValueError("pack limits must be positive")
+
+
 def set_crossref_expander(
-    fn: Optional[Callable[[List[dict], str], List[dict]]],
+    fn: Optional[Callable[[List[dict], str, Optional[dict]], List[dict]]],
 ) -> None:
     """Инжект расширителя перекрёстных ссылок.
 
@@ -47,7 +61,13 @@ def set_crossref_expander(
     _crossref_expander = fn
 
 
-def candidate_version(passages: List[dict], plan: dict, query: str) -> str:
+def candidate_version(
+    passages: List[dict],
+    plan: dict,
+    query: str,
+    filters: dict | None = None,
+    limits: PackLimits | None = None,
+) -> str:
     """Стабильный ключ версии кандидата.
 
     Включает идентичность И текст пассажей (enrichment меняет текст при том же
@@ -59,7 +79,29 @@ def candidate_version(passages: List[dict], plan: dict, query: str) -> str:
         for p in passages
     )
     plan_snapshot = json.dumps(plan or {}, sort_keys=True, default=str)
-    raw = _SEP.join(ids) + _SEP + plan_snapshot + _SEP + (query or "")
+    filter_snapshot = json.dumps(filters or {}, sort_keys=True, default=str)
+    limits_snapshot = json.dumps(
+        (
+            {
+                "max_passages": limits.max_passages,
+                "token_budget": limits.token_budget,
+            }
+            if limits
+            else {}
+        ),
+        sort_keys=True,
+    )
+    raw = (
+        _SEP.join(ids)
+        + _SEP
+        + plan_snapshot
+        + _SEP
+        + filter_snapshot
+        + _SEP
+        + limits_snapshot
+        + _SEP
+        + (query or "")
+    )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -122,6 +164,8 @@ def pack_context(
     *,
     cache: Optional[Dict[str, PackResult]] = None,
     crossref_expander=_UNSET,
+    filters: dict | None = None,
+    limits: PackLimits | None = None,
 ) -> PackResult:
     """Упаковать кандидата в контекст, который увидит генератор.
 
@@ -132,7 +176,7 @@ def pack_context(
     if not passages:
         return {"final_context": [], "status": "ok", "dropped": 0}
 
-    key = candidate_version(passages, plan, query)
+    key = candidate_version(passages, plan, query, filters, limits)
     if cache is not None and key in cache:
         return copy.deepcopy(cache[key])
 
@@ -142,7 +186,17 @@ def pack_context(
     expander = _crossref_expander if crossref_expander is _UNSET else crossref_expander
     if expander is not None:
         try:
-            expanded = list(expander(copy.deepcopy(working), query))
+            parameters = inspect.signature(expander).parameters.values()
+            accepts_filters = "filters" in inspect.signature(
+                expander
+            ).parameters or any(
+                p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters
+            )
+            expanded = list(
+                expander(copy.deepcopy(working), query, filters)
+                if accepts_filters
+                else expander(copy.deepcopy(working), query)
+            )
             if expanded:
                 working = _merge_new_at_tail(working, expanded)
         except Exception as exc:  # noqa: BLE001 — живой запрос не должен умирать
@@ -153,9 +207,10 @@ def pack_context(
     packed = [{**p, "text": sanitize_for_llm(p.get("text", ""))} for p in working]
 
     n_before = len(packed)
-    packed = packed[: v7_config.MAX_CHUNKS_FOR_LLM]
+    max_passages = limits.max_passages if limits else v7_config.MAX_CHUNKS_FOR_LLM
+    packed = packed[:max_passages]
 
-    budget = v7_config.PACK_TOKEN_BUDGET
+    budget = limits.token_budget if limits else v7_config.PACK_TOKEN_BUDGET
     kept: List[dict] = []
     spent = 0
     for p in packed:

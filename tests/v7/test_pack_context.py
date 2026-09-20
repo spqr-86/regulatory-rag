@@ -4,6 +4,7 @@ import pytest
 
 from src.v7 import pack_context as pc
 from src.v7.pack_context import candidate_version
+from src.v7.pack_context import PackLimits
 
 
 def _p(chunk_id, source="doc.pdf", text="t"):
@@ -49,6 +50,30 @@ def test_version_changes_with_query():
     assert candidate_version([_p(1)], PLAN, "q1") != candidate_version(
         [_p(1)], PLAN, "q2"
     )
+
+
+def test_version_changes_with_scope():
+    assert candidate_version(
+        [_p(1)], PLAN, "q", {"audience": "unit_1"}
+    ) != candidate_version([_p(1)], PLAN, "q", {"audience": "unit_2"})
+
+
+def test_version_changes_with_pack_limits():
+    assert candidate_version(
+        [_p(1)], PLAN, "q", limits=PackLimits(8, 1000)
+    ) != candidate_version([_p(1)], PLAN, "q", limits=PackLimits(4, 1000))
+
+
+def test_pack_passes_scope_to_expander():
+    seen = []
+
+    def expander(passages, query, filters):
+        seen.append(filters)
+        return passages
+
+    scope = {"source_type": "internal", "audience": {"$in": ["company", "unit_1"]}}
+    pc.pack_context([_p(1)], "q", PLAN, crossref_expander=expander, filters=scope)
+    assert seen == [scope]
 
 
 def test_pack_runs_expander_once_per_version():
@@ -109,6 +134,24 @@ def test_pack_truncates_to_max_chunks(monkeypatch):
     res = pc.pack_context([_p(i) for i in range(10)], "q", PLAN)
     assert len(res["final_context"]) == 3
     assert res["dropped"] == 7
+
+
+def test_explicit_pack_limits_override_generic_defaults(monkeypatch):
+    monkeypatch.setattr(pc.v7_config, "MAX_CHUNKS_FOR_LLM", 99)
+    monkeypatch.setattr(pc.v7_config, "PACK_TOKEN_BUDGET", 10**6)
+    res = pc.pack_context(
+        [_p(i) for i in range(10)],
+        "q",
+        PLAN,
+        limits=PackLimits(max_passages=8, token_budget=10**6),
+    )
+    assert len(res["final_context"]) == 8
+    assert res["dropped"] == 2
+
+
+def test_pack_limits_must_be_positive():
+    with pytest.raises(ValueError, match="positive"):
+        PackLimits(max_passages=0, token_budget=100)
 
 
 def test_default_pack_keeps_all_twelve_simple_retrieval_chunks(monkeypatch):

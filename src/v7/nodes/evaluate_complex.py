@@ -74,7 +74,12 @@ def _candidates(state: RAGState) -> List[Candidate]:
     return out
 
 
-def _prepare(cand: Candidate, cache: Dict[str, Any], dependencies=None) -> PackResult:
+def _prepare(
+    cand: Candidate,
+    cache: Dict[str, Any],
+    dependencies=None,
+    filters: dict | None = None,
+) -> PackResult:
     """Enrich and pack a candidate, unless it is an already packed snapshot."""
     if cand.get("packed"):
         return {
@@ -84,7 +89,13 @@ def _prepare(cand: Candidate, cache: Dict[str, Any], dependencies=None) -> PackR
         }
     if dependencies is None:
         enriched = enrich_passages(cand["passages"])
-        return pack_context(enriched, cand["active_query"], cand["plan"], cache=cache)
+        return pack_context(
+            enriched,
+            cand["active_query"],
+            cand["plan"],
+            cache=cache,
+            filters=filters,
+        )
     enriched = enrich_passages(
         cand["passages"], visual_proof_fn=dependencies.visual_proof
     )
@@ -94,6 +105,8 @@ def _prepare(cand: Candidate, cache: Dict[str, Any], dependencies=None) -> PackR
         cand["plan"],
         cache=cache,
         crossref_expander=dependencies.crossref_expander,
+        filters=filters,
+        limits=dependencies.pack_limits,
     )
 
 
@@ -127,7 +140,7 @@ def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
 
     for i, cand in enumerate(candidates):
         is_last = i == len(candidates) - 1
-        packed = _prepare(cand, cache, dependencies)
+        packed = _prepare(cand, cache, dependencies, state.get("filters"))
         if packed["status"] == "degraded":
             technical = True
         verdict = validate_context(
