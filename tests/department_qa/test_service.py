@@ -612,6 +612,35 @@ def test_scoped_request_writes_exactly_one_telemetry_row():
 
 
 @pytest.mark.unit
+def test_scoped_telemetry_row_carries_run_id_when_passed_and_none_when_omitted():
+    def retrieve(question, *, corpus, **kwargs):
+        return _retrieval(text=corpus)
+
+    writer = FakeWriter()
+    answer_scoped_question(
+        "q",
+        RequestContext(include_object_profile=False),
+        retrieve,
+        _model(GOOD),
+        known_units=set(),
+        writer=writer,
+    )
+    assert writer.events[0]["run_id"] is None
+
+    writer = FakeWriter()
+    answer_scoped_question(
+        "q",
+        RequestContext(include_object_profile=False),
+        retrieve,
+        _model(GOOD),
+        known_units=set(),
+        writer=writer,
+        run_id="eval-20260920T000000Z-abcd",
+    )
+    assert writer.events[0]["run_id"] == "eval-20260920T000000Z-abcd"
+
+
+@pytest.mark.unit
 def test_scoped_fail_path_writes_one_row_with_error_and_abstain_path():
     writer = FakeWriter()
     result = answer_scoped_question(

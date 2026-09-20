@@ -31,7 +31,6 @@ from src.department_qa.object_profile import (  # noqa: E402
     typed_fields_prompt_lines,
 )
 from src.department_qa.contract import RequestContext  # noqa: E402
-
 from src.department_qa.service import answer_scoped_question  # noqa: E402
 from src.department_qa.view import (  # noqa: E402
     basis_cards,
@@ -294,6 +293,13 @@ try:
     stack = load_department_stack(stack_cache_key())
 except (RuntimeError, ObjectProfileError) as exc:  # fail-fast config errors, shown
     st.error(str(exc))
+    st.stop()
+
+if stack.config.mode != "v2":
+    st.error(
+        "Этот экран поддерживает только DEPARTMENT_QA_MODE=v2. Режим v1 доступен "
+        "только через eval/run_object_profile_pair.py для воспроизведения baseline."
+    )
     st.stop()
 
 manifest, config = stack.manifest, stack.config

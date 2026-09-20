@@ -37,6 +37,8 @@ import hashlib
 import json
 import re
 import sys
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -144,6 +146,9 @@ def run_mode(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     telemetry_writer = default_writer()
+    # One id for the whole run (matches run_v7_eval.py's new_run_id): batch
+    # semantics, not a fresh id per question.
+    run_id = f"eval-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:4]}"
     records = []
     for q in questions:
         prompts: list[str] = []
@@ -187,6 +192,7 @@ def run_mode(
                 limits=getattr(stack, "service_limits", None) or ServiceLimits(),
                 writer=telemetry_writer,
                 source="eval",
+                run_id=run_id,
             )
             # Preserve the historical meaning of search_calls (raw hybrid search
             # calls). The scoped graph records its own accepted attempts below.

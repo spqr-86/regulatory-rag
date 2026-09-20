@@ -63,7 +63,7 @@ def _profile(unit_id: str) -> ObjectProfile:
     )
 
 
-def _fake_stack() -> DepartmentStack:
+def _fake_stack(mode: str = "v2") -> DepartmentStack:
     manifest = Manifest(
         snapshot_id="pb_demo_test",
         organization_id="org_test",
@@ -75,7 +75,7 @@ def _fake_stack() -> DepartmentStack:
         object_profiles={},
     )
     config = ModeConfig(
-        mode="v2",
+        mode=mode,
         chroma_db_path="./chroma_db_dept_v2",
         collection="department_demo_v2",
         prompt_version="v4",
@@ -190,6 +190,24 @@ def test_page_shows_stack_error_instead_of_traceback(monkeypatch, tmp_path, exc)
     assert not at.exception
     assert len(at.error) == 1
     assert str(exc) in at.error[0].value
+
+
+def test_page_stops_with_error_when_stack_mode_is_not_v2(monkeypatch, tmp_path):
+    """DEPARTMENT_QA_MODE=v1 renders a v1-schema model_fn against the v5 prompt
+    and scope filters with no v1 metadata — the UI must refuse, not degrade
+    silently (v1 stays supported only via eval/run_object_profile_pair.py)."""
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    monkeypatch.setattr(
+        wiring, "build_department_stack", lambda: _fake_stack(mode="v1")
+    )
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+
+    assert not at.exception
+    assert len(at.error) == 1
+    assert "v2" in at.error[0].value
+    # Nothing past the guard ran: no unit selector, no question screen.
+    assert not at.subheader
 
 
 EVIDENCE = [

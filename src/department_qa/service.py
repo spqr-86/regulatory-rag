@@ -241,6 +241,7 @@ def answer_scoped_question(
     progress_fn: Optional[ProgressFn] = None,
     writer: Optional[telemetry.EventWriter] = None,
     source: telemetry.Source = "ui",
+    run_id: Optional[str] = None,
 ) -> DepartmentResponse:
     """Run selected corpora concurrently, then perform exactly one generation."""
     started = time.monotonic()
@@ -286,7 +287,7 @@ def answer_scoped_question(
             path = "complex" if has_complex_route else "simple"
         event = {
             "query_id": response.trace_id,
-            "run_id": None,
+            "run_id": run_id,
             "ts": datetime.now(timezone.utc),
             "source": source,
             "question": question,
