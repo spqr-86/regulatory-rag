@@ -26,6 +26,12 @@ class VectorStoreBackend(Protocol):
         """
         ...
 
+    def similarity_search_by_vector_with_score(
+        self, embedding: list[float], k: int = 10, filter: dict | None = None
+    ) -> list[tuple[Document, float]]:
+        """Top-k semantic search from a prepared vector; score semantics unchanged."""
+        ...
+
     def add_texts(
         self, texts: list[str], metadatas: list[dict] | None = None
     ) -> list[str]:
@@ -50,6 +56,10 @@ class VectorStoreBackend(Protocol):
         {"field": {"$gte": N, "$lte": M}}. Backends translate as needed.
         `limit` is the page size, not a hard cap on the result count.
         """
+        ...
+
+    def get_by_filter_bounded(self, where: dict, max_results: int) -> list[Document]:
+        """Return at most the first ``max_results`` matches without full pagination."""
         ...
 
 

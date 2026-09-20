@@ -31,6 +31,21 @@ class TestMakeVectorSearchFn:
         assert result == []
 
     @pytest.mark.unit
+    def test_prepared_embedding_uses_by_vector_api(self):
+        mock_store = MagicMock()
+        mock_store.similarity_search_by_vector_with_score.return_value = []
+
+        result = make_vector_search_fn(mock_store)(
+            query="test query", embedding=[1.0, 2.0], top_k=5
+        )
+
+        mock_store.similarity_search_by_vector_with_score.assert_called_once_with(
+            [1.0, 2.0], k=5, filter=None
+        )
+        mock_store.similarity_search_with_score.assert_not_called()
+        assert result == []
+
+    @pytest.mark.unit
     def test_converts_documents_to_dicts(self):
         mock_store = MagicMock()
         mock_doc = MagicMock()

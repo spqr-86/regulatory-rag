@@ -228,12 +228,18 @@ def make_vector_search_fn(vector_store) -> Callable[..., List[dict]]:
         query: str,
         filters: dict | None = None,
         top_k: int = 12,
+        embedding: list[float] | None = None,
         **kwargs,
     ) -> List[dict]:
         t0 = time.perf_counter()
-        docs_and_scores = vector_store.similarity_search_with_score(
-            query, k=top_k, filter=filters or None
-        )
+        if embedding is None:
+            docs_and_scores = vector_store.similarity_search_with_score(
+                query, k=top_k, filter=filters or None
+            )
+        else:
+            docs_and_scores = vector_store.similarity_search_by_vector_with_score(
+                embedding, k=top_k, filter=filters or None
+            )
         logger.info(
             "vector_search.timing",
             top_k=top_k,
@@ -279,17 +285,16 @@ def make_section_fetch_fn(
             return []
         try:
             if isinstance(vector_store, VectorStoreBackend):
-                docs = vector_store.get_by_filter(
+                docs = vector_store.get_by_filter_bounded(
                     {
                         "parent_section": section,
                         "source": source,
                     },
-                    limit=max_section_chunks,
+                    max_results=max_section_chunks,
                 )
-                # get_by_filter paginates until exhausted — hard cap here.
                 return [
                     _doc_to_passage(d.page_content, dict(d.metadata or {}))
-                    for d in docs[:max_section_chunks]
+                    for d in docs
                 ]
             col = vector_store._collection
             results = col.get(

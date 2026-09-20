@@ -142,6 +142,44 @@ def test_get_by_filter_paginates_all_pages():
 
 
 @pytest.mark.unit
+def test_get_by_filter_bounded_reads_only_requested_prefix():
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
+        mock_vs = MagicMock(spec=Chroma)
+        mock_vs.get.return_value = {
+            "documents": ["d0", "d1", "d2"],
+            "metadatas": [{"source": "big.pdf"}] * 3,
+        }
+        mock_load.return_value = mock_vs
+
+        from src.backends.chroma_backend import ChromaBackend
+
+        docs = ChromaBackend().get_by_filter_bounded(
+            {"source": "big.pdf"}, max_results=3
+        )
+
+        assert [d.page_content for d in docs] == ["d0", "d1", "d2"]
+        mock_vs.get.assert_called_once()
+        assert mock_vs.get.call_args.kwargs["limit"] == 3
+
+
+@pytest.mark.unit
+def test_similarity_search_by_vector_preserves_raw_distance():
+    with patch("src.indexing.vector_store.load_vector_store") as mock_load:
+        doc = Document(page_content="hit", metadata={"source": "law.pdf"})
+        mock_vs = MagicMock(spec=Chroma)
+        mock_vs.similarity_search_by_vector_with_relevance_scores.return_value = [
+            (doc, 0.125)
+        ]
+        mock_load.return_value = mock_vs
+
+        from src.backends.chroma_backend import ChromaBackend
+
+        assert ChromaBackend().similarity_search_by_vector_with_score(
+            [1.0, 2.0], k=1, filter={"source_type": "external"}
+        ) == [(doc, 0.125)]
+
+
+@pytest.mark.unit
 def test_iter_all_documents_paginates():
     """iter_all_documents must batch via offset and return all docs."""
     with patch("src.indexing.vector_store.load_vector_store") as mock_load:

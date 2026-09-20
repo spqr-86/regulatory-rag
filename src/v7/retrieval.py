@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import copy
+from concurrent.futures import Future
+import threading
 import time
 from dataclasses import dataclass, replace
 from functools import partial
@@ -26,6 +28,31 @@ class ScopedRetrievalResult:
     elapsed_ms: float
     technical_failure: bool
     clarification: str | None = None
+
+
+class RequestEmbeddingMemo:
+    """Request-local single-flight memo for exact prepared query embeddings."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._futures: dict[tuple[str, str], Future[list[float]]] = {}
+
+    def get_or_compute(self, *, space: str, text: str, embed) -> list[float]:
+        key = (space, text)
+        with self._lock:
+            future = self._futures.get(key)
+            if future is None:
+                future = Future()
+                self._futures[key] = future
+                owner = True
+            else:
+                owner = False
+        if owner:
+            try:
+                future.set_result(embed(text))
+            except Exception as exc:
+                future.set_exception(exc)
+        return future.result()
 
 
 def retrieve_context(
