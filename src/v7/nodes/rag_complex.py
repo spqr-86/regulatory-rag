@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+# ANCHOR: existing complex retrieval with per-graph dependencies.
+# Input: request state/dependencies. Output: complex attempt under its own plan.
+
 import logging
 from typing import Callable, List, Optional
 
@@ -10,6 +13,7 @@ from src.v7.hard_gates import compute_attempt_metrics, validate_filters
 from src.v7.nlp_core import bm25_search, rrf_merge
 from src.v7.nodes.utils import make_retrieval_id
 from src.v7.state_types import RAGState, RetrievalAttempt, RetrievalPlan
+from src.v7.reranker import RerankerError
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +52,20 @@ def set_section_fetch_fn(fn: Callable[[List[dict]], List[dict]]) -> None:
 # ─── Node ─────────────────────────────────────────────────────────────────
 
 
-def rag_complex(state: RAGState) -> RAGState:
+def rag_complex(state: RAGState, *, dependencies=None) -> RAGState:
     """Slow path: higher thresholds, rerank + MMR."""
+    vector_search = (
+        (dependencies.complex_vector_search or dependencies.vector_search)
+        if dependencies is not None
+        else _vector_search
+    )
+    lexical_search = (
+        dependencies.bm25_search if dependencies is not None else bm25_search
+    )
+    section_fetch = (
+        dependencies.section_fetch if dependencies is not None else _section_fetch_fn
+    )
+    rerank = dependencies.rerank if dependencies is not None else _rerank_fn
     current_plan = state.get("plan") or {}
 
     slow_plan: RetrievalPlan = {
@@ -93,7 +109,7 @@ def rag_complex(state: RAGState) -> RAGState:
     # matters here is membership, not the order this merge produces.
     retrieval_error = False
     try:
-        vector_results = _vector_search(
+        vector_results = vector_search(
             query=active_q,
             filters=safe_filters,
             top_k=slow_plan["top_k"],
@@ -105,7 +121,7 @@ def rag_complex(state: RAGState) -> RAGState:
 
     try:
         bm25_results = (
-            bm25_search(
+            lexical_search(
                 query=active_q,
                 filters=safe_filters,
                 top_k=slow_plan["top_k"],
@@ -128,8 +144,8 @@ def rag_complex(state: RAGState) -> RAGState:
 
     # Section-aware expansion: fetch all chunks from the same section as the top anchor.
     # Helps for queries where the answer is scattered across multiple paragraphs of one section.
-    if _section_fetch_fn is not None and passages:
-        extra = _section_fetch_fn(passages)
+    if section_fetch is not None and passages:
+        extra = section_fetch(passages)
         if extra:
             seen_texts = {p.get("text", "") for p in passages}
             for p in extra:
@@ -149,13 +165,22 @@ def rag_complex(state: RAGState) -> RAGState:
 
     # FlashRank reranking (if injected): reorders by cross-encoder score,
     # but top_score stays anchored to vector similarity (not inflated FlashRank probs).
-    if _rerank_fn is not None and passages:
-        passages = _rerank_fn(active_q, passages, slow_plan["top_k"])
+    rerank_error = None
+    if rerank is not None and passages:
+        try:
+            passages = rerank(active_q, passages, slow_plan["top_k"])
+        except (RerankerError, TimeoutError) as exc:
+            logger.warning("rag_complex: reranker failed: %s", exc)
+            rerank_error = type(exc).__name__
+            retrieval_error = True
+            passages = []
     # Anchored to the dense list only: the BM25 `score` is a squashed BM25 value,
     # not a similarity, and must not lift the threshold gate.
     top_score = max((p.get("vector_score", 0.0) for p in vector_results), default=0.0)
 
     _, metrics = compute_attempt_metrics(original_q, active_q, passages, slow_plan)
+    if rerank_error:
+        metrics["rerank_error"] = rerank_error
 
     return {
         "plan": slow_plan,

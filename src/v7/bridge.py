@@ -14,7 +14,6 @@ Responsibilities:
 
 from __future__ import annotations
 
-import threading
 import time
 from typing import Callable, List
 
@@ -31,7 +30,14 @@ from src.infra.parsers import (
 from src.infra.prompt_manager import PromptManager
 from src.v7.config import v7_config
 from src.v7.cross_ref import expand_cross_references
-from src.v7.nlp_core import init_bm25_index
+from src.v7.nlp_core import BM25Index, init_bm25_index
+from src.v7.runtime import (
+    V7Runtime,
+    capture_legacy_runtime,
+    empty_search,
+    legacy_runtime_lock,
+)
+from src.v7.reranker import shared_reranker
 from src.v7.usage import LLMUsage, usage_from_response
 from src.v7 import pack_context as pack_context_mod
 from src.v7.nodes import generate_answer as generate_answer_mod
@@ -45,7 +51,7 @@ _pm = PromptManager()
 # Module-level RLock protecting init_v7_from_chroma.
 # Concurrent calls serialize to prevent readers observing a half-initialized
 # pipeline state (7 set_*_fn injectors + BM25 build are not atomic individually).
-_init_lock = threading.RLock()
+_init_lock = legacy_runtime_lock
 
 
 def _doc_to_passage(text: str, meta: dict, score: float = 0.0) -> dict:
@@ -90,6 +96,18 @@ def make_rerank_fn(
     model_name: str = "ms-marco-MiniLM-L-12-v2",
     cache_dir: str = ".reranker_cache",
 ) -> Callable[[str, List[dict], int], List[dict]]:
+    """Share a lazy FlashRank model across graph instances."""
+    import os
+    from config.settings import settings
+
+    return shared_reranker(
+        ("flashrank", model_name, os.path.abspath(cache_dir)),
+        lambda: _load_rerank_fn(model_name, cache_dir),
+        wait_timeout_s=settings.REQUEST_TIMEOUT,
+    )
+
+
+def _load_rerank_fn(model_name, cache_dir):
     """Create a FlashRank reranker function for v7 rag_complex.
 
     Signature: fn(query, passages, top_k) -> passages (reranked, ≤ top_k items).
@@ -134,6 +152,17 @@ def make_crossencoder_rerank_fn(
     model_name: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
     batch_size: int = 32,
 ) -> Callable[[str, List[dict], int], List[dict]]:
+    """Share a lazy CrossEncoder using the existing default device selection."""
+    from config.settings import settings
+
+    return shared_reranker(
+        ("crossencoder", model_name, "auto", batch_size),
+        lambda: _load_crossencoder_rerank_fn(model_name, batch_size),
+        wait_timeout_s=settings.REQUEST_TIMEOUT,
+    )
+
+
+def _load_crossencoder_rerank_fn(model_name, batch_size):
     """CrossEncoder reranker with sigmoid normalization to [0, 1].
 
     Multilingual (works on Russian). Raw logits (~-5..+7) are squashed via
@@ -459,7 +488,66 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
     return _generate
 
 
-def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
+_DEFAULT_RERANK = object()
+
+
+def build_v7_runtime(
+    vector_store,
+    *,
+    bm25_index: BM25Index | None = None,
+    rerank=_DEFAULT_RERANK,
+    expand=None,
+    visual_proof=None,
+    generate_simple=None,
+    generate_complex=None,
+) -> V7Runtime:
+    """Bind an existing store and snapshot without initializing any LLM clients.
+
+    Reuse this runtime (or pass the same BM25Index) for both corpus branches.
+    Generation, expansion and visual callbacks are opt-in for Generic callers.
+    """
+    from config.settings import settings
+
+    if bm25_index is None:
+        if isinstance(vector_store, VectorStoreBackend):
+            corpus = list(vector_store.iter_all_documents())
+        else:
+            data = vector_store.get(include=["metadatas", "documents"])
+            corpus = [
+                {"text": text, "metadata": meta or {}}
+                for text, meta in zip(data["documents"], data["metadatas"])
+            ]
+        bm25_index = BM25Index(corpus) if corpus else None
+    lexical = bm25_index.search if bm25_index is not None else empty_search
+    if rerank is _DEFAULT_RERANK:
+        if settings.RERANKER_BACKEND.lower() == "crossencoder":
+            rerank = make_crossencoder_rerank_fn(settings.CROSSENCODER_MODEL)
+        else:
+            rerank = make_rerank_fn(
+                settings.RERANKING_MODEL, settings.FLASHRANK_CACHE_DIR
+            )
+    crossref = None
+    if isinstance(vector_store, VectorStoreBackend):
+
+        def crossref(passages, query):
+            return expand_cross_references(
+                passages, vector_store, query=query, bm25_fn=lexical
+            )
+
+    return V7Runtime(
+        vector_search=make_vector_search_fn(vector_store),
+        bm25_search=lexical,
+        section_fetch=make_section_fetch_fn(vector_store),
+        crossref_expander=crossref,
+        rerank=rerank,
+        expand=expand,
+        visual_proof=visual_proof,
+        generate_simple=generate_simple,
+        generate_complex=generate_complex,
+    )
+
+
+def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> V7Runtime:
     """Initialize V7 pipeline from a vector store (raw Chroma or VectorStoreBackend).
 
     1. Creates vector search wrapper
@@ -467,6 +555,10 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
     3. Builds BM25 index from full corpus
     4. Injects FlashRank reranker into rag_complex
     5. Injects LLM-backed generate and expand functions (if provider available)
+
+    Return the atomically captured runtime for build_graph(runtime=...).
+    The legacy init(); build_graph() pair cannot guarantee which store wins
+    if another initializer runs between those two calls.
     """
     from config.settings import settings
 
@@ -489,6 +581,10 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
                 for doc, meta in zip(all_data["documents"], all_data["metadatas"])
             ]
         init_bm25_index(corpus)
+        from src.v7 import nlp_core
+
+        bound_bm25 = nlp_core._bm25_index
+        lexical = bound_bm25.search if bound_bm25 is not None else empty_search
 
         # Inject section-aware expander for complex path
         try:
@@ -502,7 +598,7 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
         if isinstance(vector_store, VectorStoreBackend):
             pack_context_mod.set_crossref_expander(
                 lambda passages, query: expand_cross_references(
-                    passages, vector_store, query=query
+                    passages, vector_store, query=query, bm25_fn=lexical
                 )
             )
             logger.info("v7 pack_context crossref expander injected successfully")
@@ -574,6 +670,8 @@ def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> None:
                 logger.info("v7 visual proof injected successfully")
         except Exception as exc:
             logger.warning("Failed to initialize visual proof for v7: %s.", exc)
+
+        return capture_legacy_runtime()
 
 
 # Backward-compat alias — remove after one release cycle.

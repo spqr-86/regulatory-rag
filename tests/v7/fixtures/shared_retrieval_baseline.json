@@ -1,0 +1,710 @@
+{
+  "baseline_commit": "2cb34ee7644fc7ea31741f3f46da35dfcb4fe284",
+  "synthetic_backend": true,
+  "cases": [
+    {
+      "name": "simple_accepted",
+      "query": "медосмотр водителей",
+      "config": {
+        "DOMAIN_GATE_THRESHOLD": 0.0,
+        "V8_ENABLE_MULTI_QUERY": false,
+        "ABSTAIN_ON_EMPTY_EVIDENCE": true,
+        "MIN_PASSAGES": 5,
+        "COMPLEX_MIN_PASSAGES": 8,
+        "SIMPLE_TOP_K": 12,
+        "COMPLEX_TOP_K": 60,
+        "HARD_GATE_THRESHOLD": 0.5,
+        "COMPLEX_THRESHOLD": 0.35
+      },
+      "simple": [
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 0.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 0
+          },
+          "chunk_id": 0,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 1.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 1
+          },
+          "chunk_id": 1,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 2.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 2
+          },
+          "chunk_id": 2,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 3.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 3
+          },
+          "chunk_id": 3,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 4.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 4
+          },
+          "chunk_id": 4,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 5.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 5
+          },
+          "chunk_id": 5,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        }
+      ],
+      "complex": [],
+      "error": false,
+      "expected": {
+        "route": "generate",
+        "reason": "context_sufficient",
+        "clarification": false,
+        "technical_failure": false,
+        "stages": [
+          "simple"
+        ],
+        "final_context": [
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 0.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 0
+            },
+            "chunk_id": 0,
+            "doc_id": "doc0.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01639
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 1.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 1
+            },
+            "chunk_id": 1,
+            "doc_id": "doc1.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01613
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 2.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 2
+            },
+            "chunk_id": 2,
+            "doc_id": "doc0.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01587
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 3.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 3
+            },
+            "chunk_id": 3,
+            "doc_id": "doc1.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01562
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 4.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 4
+            },
+            "chunk_id": 4,
+            "doc_id": "doc0.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01538
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 5.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 5
+            },
+            "chunk_id": 5,
+            "doc_id": "doc1.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01515
+          }
+        ],
+        "rejected_origins": []
+      }
+    },
+    {
+      "name": "escalation_accepted",
+      "query": "медосмотр водителей",
+      "config": {
+        "DOMAIN_GATE_THRESHOLD": 0.0,
+        "V8_ENABLE_MULTI_QUERY": false,
+        "ABSTAIN_ON_EMPTY_EVIDENCE": true,
+        "MIN_PASSAGES": 5,
+        "COMPLEX_MIN_PASSAGES": 8,
+        "SIMPLE_TOP_K": 12,
+        "COMPLEX_TOP_K": 60,
+        "HARD_GATE_THRESHOLD": 0.5,
+        "COMPLEX_THRESHOLD": 0.35
+      },
+      "simple": [
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 0.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 0
+          },
+          "chunk_id": 0,
+          "doc_id": "doc0.pdf",
+          "score": 0.3,
+          "vector_score": 0.3
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 1.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 1
+          },
+          "chunk_id": 1,
+          "doc_id": "doc1.pdf",
+          "score": 0.3,
+          "vector_score": 0.3
+        }
+      ],
+      "complex": [
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 0.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 0
+          },
+          "chunk_id": 0,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 1.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 1
+          },
+          "chunk_id": 1,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 2.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 2
+          },
+          "chunk_id": 2,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 3.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 3
+          },
+          "chunk_id": 3,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 4.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 4
+          },
+          "chunk_id": 4,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 5.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 5
+          },
+          "chunk_id": 5,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 6.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 6
+          },
+          "chunk_id": 6,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 7.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 7
+          },
+          "chunk_id": 7,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 8.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 8
+          },
+          "chunk_id": 8,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 9.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 9
+          },
+          "chunk_id": 9,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        }
+      ],
+      "error": false,
+      "expected": {
+        "route": "generate",
+        "reason": "complex_sufficient",
+        "clarification": false,
+        "technical_failure": false,
+        "stages": [
+          "simple",
+          "complex"
+        ],
+        "final_context": [
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 0.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 0
+            },
+            "chunk_id": 0,
+            "doc_id": "doc0.pdf",
+            "score": 0.3,
+            "vector_score": 0.3,
+            "rrf_score": 0.01639
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 1.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 1
+            },
+            "chunk_id": 1,
+            "doc_id": "doc1.pdf",
+            "score": 0.3,
+            "vector_score": 0.3,
+            "rrf_score": 0.01613
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 2.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 2
+            },
+            "chunk_id": 2,
+            "doc_id": "doc0.pdf",
+            "score": 0.8,
+            "vector_score": 0.8
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 3.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 3
+            },
+            "chunk_id": 3,
+            "doc_id": "doc1.pdf",
+            "score": 0.8,
+            "vector_score": 0.8
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 4.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 4
+            },
+            "chunk_id": 4,
+            "doc_id": "doc0.pdf",
+            "score": 0.8,
+            "vector_score": 0.8
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 5.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 5
+            },
+            "chunk_id": 5,
+            "doc_id": "doc1.pdf",
+            "score": 0.8,
+            "vector_score": 0.8
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 6.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 6
+            },
+            "chunk_id": 6,
+            "doc_id": "doc0.pdf",
+            "score": 0.8,
+            "vector_score": 0.8
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 7.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 7
+            },
+            "chunk_id": 7,
+            "doc_id": "doc1.pdf",
+            "score": 0.8,
+            "vector_score": 0.8
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 8.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 8
+            },
+            "chunk_id": 8,
+            "doc_id": "doc0.pdf",
+            "score": 0.8,
+            "vector_score": 0.8
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 9.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 9
+            },
+            "chunk_id": 9,
+            "doc_id": "doc1.pdf",
+            "score": 0.8,
+            "vector_score": 0.8
+          }
+        ],
+        "rejected_origins": []
+      }
+    },
+    {
+      "name": "simple_fallback",
+      "query": "медосмотр водителей",
+      "config": {
+        "DOMAIN_GATE_THRESHOLD": 0.0,
+        "V8_ENABLE_MULTI_QUERY": false,
+        "ABSTAIN_ON_EMPTY_EVIDENCE": true,
+        "MIN_PASSAGES": 5,
+        "COMPLEX_MIN_PASSAGES": 8,
+        "SIMPLE_TOP_K": 12,
+        "COMPLEX_TOP_K": 60,
+        "HARD_GATE_THRESHOLD": 0.5,
+        "COMPLEX_THRESHOLD": 0.35
+      },
+      "simple": [
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 0. Согласно пункту 99.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 0
+          },
+          "chunk_id": 0,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 1. Согласно пункту 99.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 1
+          },
+          "chunk_id": 1,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 2. Согласно пункту 99.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 2
+          },
+          "chunk_id": 2,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 3. Согласно пункту 99.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 3
+          },
+          "chunk_id": 3,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 4. Согласно пункту 99.",
+          "metadata": {
+            "source": "doc0.pdf",
+            "chunk_id": 4
+          },
+          "chunk_id": 4,
+          "doc_id": "doc0.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        },
+        {
+          "text": "Медосмотр водителей обязателен. Фрагмент 5. Согласно пункту 99.",
+          "metadata": {
+            "source": "doc1.pdf",
+            "chunk_id": 5
+          },
+          "chunk_id": 5,
+          "doc_id": "doc1.pdf",
+          "score": 0.8,
+          "vector_score": 0.8
+        }
+      ],
+      "complex": [],
+      "error": false,
+      "expected": {
+        "route": "generate",
+        "reason": "refs_best_effort",
+        "clarification": false,
+        "technical_failure": false,
+        "stages": [
+          "simple",
+          "complex"
+        ],
+        "final_context": [
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 0. Согласно пункту 99.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 0
+            },
+            "chunk_id": 0,
+            "doc_id": "doc0.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01639
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 1. Согласно пункту 99.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 1
+            },
+            "chunk_id": 1,
+            "doc_id": "doc1.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01613
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 2. Согласно пункту 99.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 2
+            },
+            "chunk_id": 2,
+            "doc_id": "doc0.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01587
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 3. Согласно пункту 99.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 3
+            },
+            "chunk_id": 3,
+            "doc_id": "doc1.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01562
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 4. Согласно пункту 99.",
+            "metadata": {
+              "source": "doc0.pdf",
+              "chunk_id": 4
+            },
+            "chunk_id": 4,
+            "doc_id": "doc0.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01538
+          },
+          {
+            "text": "Медосмотр водителей обязателен. Фрагмент 5. Согласно пункту 99.",
+            "metadata": {
+              "source": "doc1.pdf",
+              "chunk_id": 5
+            },
+            "chunk_id": 5,
+            "doc_id": "doc1.pdf",
+            "score": 0.8,
+            "vector_score": 0.8,
+            "rrf_score": 0.01515
+          }
+        ],
+        "rejected_origins": [
+          "merged",
+          "last_attempt"
+        ]
+      }
+    },
+    {
+      "name": "empty",
+      "query": "медосмотр водителей",
+      "config": {
+        "DOMAIN_GATE_THRESHOLD": 0.0,
+        "V8_ENABLE_MULTI_QUERY": false,
+        "ABSTAIN_ON_EMPTY_EVIDENCE": true,
+        "MIN_PASSAGES": 5,
+        "COMPLEX_MIN_PASSAGES": 8,
+        "SIMPLE_TOP_K": 12,
+        "COMPLEX_TOP_K": 60,
+        "HARD_GATE_THRESHOLD": 0.5,
+        "COMPLEX_THRESHOLD": 0.35
+      },
+      "simple": [],
+      "complex": [],
+      "error": false,
+      "expected": {
+        "route": "abstain",
+        "reason": "empty_pool",
+        "clarification": false,
+        "technical_failure": false,
+        "stages": [
+          "simple"
+        ],
+        "final_context": [],
+        "rejected_origins": []
+      }
+    },
+    {
+      "name": "retrieval_error",
+      "query": "медосмотр водителей",
+      "config": {
+        "DOMAIN_GATE_THRESHOLD": 0.0,
+        "V8_ENABLE_MULTI_QUERY": false,
+        "ABSTAIN_ON_EMPTY_EVIDENCE": true,
+        "MIN_PASSAGES": 5,
+        "COMPLEX_MIN_PASSAGES": 8,
+        "SIMPLE_TOP_K": 12,
+        "COMPLEX_TOP_K": 60,
+        "HARD_GATE_THRESHOLD": 0.5,
+        "COMPLEX_THRESHOLD": 0.35
+      },
+      "simple": [],
+      "complex": [],
+      "error": true,
+      "expected": {
+        "route": "abstain",
+        "reason": "retrieval_error",
+        "clarification": false,
+        "technical_failure": true,
+        "stages": [
+          "simple"
+        ],
+        "final_context": [],
+        "rejected_origins": []
+      }
+    },
+    {
+      "name": "clarification",
+      "query": "что?",
+      "config": {
+        "DOMAIN_GATE_THRESHOLD": 0.0,
+        "V8_ENABLE_MULTI_QUERY": false,
+        "ABSTAIN_ON_EMPTY_EVIDENCE": true,
+        "MIN_PASSAGES": 5,
+        "COMPLEX_MIN_PASSAGES": 8,
+        "SIMPLE_TOP_K": 12,
+        "COMPLEX_TOP_K": 60,
+        "HARD_GATE_THRESHOLD": 0.5,
+        "COMPLEX_THRESHOLD": 0.35
+      },
+      "simple": [],
+      "complex": [],
+      "error": false,
+      "expected": {
+        "route": null,
+        "reason": null,
+        "clarification": true,
+        "technical_failure": false,
+        "stages": [],
+        "final_context": [],
+        "rejected_origins": []
+      }
+    }
+  ]
+}

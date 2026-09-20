@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+# ANCHOR: existing hybrid algorithm with graph-bound search callbacks.
+# Input: request state and optional dependencies. Output: one simple attempt.
+
 import logging
 from typing import Callable, List, Optional
 
@@ -40,8 +43,15 @@ def set_expand_fn(fn: Optional[Callable]) -> None:
 # ─── Node ─────────────────────────────────────────────────────────────────
 
 
-def rag_simple(state: RAGState) -> RAGState:
+def rag_simple(state: RAGState, *, dependencies=None) -> RAGState:
     """Fast hybrid retrieval: vector + BM25 → RRF merge."""
+    vector_search = (
+        dependencies.vector_search if dependencies is not None else _vector_search
+    )
+    lexical_search = (
+        dependencies.bm25_search if dependencies is not None else bm25_search
+    )
+    expand_fn = dependencies.expand if dependencies is not None else _expand_fn
     plan = state["plan"]
     rid = state["retrieval_id"]
     active_q = state.get("active_query", state["query"])
@@ -58,10 +68,10 @@ def rag_simple(state: RAGState) -> RAGState:
     # V8 Multi-Query Expand: generate alternative query reformulations
     extra_queries: List[str] = []
     expand_usage: List[dict] = []
-    if _expand_fn is not None and v7_config.V8_ENABLE_MULTI_QUERY:
+    if expand_fn is not None and v7_config.V8_ENABLE_MULTI_QUERY:
         try:
             expanded, expand_usage = unpack(
-                _expand_fn(active_q, n=v7_config.V8_EXPAND_N)
+                expand_fn(active_q, n=v7_config.V8_EXPAND_N)
             )
             extra_queries = expanded or []
         except Exception as exc:
@@ -78,8 +88,8 @@ def rag_simple(state: RAGState) -> RAGState:
 
     try:
         for q in all_queries:
-            v_res = _vector_search(query=q, filters=safe_filters, top_k=plan["top_k"])
-            b_res = bm25_search(query=q, filters=safe_filters, top_k=plan["top_k"])
+            v_res = vector_search(query=q, filters=safe_filters, top_k=plan["top_k"])
+            b_res = lexical_search(query=q, filters=safe_filters, top_k=plan["top_k"])
             all_vector_lists.append(v_res)
             all_bm25_lists.append(b_res)
     except Exception as exc:  # noqa: BLE001 — failure is represented in graph state
