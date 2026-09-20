@@ -872,7 +872,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    from eval.run_retrieval_eval import init_engine
+    from src.backends.vector_store import get_vector_store_backend
+    from src.v7.bridge import init_v7_pipeline
 
     args = _parse_args()
     questions = (
@@ -882,7 +883,10 @@ def main() -> None:
     )
     if args.limit is not None:
         questions = questions[: args.limit]
-    init_engine()
+    # This tool calls rag_simple/rag_complex/pack_context directly (no
+    # dependencies kwarg) — it still needs the legacy global-setter path, not
+    # the bound V7Runtime used by eval/run_retrieval_eval.py's make_retrieval_fn.
+    init_v7_pipeline(get_vector_store_backend(), llm_provider=None)
     result = (
         run_calibration_grid(questions) if args.grid else run_paired_audit(questions)
     )

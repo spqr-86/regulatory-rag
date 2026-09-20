@@ -38,7 +38,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from eval.run_retrieval_eval import (  # noqa: E402
     extract_chunk_ids,
-    init_engine,
     load_gt,
 )
 
@@ -279,7 +278,13 @@ def main() -> None:
     gt = load_gt(args.gt, limit=args.limit)
     print(f"GT: {len(gt)} вопросов из {args.gt}")
 
-    init_engine()
+    from src.backends.vector_store import get_vector_store_backend
+    from src.v7.bridge import init_v7_pipeline
+
+    # This tool calls rag_simple directly (no dependencies kwarg) — it still
+    # needs the legacy global-setter path, not the bound V7Runtime used by
+    # eval/run_retrieval_eval.py's own make_retrieval_fn.
+    init_v7_pipeline(get_vector_store_backend(), llm_provider=None)
     result = run(gt, k=args.k)
     result["gt_path"] = str(args.gt)
 

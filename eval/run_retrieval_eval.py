@@ -137,7 +137,7 @@ def to_candidates(passages: Iterable[dict]) -> List[dict]:
 
 
 def _make_backbone_fn(
-    path: str, return_passages: bool
+    path: str, runtime, return_passages: bool
 ) -> Callable[[str], List[str]] | Callable[[str], List[dict]]:
     """query → [chunk_id] on a single retriever (dense or lexical).
 
@@ -145,8 +145,6 @@ def _make_backbone_fn(
     production; then vector or BM25 is called on its own — no RRF, no rerank.
     """
     from src.v7.hard_gates import validate_filters
-    from src.v7.nlp_core import bm25_search
-    from src.v7.nodes import rag_simple as rag_simple_mod
     from src.v7.nodes.router import router
 
     def _retrieve(query: str) -> List[str] | List[dict]:
@@ -158,11 +156,11 @@ def _make_backbone_fn(
         active_q = state.get("active_query", query)
         safe_filters = validate_filters(state.get("filters"))
         if path == "vector":
-            passages = rag_simple_mod._vector_search(
+            passages = runtime.vector_search(
                 query=active_q, filters=safe_filters, top_k=plan["top_k"]
             )
         else:
-            passages = bm25_search(
+            passages = runtime.bm25_search(
                 query=active_q, filters=safe_filters, top_k=plan["top_k"]
             )
         return (
@@ -173,20 +171,21 @@ def _make_backbone_fn(
 
 
 def make_retrieval_fn(
-    path: str, return_passages: bool = False
+    path: str, runtime, return_passages: bool = False
 ) -> Callable[[str], List[str]] | Callable[[str], List[dict]]:
     """Build query → [chunk_id] on the engine of the given path.
 
     The router node builds the plan so that thresholds, top_k and the glossary
     expansion match production exactly; only the LLM-bearing nodes are skipped.
     With ``return_passages`` the same call returns the candidate dicts (identity
-    plus text and source) that held-out labelling needs.
+    plus text and source) that held-out labelling needs. ``runtime`` is the
+    bound V7Runtime from init_engine() — no module-global search state.
     """
     if path not in PATHS:
         raise ValueError(f"unknown path {path!r}, expected one of {PATHS}")
 
     if path in BACKBONE_PATHS:
-        return _make_backbone_fn(path, return_passages)
+        return _make_backbone_fn(path, runtime, return_passages)
 
     from src.v7.nodes.rag_complex import rag_complex
     from src.v7.nodes.rag_simple import rag_simple
@@ -200,7 +199,7 @@ def make_retrieval_fn(
         state.update(router(state))
         if state.get("clarify_message"):  # too short for the router to plan
             return []
-        update = node(state)
+        update = node(state, dependencies=runtime)
         attempts = [
             a for a in (update.get("retrieval_attempts") or []) if a["stage"] == stage
         ]
@@ -214,8 +213,8 @@ def make_retrieval_fn(
     return _retrieve
 
 
-def init_engine() -> None:
-    """Wire the real Chroma-backed engine into the retrieval nodes."""
+def init_engine():
+    """Build the bound retrieval-only V7Runtime for the real Chroma-backed engine."""
     import os
 
     from dotenv import load_dotenv
@@ -227,10 +226,11 @@ def init_engine() -> None:
     os.environ["LANGCHAIN_TRACING_V2"] = "false"
 
     from src.backends.vector_store import get_vector_store_backend
-    from src.v7.bridge import init_v7_pipeline
+    from src.v7.bridge import build_v7_runtime
 
-    # llm_provider=None: no generator, no query expander — retrieval only.
-    init_v7_pipeline(get_vector_store_backend(), llm_provider=None)
+    # No generate_simple/generate_complex/expand: retrieval only, matches
+    # today's llm_provider=None behavior (build_v7_runtime defaults those to None).
+    return build_v7_runtime(get_vector_store_backend())
 
 
 # ── Metrics ───────────────────────────────────────────────────────────────
@@ -406,8 +406,8 @@ def main() -> None:
     gt = load_gt(args.gt, limit=args.limit)
     print(f"GT: {len(gt)} вопросов из {args.gt}")
 
-    init_engine()
-    result = evaluate(gt, make_retrieval_fn(args.path), ks=tuple(args.ks))
+    runtime = init_engine()
+    result = evaluate(gt, make_retrieval_fn(args.path, runtime), ks=tuple(args.ks))
     result["path"] = args.path
     result["gt_path"] = str(args.gt)
     result["date"] = date.today().isoformat()

@@ -568,6 +568,60 @@ def build_v7_runtime(
     )
 
 
+def build_full_v7_runtime(
+    vector_store, llm_provider: str | None = "gemini"
+) -> V7Runtime:
+    """Bound runtime with generation wired in — the Generic (not retrieval-only)
+    assembly. Mirrors init_v7_pipeline's LLM/rerank/visual-proof construction
+    without mutating any node module's globals.
+    """
+    generate_simple = None
+    generate_complex = None
+    expand = None
+    if llm_provider:
+        try:
+            # Split generators: cheap model for the simple path, full-quality
+            # model for the complex path (answer quality dominates CPS savings).
+            generator_llm_complex = get_complex_llm(thinking_budget=4096)
+            generator_llm_simple = get_simple_llm(thinking_budget=4096)
+            xref_backend = (
+                vector_store if isinstance(vector_store, VectorStoreBackend) else None
+            )
+            generate_simple = make_generate_fn(
+                generator_llm_simple, backend=xref_backend
+            )
+            generate_complex = make_generate_fn(
+                generator_llm_complex, backend=xref_backend
+            )
+
+            expander_llm = get_simple_llm(thinking_budget=0)
+            expand = make_expand_fn(expander_llm)
+
+            logger.info("v7 LLM generator and expander built successfully")
+        except Exception as exc:
+            logger.warning(
+                "Failed to initialize LLM for v7 generator: %s. "
+                "Using rule-based stubs.",
+                exc,
+            )
+
+    visual_proof = None
+    try:
+        visual_proof = make_visual_proof_fn()
+        if visual_proof is not None:
+            logger.info("v7 visual proof built successfully")
+    except Exception as exc:
+        logger.warning("Failed to initialize visual proof for v7: %s.", exc)
+
+    return build_v7_runtime(
+        vector_store,
+        visual_proof=visual_proof,
+        generate_simple=generate_simple,
+        generate_complex=generate_complex,
+        expand=expand,
+    )
+
+
 def init_v7_pipeline(vector_store, llm_provider: str | None = "gemini") -> V7Runtime:
     """Initialize V7 pipeline from a vector store (raw Chroma or VectorStoreBackend).
 

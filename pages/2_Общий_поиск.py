@@ -24,7 +24,7 @@ apply_ipv6_patch_for_googleapis()
 from config.settings import settings  # noqa: E402
 from src.ui_feedback import render_feedback  # noqa: E402
 from src.ui_helpers import find_proof_images  # noqa: E402
-from src.v7.bridge import init_v7_pipeline  # noqa: E402
+from src.v7.bridge import build_full_v7_runtime  # noqa: E402
 from utils.logging import logger  # noqa: E402
 
 # V7 Graph
@@ -75,8 +75,8 @@ def load_resources():
         from src.backends.vector_store import get_vector_store_backend
 
         vector_store = get_vector_store_backend(load_existing=True)
-        init_v7_pipeline(vector_store)
-        v7_app = build_v7_graph().compile()
+        runtime = build_full_v7_runtime(vector_store)
+        v7_app = build_v7_graph(runtime=runtime).compile()
         return v7_app
     except Exception as e:
         st.error(f"Ошибка инициализации V7 Graph: {e}")

@@ -47,7 +47,7 @@ from eval.advanced_generation_metrics import (
     evaluate_faithfulness,
 )
 from src.backends.vector_store import get_vector_store_backend
-from src.v7.bridge import init_v7_pipeline
+from src.v7.bridge import build_full_v7_runtime
 from src.v7.graph import build_graph
 from src.v7.runner import default_writer
 from src.v7.runner import run_query as run_with_telemetry
@@ -268,8 +268,8 @@ def run(
 
     print("Initializing V7 graph...")
     vector_store = get_vector_store_backend(load_existing=True)
-    init_v7_pipeline(vector_store)
-    graph = build_graph().compile()
+    runtime = build_full_v7_runtime(vector_store)
+    graph = build_graph(runtime=runtime).compile()
     telemetry_writer = default_writer()
     # One id for the whole run: it ties the rows in the journal to this file.
     run_id = new_run_id()
