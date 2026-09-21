@@ -266,8 +266,9 @@ shows cost, 👍/👎 rate, routes and p50/p95. Without the stack nothing breaks
 - **Online telemetry** — every query a row in Postgres, Grafana dashboard, 👍/👎 feedback;
   the whole stack is one `docker compose up`
 
-The previous portfolio build is deployed on a VPS (Streamlit, port 8502); the scoped
-Department cutover described above is implemented and accepted but not yet deployed. The full shipped-capability checklist and the
+The scoped Department build is deployed on a VPS as a localhost-only Streamlit service
+(port 8502). HTTP health, configuration loading and local tests pass; a post-deploy live
+generation smoke is still pending. The full shipped-capability checklist and the
 optional post-MVP backlog (independent judge validation, error attribution between retrieval
 and generation, a chunking experiment for tables and headers) are in
 [docs/roadmap.md](./docs/roadmap.md); results, rejected variants and threats to validity are

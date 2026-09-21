@@ -206,6 +206,7 @@ $0.01755 / запрос (n=9, p50 14.04 с) — разница ~16× при до
 ## deploy
 - port: 8502
 - process: tmux session `sia`
-- deployed build: pre-#59 portfolio version
-- scoped Department service/UI cutover (#58/#59): implemented and accepted in PR #62,
-  not deployed as of 21.09.2026
+- bind: `127.0.0.1` (not public)
+- deployed build: merge commit `18ad818` (PR #62, scoped Department service/UI cutover)
+- deploy check 21.09.2026: Streamlit HTTP health OK; v2 collection loaded (1115 chunks),
+  77 targeted tests passed; live generation smoke pending
