@@ -1,11 +1,19 @@
 # Roadmap — regulatory-rag
 
-**Обновлено:** 2026-09-11
+**Обновлено:** 2026-09-21
 
 **Статус:** портфельный MVP завершён. Обязательный маршрут закрыт: offline eval,
 терминальный triage-контракт, учёт стоимости, online monitoring и финальный quality gate.
 Оставшиеся ниже исследования сохранены как optional post-MVP backlog и не блокируют
 релиз или использование проекта в портфолио.
+
+**Текущий инкремент:** общий scoped retrieval завершён по цепочке #56→#59. #56 (V7
+retrieval-only runtime) и #57 (сквозной scope и общий retrieval core) влиты в `main`; #58
+(Department scoped service) и #59 (переключение корневого Streamlit UI) реализованы в PR
+#62. Cutover принят по сравнению old / workers=1 / workers=4: параллельный scoped service
+прошёл 9/9 контрактов. Код ещё не задеплоен: до deploy остаются merge PR #62, smoke и
+закрытие лишнего публичного Streamlit. Отчёт:
+[`department-scoped-service-pr4-wiring.md`](./evaluation/experiments/department-scoped-service-pr4-wiring.md).
 
 Единственное место, где собран маршрут проекта. До этого файла он был размазан по трём
 источникам: конспект курса и аудит покрытия (вне репо, `~/career/courses/llm-zoomcamp/`),
@@ -34,7 +42,10 @@
 - ✅ Offline eval — golden dataset + тест-набор для retrieval из 90 вопросов практиков, цена и латентность на запрос
 - ✅ Онлайн-мониторинг — каждый запрос строкой в Postgres (цена, латентность, маршрут, токены, `source`), дашборд Grafana, 👍/👎 под ответом; весь стек — один `docker compose up`
 - ✅ Q&A подразделений — отдельный стек для вопросов об объекте подразделения поверх внешних и внутренних норм плюс структурированный профиль объекта; типизированный лист, детерминированные гейты цитат и `unknown`-полей; дефолт `v2`
-- ✅ Задеплоен на VPS (порт 8502, Streamlit)
+- ✅ Общий scoped retrieval — V7 retrieval-only runtime, сквозной scope, request-local reuse embedding, общий lazy reranker и ограниченно-параллельные external/internal ветви (#56–#58)
+- ✅ Корневой Streamlit переключён на scoped Department service; generic Q&A оставлен вторичной страницей (#59, PR #62)
+- ✅ Предыдущая портфельная версия задеплоена на VPS (порт 8502, Streamlit)
+- 🟡 Scoped Department cutover реализован и принят по eval, но ещё не смержен/задеплоен
 
 ## Рамка
 

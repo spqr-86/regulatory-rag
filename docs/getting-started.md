@@ -25,6 +25,7 @@ Copy `.env.example` to `.env` and fill in your keys:
 
 ```env
 OPENAI_API_KEY=your_openai_key
+OPENROUTER_API_KEY=your_openrouter_key
 ```
 
 Optional overrides (defaults are in `config/settings.py` and `src/v7/config.py`):
@@ -68,12 +69,27 @@ documents (see [FACTS](reference/FACTS.md#corpus)).
 
 ## Run the UI
 
+The root screen is Department Q&A. It requires the v2 Department index, corpus manifest and
+object-profile source directory:
+
 ```bash
+DEPARTMENT_QA_MODE=v2 \
+CORPUS_MANIFEST_PATH=corpus/manifest.yaml \
+SOURCE_DOCS_PATH=./source_docs_dept \
+CHROMA_DB_PATH=./chroma_db_dept_v2 \
+CHROMA_COLLECTION_NAME=department_demo_v2 \
 streamlit run app.py --server.port 8502
 ```
 
-Open `http://localhost:8502`. The query goes through the V7 graph:
-`intent_gate → router → rag_simple → evaluate_triage → [rag_complex] → pack_context → generate_answer`
+Open `http://localhost:8502`. Select a unit and a scope: `Закон`, `ЛНА`, or
+`Закон + ЛНА`. The scoped service runs the shared V7 graph in retrieval-only mode for the
+selected external/internal corpora, combines that evidence with the unit's object profile,
+and generates one Department answer. External and internal retrieval branches run in
+parallel by default (`DEPARTMENT_RETRIEVAL_WORKERS=4`).
+
+The generic regulatory chat is the secondary Streamlit page
+`pages/2_Общий_поиск.py`. Its query goes through the full V7 graph:
+`intent_gate → router → rag_simple → evaluate_triage → [rag_complex] → generate_answer`
 (insufficient results escalate to `rag_complex`, then answer or abstain).
 
 ## Run the API

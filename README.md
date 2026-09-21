@@ -137,6 +137,12 @@ it survived prompt iterations, a typed object sheet and a post-generation verifi
 only fixed by the model
 ([memo](./docs/evaluation/experiments/department-qa-object-profile.md)).
 
+The current scoped Department service was then checked on the same 9-question set with the
+showcase model: the parallel configuration passed **9/9** contract checks with no
+unknown-field or forbidden-conclusion violations. This is the accepted pre-deploy cutover
+result, not a claim about the older paired run above
+([cutover memo](./docs/evaluation/experiments/department-scoped-service-pr4-wiring.md)).
+
 **Cheap-model selection on 4 adversarial threshold traps** (mode `v2`, one run per model):
 
 | Model | Traps passed | Cost, 4 q |
@@ -171,6 +177,11 @@ ordinary chunks (`v1`). The answer schema adds `object_facts` (facts quoted from
 and `applied_conclusions` (an object fact plus the norm applied to it) to the existing answer
 contract.
 
+This is the main Streamlit screen. The user selects a unit and the corpus scope (law, local
+acts, or both); the service runs external and internal scoped retrieval through the shared V7
+runtime, then generates one answer over the retrieved norms and the full object profile.
+Generic regulatory chat remains available as the secondary page.
+
 `answered` means **"citations checked"**, not "content verified": every cited id exists with
 the right role, no clarifying question is pending, both norm levels are present, a cited
 profile carries a fill-in date, and a deterministic gate rejects an applied conclusion that
@@ -193,13 +204,18 @@ pip install -r requirements.txt
 cp .env.example .env  # fill OPENAI_API_KEY (embeddings, complex path, judge) + OPENROUTER_API_KEY (simple path)
 ```
 
-Drop your PDF/DOCX regulatory documents into `source_docs/`, then:
+For the generic regulatory corpus, drop PDF/DOCX files into `source_docs/`, then:
 
 ```bash
 python index.py                 # index documents → ChromaDB (rebuilds the collection; the old index is removed only after chunking succeeds)
 streamlit run app.py --server.port 8502   # UI at http://localhost:8502
 uvicorn api:app --port 8503                # REST API at http://localhost:8503/docs
 ```
+
+The root UI is Department Q&A and therefore also needs its manifest, object-profile source
+directory, and dedicated Chroma collection. The complete Department launch command and mode
+contract are in [Quick Start](./docs/getting-started.md#run-the-ui). Generic chat is the
+`pages/2_Общий_поиск.py` page in the same Streamlit app.
 
 Defaults: ChromaDB, OpenAI embeddings, and a two-provider LLM split (OpenRouter on the simple
 path, OpenAI on the complex path). Every layer — LLM, embeddings, reranker, vector store — is
@@ -250,7 +266,8 @@ shows cost, 👍/👎 rate, routes and p50/p95. Without the stack nothing breaks
 - **Online telemetry** — every query a row in Postgres, Grafana dashboard, 👍/👎 feedback;
   the whole stack is one `docker compose up`
 
-Deployed on a VPS (Streamlit, port 8502). The full shipped-capability checklist and the
+The previous portfolio build is deployed on a VPS (Streamlit, port 8502); the scoped
+Department cutover described above is implemented and accepted but not yet deployed. The full shipped-capability checklist and the
 optional post-MVP backlog (independent judge validation, error attribution between retrieval
 and generation, a chunking experiment for tables and headers) are in
 [docs/roadmap.md](./docs/roadmap.md); results, rejected variants and threats to validity are
