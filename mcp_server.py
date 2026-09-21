@@ -27,8 +27,8 @@ from utils.logging import configure_logging
 
 configure_logging()
 
-from mcp.server import MCPServer
-from mcp.server.mcpserver import Context
+from mcp.server import MCPServer  # noqa: E402
+from mcp.server.mcpserver import Context  # noqa: E402
 
 OVERFETCH = 4  # кандидатов на реранк на каждый итоговый результат
 ID_SEP = "::"

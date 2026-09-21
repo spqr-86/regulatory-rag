@@ -19,7 +19,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Sequence
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -98,8 +97,8 @@ def build_verdicts(
             }
             continue
         s = validate_label_spans(parse_labels(strict[n], len(candidates)), candidates)
-        l = validate_label_spans(parse_labels(lenient[n], len(candidates)), candidates)
-        out[n] = merge_passes(s, l, candidates)
+        lenient_pass = validate_label_spans(parse_labels(lenient[n], len(candidates)), candidates)
+        out[n] = merge_passes(s, lenient_pass, candidates)
     return out
 
 

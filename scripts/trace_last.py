@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from langsmith import Client
+from langsmith import Client  # noqa: E402
 
 client = Client()
 project = "regulatory-rag"

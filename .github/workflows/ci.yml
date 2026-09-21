@@ -20,7 +20,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install pytest pytest-mock
+          pip install pytest pytest-mock ruff
+
+      - name: Lint
+        run: ruff check .
 
       - name: Run unit tests
         env:

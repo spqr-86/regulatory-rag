@@ -15,8 +15,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.backends.vector_store import get_vector_store_backend
-from src.indexing.file_handler import DocumentProcessor
+from src.backends.vector_store import get_vector_store_backend  # noqa: E402
+from src.indexing.file_handler import DocumentProcessor  # noqa: E402
 
 
 def main() -> None:

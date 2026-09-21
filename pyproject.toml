@@ -5,13 +5,16 @@ description = "RAG showcase over Russian regulatory documents — deterministic 
 requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
-# Dependencies are pinned in requirements.txt (venv workflow, not a distributable package).
+# Dependencies live in requirements.txt (venv workflow, not a distributable package);
+# only langchain-google-genai is version-pinned there, the rest float.
 
 [tool.black]
 line-length = 88
 
 [tool.ruff]
 line-length = 88
+
+[tool.ruff.lint]
 select = ["E", "F", "W"]  # Проверять на ошибки (E), фатальные ошибки (F) и предупреждения (W)
 ignore = ["E501"]  # Игнорировать ошибку "строка слишком длинная", так как Black сам этим управляет
 

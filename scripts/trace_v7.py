@@ -163,9 +163,6 @@ def infer_path(state: dict) -> str:
         return " → ".join(parts) + " → [no retrieval]"
 
     details = state.get("sufficiency_details") or {}
-    triage = details.get("triage", "?")
-
-    details = state.get("sufficiency_details") or {}
     triage_after_simple = details.get("triage", "?")
     verif = state.get("verification") or {}
     verdict = verif.get("verdict")
