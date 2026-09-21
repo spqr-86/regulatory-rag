@@ -192,7 +192,7 @@ profile carries a fill-in date, and a deterministic gate rejects an applied conc
 cites a field the sheet marks `unknown`. Whether the cited text actually supports the claim is
 measured in eval, not enforced at runtime — and the UI says so.
 
-- Specs: [department Q&A MVP](./docs/superpowers/specs/2026-09-14-department-qa-mvp-design.md) · [object profile](./docs/superpowers/specs/2026-09-15-object-profile-design.md)
+- Specs: [department Q&A MVP](./docs/design/2026-09-14-department-qa-mvp-design.md) · [object profile](./docs/design/2026-09-15-object-profile-design.md)
 - Mode, env and guarantee boundary: [FACTS § department qa](./docs/reference/FACTS.md#department-qa)
 - Results and known error: [evaluation report](./docs/evaluation/README.md)
 

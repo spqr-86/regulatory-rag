@@ -179,7 +179,7 @@ DeepSeek V4.1 Flash — самая дешёвая модель из прошед
 отклоняет вывод, опирающийся на поле со статусом `unknown`. Действительно ли цитата
 подтверждает утверждение — меряется в eval, а не в рантайме, и UI это говорит.
 
-- Спеки: [Q&A подразделений](./docs/superpowers/specs/2026-09-14-department-qa-mvp-design.md) · [профиль объекта](./docs/superpowers/specs/2026-09-15-object-profile-design.md)
+- Спеки: [Q&A подразделений](./docs/design/2026-09-14-department-qa-mvp-design.md) · [профиль объекта](./docs/design/2026-09-15-object-profile-design.md)
 - Режим, env и граница гарантии: [FACTS § department qa](./docs/reference/FACTS.md#department-qa)
 - Результаты и известная ошибка: [отчёт по eval](./docs/evaluation/README.md)
 
