@@ -63,7 +63,7 @@ def _profile(unit_id: str) -> ObjectProfile:
     )
 
 
-def _fake_stack() -> DepartmentStack:
+def _fake_stack(mode: str = "v2") -> DepartmentStack:
     manifest = Manifest(
         snapshot_id="pb_demo_test",
         organization_id="org_test",
@@ -75,7 +75,7 @@ def _fake_stack() -> DepartmentStack:
         object_profiles={},
     )
     config = ModeConfig(
-        mode="v2",
+        mode=mode,
         chroma_db_path="./chroma_db_dept_v2",
         collection="department_demo_v2",
         prompt_version="v4",
@@ -192,6 +192,24 @@ def test_page_shows_stack_error_instead_of_traceback(monkeypatch, tmp_path, exc)
     assert str(exc) in at.error[0].value
 
 
+def test_page_stops_with_error_when_stack_mode_is_not_v2(monkeypatch, tmp_path):
+    """DEPARTMENT_QA_MODE=v1 renders a v1-schema model_fn against the v5 prompt
+    and scope filters with no v1 metadata — the UI must refuse, not degrade
+    silently (v1 stays supported only via eval/run_object_profile_pair.py)."""
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    monkeypatch.setattr(
+        wiring, "build_department_stack", lambda: _fake_stack(mode="v1")
+    )
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+
+    assert not at.exception
+    assert len(at.error) == 1
+    assert "v2" in at.error[0].value
+    # Nothing past the guard ran: no unit selector, no question screen.
+    assert not at.subheader
+
+
 EVIDENCE = [
     Evidence(
         id="ext_001",
@@ -265,7 +283,7 @@ def _submit(monkeypatch, tmp_path, response: DepartmentResponse) -> AppTest:
     monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
     monkeypatch.setattr(wiring, "build_department_stack", _fake_stack)
     monkeypatch.setattr(
-        "src.department_qa.service.answer_question", lambda *a, **k: response
+        "src.department_qa.service.answer_scoped_question", lambda *a, **k: response
     )
 
     at = AppTest.from_file(PAGE, default_timeout=30).run()
@@ -339,7 +357,7 @@ def test_submit_shows_real_progress_stages(monkeypatch, tmp_path):
                 progress_fn(stage)
         return _answered_response()
 
-    monkeypatch.setattr("src.department_qa.service.answer_question", fake_answer)
+    monkeypatch.setattr("src.department_qa.service.answer_scoped_question", fake_answer)
 
     at = AppTest.from_file(PAGE, default_timeout=30).run()
     at.text_input[0].set_value("Как часто требуется проверка?").run()
@@ -456,3 +474,71 @@ def test_feedback_buttons_show_and_record_when_writer_available(monkeypatch, tmp
 
     [b for b in at.button if b.label == "👍"][0].click().run()
     assert fake.votes == [("t", 1, None)]
+
+
+def test_corpus_radio_default_and_options(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    monkeypatch.setattr(wiring, "build_department_stack", _fake_stack)
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+
+    assert not at.exception
+    assert len(at.radio) == 1
+    assert at.radio[0].options == ["Закон", "ЛНА", "Закон + ЛНА"]
+    assert at.radio[0].value == "Закон + ЛНА"
+
+
+def test_profile_checkbox_enabled_only_with_profile(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    monkeypatch.setattr(wiring, "build_department_stack", _fake_stack)
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+    # default selected unit is unit_dispatch — no profile in the fixture
+    assert at.selectbox[0].value == "unit_dispatch"
+    assert len(at.checkbox) == 1
+    assert at.checkbox[0].disabled
+    assert at.checkbox[0].value is False
+
+    at.selectbox[0].select_index(2).run()  # unit_office — has a profile
+    assert not at.exception
+    assert len(at.checkbox) == 1
+    assert not at.checkbox[0].disabled
+    assert at.checkbox[0].value is True
+
+
+def test_submit_calls_scoped_service_with_context(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    monkeypatch.setattr(wiring, "build_department_stack", _fake_stack)
+
+    captured = {}
+
+    def fake_answer_scoped(question, context, *args, **kwargs):
+        captured["context"] = context
+        return _answered_response()
+
+    monkeypatch.setattr(
+        "src.department_qa.service.answer_scoped_question", fake_answer_scoped
+    )
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+    at.selectbox[0].select_index(2).run()  # unit_office — has a profile
+    at.radio[0].set_value("Закон").run()
+    at.checkbox[0].set_value(False).run()
+    at.text_input[0].set_value("Как часто требуется проверка?").run()
+    [b for b in at.button if b.label == "Спросить"][0].click().run()
+
+    assert not at.exception
+    context = captured["context"]
+    assert context.corpora == ("external",)
+    assert context.unit_id == "unit_office"
+    assert context.include_object_profile is False
+
+
+def test_changing_corpus_clears_last_answer(monkeypatch, tmp_path):
+    at = _submit(monkeypatch, tmp_path, _answered_response())
+    assert "Ваш вопрос" in [h.value for h in at.subheader]
+
+    at.radio[0].set_value("Закон").run()
+
+    assert not at.exception
+    assert "Ваш вопрос" not in [h.value for h in at.subheader]

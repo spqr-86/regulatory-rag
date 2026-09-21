@@ -205,7 +205,13 @@ questions:
         status: needs_review
         reasons: [external_evidence_missing]
         note: в v1 лист — внутренний документ, fact_only не существует
-      v2: {status: answered, reasons: []}
+      v2:
+        status: needs_context
+        reasons: [applicability_unclear]
+        note: >-
+          режим работы поста охраны БЦ (круглосуточный/нет) ни в одном источнике не
+          зафиксирован; лист подтверждает только приём сигнала постом БЦ, не его график —
+          решение Петра 20.09, было answered
     sources:
       - {document_id: int_unit_office_list, section: "5 Дежурный персонал"}
   - n: 6

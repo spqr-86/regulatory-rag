@@ -172,7 +172,9 @@ def format_scan_report(scan: dict) -> str:
     spread = max(scores) - min(scores)
 
     lines.append("")
-    lines.append(f"  рекомендация: {scan['param']} = {best} (сейчас в конфиге {baseline})")
+    lines.append(
+        f"  рекомендация: {scan['param']} = {best} (сейчас в конфиге {baseline})"
+    )
     if spread < NOISE_SPREAD:
         lines.append(
             f"  разброс {metric} по всему скану {spread:.4f} < {NOISE_SPREAD} —"
@@ -185,7 +187,9 @@ def format_scan_report(scan: dict) -> str:
         lines.append("")
         lines.append(f"  кривая Hit Rate@k при {scan['param']} = {best}:")
         for k in sorted(int(k) for k in curve):
-            lines.append(f"    k={k:<3} {curve[k] if k in curve else curve[str(k)]:.3f}")
+            lines.append(
+                f"    k={k:<3} {curve[k] if k in curve else curve[str(k)]:.3f}"
+            )
     return "\n".join(lines)
 
 
@@ -194,14 +198,20 @@ def format_scan_report(scan: dict) -> str:
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--path", choices=("simple",), default="simple",
-                   help="complex is excluded: its held-out GT is pooled from its own output")
+    p.add_argument(
+        "--path",
+        choices=("simple",),
+        default="simple",
+        help="complex is excluded: its held-out GT is pooled from its own output",
+    )
     p.add_argument("--param", default="RRF_K")
     p.add_argument("--values", type=int, nargs="+", default=list(DEFAULT_RRF_VALUES))
     p.add_argument("--gt", type=Path, default=DEFAULT_GT)
     p.add_argument("--limit", type=int, default=None, help="first N questions only")
     p.add_argument("--ks", type=int, nargs="+", default=list(DEFAULT_KS))
-    p.add_argument("--metric", default=DEFAULT_METRIC, help="metric the winner is picked by")
+    p.add_argument(
+        "--metric", default=DEFAULT_METRIC, help="metric the winner is picked by"
+    )
     p.add_argument("--curve-max-k", type=int, default=DEFAULT_CURVE_MAX_K)
     p.add_argument("--out", type=Path, default=None)
     return p.parse_args()
@@ -213,12 +223,12 @@ def main() -> None:
     print(f"GT: {len(gt)} вопросов из {args.gt}")
     print(f"скан {args.param}: {args.values}\n")
 
-    init_engine()
+    runtime = init_engine()
     scan = scan_param(
         args.param,
         args.values,
         gt,
-        lambda: make_retrieval_fn(args.path),
+        lambda: make_retrieval_fn(args.path, runtime),
         ks=tuple(args.ks),
     )
     scan["metric"] = args.metric

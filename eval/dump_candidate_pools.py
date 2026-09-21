@@ -67,9 +67,9 @@ def main() -> int:
     if args.limit:
         records = records[: args.limit]
 
-    from eval.run_retrieval_eval import init_engine  # noqa: PLC0415
+    from eval.label_golden_retrieval import init_retrieval_engine  # noqa: PLC0415
 
-    init_engine()
+    init_retrieval_engine()
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     items = []

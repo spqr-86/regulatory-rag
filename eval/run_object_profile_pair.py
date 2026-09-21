@@ -37,6 +37,8 @@ import hashlib
 import json
 import re
 import sys
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -133,10 +135,20 @@ def run_mode(
     verifier_log: list[dict] | None = None,
     enable_verifier: bool = True,
 ) -> list[dict]:
-    from src.department_qa.service import answer_question
+    from src.department_qa.contract import RequestContext
+    from src.department_qa.service import (
+        ServiceLimits,
+        answer_question,
+        answer_scoped_question,
+    )
+    from src.v7.runner import default_writer
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    telemetry_writer = default_writer()
+    # One id for the whole run (matches run_v7_eval.py's new_run_id): batch
+    # semantics, not a fresh id per question.
+    run_id = f"eval-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:4]}"
     records = []
     for q in questions:
         prompts: list[str] = []
@@ -165,19 +177,45 @@ def run_mode(
             _passed.append({"filters": filters, "hits": hits})
             return hits
 
-        response = answer_question(
-            q["question"],
-            q["unit_id"],
-            search_fn,
-            model_fn,
-            snapshot_id=stack.manifest.snapshot_id,
-            profile=profile,
-            prompt_version=stack.config.prompt_version,
-            verifier_fn=verifier_fn if stack_verifier is not None else None,
-        )
+        if stack.config.mode == "v2" and getattr(stack, "retrieve_fn", None):
+            response = answer_scoped_question(
+                q["question"],
+                RequestContext(
+                    unit_id=q["unit_id"],
+                    include_object_profile=profile is not None,
+                ),
+                stack.retrieve_fn,
+                model_fn,
+                known_units=stack.known_units,
+                snapshot_id=stack.manifest.snapshot_id,
+                profiles=stack.config.profiles,
+                limits=getattr(stack, "service_limits", None) or ServiceLimits(),
+                writer=telemetry_writer,
+                source="eval",
+                run_id=run_id,
+            )
+            # Preserve the historical meaning of search_calls (raw hybrid search
+            # calls). The scoped graph records its own accepted attempts below.
+            passed = []
+        else:
+            response = answer_question(
+                q["question"],
+                q["unit_id"],
+                search_fn,
+                model_fn,
+                snapshot_id=stack.manifest.snapshot_id,
+                profile=profile,
+                prompt_version=stack.config.prompt_version,
+                verifier_fn=verifier_fn if stack_verifier is not None else None,
+            )
         record = {
             "n": q["n"],
             "mode": stack.config.mode,
+            "prompt_version": (
+                "v5"
+                if stack.config.mode == "v2" and getattr(stack, "retrieve_fn", None)
+                else stack.config.prompt_version
+            ),
             "unit_id": q["unit_id"],
             "question": q["question"],
             "prompt": prompts[0] if prompts else "",
@@ -193,6 +231,8 @@ def run_mode(
             ),
             "raw_verifier_output": list(verifier_log or []),
             "search_calls": passed,
+            "retrieval_trace": response.retrieval_trace,
+            "retrieval_stats": response.retrieval_stats,
             "evidence_ids": prompt_evidence_ids(prompts[0]) if prompts else [],
             "profile_sha256": profile.content_sha256 if profile else None,
             "response": json.loads(response.model_dump_json()),
@@ -263,9 +303,14 @@ def main() -> int:
         "chroma_db_path": settings.CHROMA_DB_PATH,
         "collection": settings.CHROMA_COLLECTION_NAME,
         "chunks": sum(1 for _ in stack.store.iter_all_documents()),
-        "prompt_version": stack.config.prompt_version,
+        "prompt_version": (
+            "v5"
+            if stack.config.mode == "v2" and getattr(stack, "retrieve_fn", None)
+            else stack.config.prompt_version
+        ),
         "verify_prompt_version": "v1",
-        "verification_enabled": not args.no_verify,
+        "verification_enabled": not args.no_verify
+        and not (stack.config.mode == "v2" and getattr(stack, "retrieve_fn", None)),
         "expectations_sha256": hashlib.sha256(
             args.expectations.read_bytes()
         ).hexdigest(),

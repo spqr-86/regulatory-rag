@@ -111,6 +111,7 @@ model selection was done on semantics, not on the validator. Details:
 | Does a structured triage gap help? | escalations 0.248 → 0.128, no hit lost, on 133 | shipped ([memo](./experiments/triage-gap-terminal-contract.md)) |
 | Sheet as chunks or as a profile? | v2 beats v1 on all three department metrics | `v2` default ([memo](./experiments/department-qa-object-profile.md)) |
 | Can a cheaper model hold the traps? | DeepSeek V4.1 Flash 4/4 at ~1/8 the cost of GPT-5 mini | showcase default ([memo](./experiments/cheap-model-selection.md)) |
+| Does scoped-service wiring (PR4/#59) change retrieval behaviour vs the old Department path? | Old vs new: 8/9 evidence byte-identical, both regressions are a prompt version change; workers=1 vs 4: identical prompt/evidence on every question | cutover accepted, no new paid run for wiring-only PR4 ([memo](./experiments/department-scoped-service-pr4-wiring.md)) |
 
 ## Threats to validity
 

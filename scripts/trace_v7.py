@@ -194,18 +194,19 @@ def trace(query: str, use_chroma: bool = True) -> None:
 
     from src.v7.graph import build_graph
 
+    runtime = None
     if use_chroma:
         from src.backends.vector_store import get_vector_store_backend
-        from src.v7.bridge import init_v7_pipeline
+        from src.v7.bridge import build_full_v7_runtime
 
         print(f"{DIM}Загружаю vector store…{RESET}", end="", flush=True)
         vs = get_vector_store_backend(load_existing=True)
-        init_v7_pipeline(vs)
+        runtime = build_full_v7_runtime(vs)
         print(f" {GREEN}готово{RESET}")
     else:
         print(f"{YELLOW}Stub mode (нет ChromaDB){RESET}")
 
-    app = build_graph().compile()
+    app = build_graph(runtime=runtime).compile()
     state: dict[str, Any] = app.invoke({"query": query})
 
     # ── Plan ──

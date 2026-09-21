@@ -80,12 +80,24 @@ below. `v2` is kept unchanged so the 2026-09-15 paired run can be re-rendered.
 | `v1` | `./chroma_db_dept` | `department_demo` (sheets in the index) | not loaded, `profile=None` | `department_answer` v1 | `ModelAnswerV1` |
 | `v2` | `./chroma_db_dept_v2` | `department_demo_v2` (sheets excluded, `role: object_profile`) | `load_profiles` | `department_answer` v4 | `ModelAnswer` |
 
+Scoped Department service (Issue #58) uses `department_answer` v5 and the same V2
+manifest/index through the retrieval-only V7 graph. Historical v1/v2 pair artifacts
+keep their recorded prompt versions. The root UI is wired to this scoped service by Issue
+#59; `DEPARTMENT_QA_MODE=v1` is rejected explicitly because the scoped service requires the
+v2 object-profile contract. Generic Q&A remains on `pages/2_Общий_поиск.py`.
+
+Cutover evidence (20.09.2026): the parallel scoped service (`workers=4`, production default)
+passed 9/9 contract checks on the object-profile pair set, with 0
+`applied_on_unknown` and 0 forbidden-conclusion violations. The old service baseline was
+8/9. The 8/9→9/9 difference includes prompt v4→v5 and the corrected q5 expectation; it is
+not attributed to the retrieval refactor. See
+`docs/evaluation/experiments/department-scoped-service-pr4-wiring.md`.
+
 Two Chroma paths exist because `index.py` deletes the whole `CHROMA_DB_PATH` folder before
 writing (not just the collection) — building `department_demo_v2` into `chroma_db_dept` would
 wipe v1. Both stores are gitignored (`chroma_db*/`).
 
-Launch the page (v2; for v1 use the v1 path/collection and the v1 manifest copy from
-[run-evaluation](../how-to/run-evaluation.md)): `DEPARTMENT_QA_MODE=v2 CORPUS_MANIFEST_PATH=corpus/manifest.yaml
+Launch the page: `DEPARTMENT_QA_MODE=v2 CORPUS_MANIFEST_PATH=corpus/manifest.yaml
 SOURCE_DOCS_PATH=./source_docs_dept CHROMA_DB_PATH=./chroma_db_dept_v2 CHROMA_COLLECTION_NAME=department_demo_v2
 .venv/bin/streamlit run app.py`. A mismatched env is shown on the page as an error.
 
@@ -194,3 +206,6 @@ $0.01755 / запрос (n=9, p50 14.04 с) — разница ~16× при до
 ## deploy
 - port: 8502
 - process: tmux session `sia`
+- deployed build: pre-#59 portfolio version
+- scoped Department service/UI cutover (#58/#59): implemented and accepted in PR #62,
+  not deployed as of 21.09.2026

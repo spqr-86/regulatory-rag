@@ -32,6 +32,7 @@ def test_concurrent_same_key_computes_embedding_once():
         release.set()
         assert first.result(timeout=2) == second.result(timeout=2) == [1.0]
     assert calls == 1
+    assert memo.stats() == {"computations": 1, "api_attempts": 1, "cache_hits": 1}
 
 
 @pytest.mark.unit

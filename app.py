@@ -30,7 +30,8 @@ from src.department_qa.object_profile import (  # noqa: E402
     ObjectProfileError,
     typed_fields_prompt_lines,
 )
-from src.department_qa.service import answer_question  # noqa: E402
+from src.department_qa.contract import RequestContext  # noqa: E402
+from src.department_qa.service import answer_scoped_question  # noqa: E402
 from src.department_qa.view import (  # noqa: E402
     basis_cards,
     build_reasoning_chains,
@@ -46,6 +47,7 @@ from src.department_qa.wiring import (  # noqa: E402
     stack_cache_key,
 )
 from src.ui_feedback import render_feedback  # noqa: E402
+from src.v7.runner import default_writer  # noqa: E402
 
 st.set_page_config(
     page_title="Regulatory Compliance Assistant", page_icon="🧭", layout="wide"
@@ -64,6 +66,13 @@ _CSS = """
 </style>
 """
 st.markdown(_CSS, unsafe_allow_html=True)
+
+# Spec §8: default is both corpora ("Закон + ЛНА"), radio order fixed.
+_CORPUS_OPTIONS: dict[str, tuple[str, ...]] = {
+    "Закон": ("external",),
+    "ЛНА": ("internal",),
+    "Закон + ЛНА": ("external", "internal"),
+}
 
 _EXAMPLES = [
     "Какие требования применимы?",
@@ -97,6 +106,12 @@ def load_department_stack(cache_key):
     # cache_key is stack_cache_key(): it changes when Streamlit hot-reloads local
     # modules, so the stale cached stack is not reused across a reload.
     return build_department_stack()
+
+
+@st.cache_resource(show_spinner=False)
+def get_telemetry_writer():
+    """One writer per Streamlit process, same pattern as pages/2_Общий_поиск.py."""
+    return default_writer()
 
 
 def _unit_names(manifest) -> dict[str, str]:
@@ -280,6 +295,13 @@ except (RuntimeError, ObjectProfileError) as exc:  # fail-fast config errors, sh
     st.error(str(exc))
     st.stop()
 
+if stack.config.mode != "v2":
+    st.error(
+        "Этот экран поддерживает только DEPARTMENT_QA_MODE=v2. Режим v1 доступен "
+        "только через eval/run_object_profile_pair.py для воспроизведения baseline."
+    )
+    st.stop()
+
 manifest, config = stack.manifest, stack.config
 units = sorted({m["unit_id"] for m in manifest.documents.values() if m.get("unit_id")})
 names = _unit_names(manifest)
@@ -299,11 +321,33 @@ unit = st.selectbox(
     ),
 )
 
-if st.session_state.get("last_unit") != unit:
+profile = config.profiles.get(unit) if unit else None
+
+corpus_label = st.radio(
+    "Корпус",
+    list(_CORPUS_OPTIONS.keys()),
+    index=2,
+    horizontal=True,
+)
+selected_corpora = _CORPUS_OPTIONS[corpus_label]
+
+include_profile = st.checkbox(
+    "Учитывать данные объекта",
+    value=profile is not None,
+    disabled=profile is None,
+    key=f"include_profile_{unit}",
+)
+
+if (
+    st.session_state.get("last_unit") != unit
+    or st.session_state.get("last_corpora") != selected_corpora
+    or st.session_state.get("last_profile_flag") != include_profile
+):
     st.session_state.pop("last_answer", None)
     st.session_state["last_unit"] = unit
+    st.session_state["last_corpora"] = selected_corpora
+    st.session_state["last_profile_flag"] = include_profile
 
-profile = config.profiles.get(unit) if unit else None
 if parts := compact_profile(profile):
     st.markdown(" · ".join(parts))
 if profile is not None:
@@ -339,15 +383,26 @@ if (submit or example_clicked) and question.strip():
                 progress.write(label)
 
         started = time.perf_counter()
-        response = answer_question(
+        context = RequestContext(
+            corpora=selected_corpora,
+            unit_id=unit,
+            include_object_profile=include_profile,
+        )
+        scoped_kwargs = {
+            "known_units": stack.known_units,
+            "snapshot_id": manifest.snapshot_id,
+            "profiles": config.profiles,
+            "progress_fn": on_progress,
+        }
+        if stack.service_limits is not None:
+            scoped_kwargs["limits"] = stack.service_limits
+        response = answer_scoped_question(
             question.strip(),
-            unit,
-            stack.search_fn,
+            context,
+            stack.retrieve_fn,
             stack.model_fn,
-            snapshot_id=manifest.snapshot_id,
-            profile=profile,
-            prompt_version=config.prompt_version,
-            progress_fn=on_progress,
+            writer=get_telemetry_writer(),
+            **scoped_kwargs,
         )
         latency_s = time.perf_counter() - started
         progress.update(label="Готово", state="complete", expanded=False)

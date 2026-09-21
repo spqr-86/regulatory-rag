@@ -61,14 +61,14 @@ async def lifespan(app: FastAPI):
     logger.info("api.startup: loading vector store and v7 pipeline")
     try:
         from src.backends.vector_store import get_vector_store_backend
-        from src.v7.bridge import init_v7_pipeline
+        from src.v7.bridge import build_full_v7_runtime
         from src.v7.graph import build_graph
         from src.v7.runner import default_writer
 
         vector_store = get_vector_store_backend(load_existing=True)
-        init_v7_pipeline(vector_store)
+        runtime = build_full_v7_runtime(vector_store)
         app.state.vector_store = vector_store
-        app.state.pipeline = build_graph().compile()
+        app.state.pipeline = build_graph(runtime=runtime).compile()
         app.state.telemetry_writer = default_writer()
         logger.info("api.startup: v7 pipeline ready")
     except Exception as exc:

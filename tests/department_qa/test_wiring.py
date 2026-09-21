@@ -14,6 +14,7 @@ from src.department_qa.contract import ModelAnswer, ModelAnswerV1, VerificationR
 from src.department_qa.wiring import (
     build_mode_config,
     ensure_store_matches,
+    ensure_manifest_matches,
     make_hybrid_search_fn,
     make_model_fn,
     stack_cache_key,
@@ -173,6 +174,93 @@ def test_store_must_match_mode(path, collection):
         )
     with pytest.raises(RuntimeError, match="DEPARTMENT_QA_MODE=v2"):
         ensure_store_matches(config, path, collection)
+
+
+@pytest.mark.unit
+def test_manifest_store_match_rejects_wrong_snapshot_and_indexed_profile():
+    manifest = SimpleNamespace(
+        snapshot_id="snap-2",
+        object_profiles={"unit_1": "profile.md"},
+        documents={"profile.md": {"document_id": "profile-1"}},
+    )
+    wrong_snapshot = SimpleNamespace(
+        iter_all_documents=lambda: iter(
+            [{"metadata": {"snapshot_id": "snap-1", "document_id": "law-1"}}]
+        )
+    )
+    with pytest.raises(RuntimeError, match="snapshot"):
+        ensure_manifest_matches(manifest, wrong_snapshot)
+
+    indexed_profile = SimpleNamespace(
+        iter_all_documents=lambda: iter(
+            [{"metadata": {"snapshot_id": "snap-2", "document_id": "profile-1"}}]
+        )
+    )
+    with pytest.raises(RuntimeError, match="object profile"):
+        ensure_manifest_matches(manifest, indexed_profile)
+
+
+@pytest.mark.unit
+def test_manifest_store_match_requires_exact_document_set_and_scope_metadata():
+    manifest = SimpleNamespace(
+        snapshot_id="snap-2",
+        object_profiles={},
+        documents={
+            "law.md": {"document_id": "law-1", "source_type": "external"},
+            "lna.md": {
+                "document_id": "lna-1",
+                "source_type": "internal",
+                "audience": "company",
+                "organization_id": "org-1",
+            },
+        },
+    )
+    correct = SimpleNamespace(
+        iter_all_documents=lambda: iter(
+            [
+                {
+                    "metadata": {
+                        "snapshot_id": "snap-2",
+                        "document_id": "law-1",
+                        "source_type": "external",
+                    }
+                },
+                {
+                    "metadata": {
+                        "snapshot_id": "snap-2",
+                        "document_id": "lna-1",
+                        "source_type": "internal",
+                        "audience": "company",
+                        "organization_id": "org-1",
+                    }
+                },
+            ]
+        )
+    )
+    ensure_manifest_matches(manifest, correct)
+
+    extra = SimpleNamespace(
+        iter_all_documents=lambda: iter(
+            [
+                {
+                    "metadata": {
+                        "snapshot_id": "snap-2",
+                        "document_id": "law-1",
+                        "source_type": "external",
+                    }
+                },
+                {
+                    "metadata": {
+                        "snapshot_id": "snap-2",
+                        "document_id": "other",
+                        "source_type": "external",
+                    }
+                },
+            ]
+        )
+    )
+    with pytest.raises(RuntimeError, match="outside manifest"):
+        ensure_manifest_matches(manifest, extra)
 
 
 @pytest.mark.unit

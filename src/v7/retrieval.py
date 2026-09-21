@@ -17,6 +17,7 @@ from src.v7.graph import build_graph
 from src.v7.hard_gates import validate_scope_filters
 from src.v7.runtime import V7Runtime
 from src.v7.reranker import SharedReranker
+from src.v7.nodes.router import router
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,9 @@ class RequestEmbeddingMemo:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._futures: dict[tuple[str, str], Future[list[float]]] = {}
+        self._computations = 0
+        self._api_attempts = 0
+        self._cache_hits = 0
 
     def get_or_compute(self, *, space: str, text: str, embed) -> list[float]:
         key = (space, text)
@@ -46,14 +50,26 @@ class RequestEmbeddingMemo:
                 future = Future()
                 self._futures[key] = future
                 owner = True
+                self._computations += 1
             else:
                 owner = False
+                self._cache_hits += 1
         if owner:
             try:
+                with self._lock:
+                    self._api_attempts += 1
                 future.set_result(embed(text))
             except Exception as exc:
                 future.set_exception(exc)
         return future.result()
+
+    def stats(self) -> dict[str, int]:
+        with self._lock:
+            return {
+                "computations": self._computations,
+                "api_attempts": self._api_attempts,
+                "cache_hits": self._cache_hits,
+            }
 
 
 def bind_request_embedding(
@@ -97,6 +113,7 @@ def retrieve_context(
     filters: dict | None = None,
     strict_scope: bool = False,
     deadline: float | None = None,
+    require_multi_doc: bool | None = None,
 ) -> ScopedRetrievalResult:
     """Invoke the shared graph with one isolated request state.
 
@@ -108,8 +125,21 @@ def retrieve_context(
         filters = validate_scope_filters(filters or {})
     if deadline is not None and isinstance(runtime.rerank, SharedReranker):
         runtime = replace(runtime, rerank=partial(runtime.rerank, deadline=deadline))
+    overrides = None
+    if require_multi_doc is not None:
+
+        def scoped_router(state):
+            update = router(state)
+            if plan := update.get("plan"):
+                update = {
+                    **update,
+                    "plan": {**plan, "require_multi_doc": require_multi_doc},
+                }
+            return update
+
+        overrides = {"router": scoped_router}
     state = (
-        build_graph(runtime=runtime, retrieval_only=True)
+        build_graph(overrides, runtime=runtime, retrieval_only=True)
         .compile()
         .invoke({"query": question, "filters": copy.deepcopy(filters)})
     )

@@ -292,9 +292,8 @@ class TestRetrievalFnParity:
 
     @pytest.fixture
     def stub_engine(self):
-        from src.v7 import nlp_core
-        from src.v7.nodes import rag_complex as rag_complex_mod
-        from src.v7.nodes import rag_simple as rag_simple_mod
+        from src.v7.nlp_core import BM25Index
+        from src.v7.runtime import V7Runtime
 
         corpus = [
             {
@@ -325,21 +324,15 @@ class TestRetrievalFnParity:
                 )
             return out
 
-        prev_bm25 = nlp_core._bm25_index
-        nlp_core.init_bm25_index(corpus)
-        rag_simple_mod.set_vector_search(fake_vector_search)
-        rag_complex_mod.set_vector_search(fake_vector_search)
-        yield
-        # The BM25 index and the injected searches are module globals — leaving
-        # them behind reds out unrelated tests in the same process.
-        nlp_core._bm25_index = prev_bm25
-        rag_simple_mod.set_vector_search(rag_simple_mod._default_vector_search)
-        rag_complex_mod.set_vector_search(rag_complex_mod._default_vector_search)
+        bm25_index = BM25Index(corpus)
+        return V7Runtime(
+            vector_search=fake_vector_search, bm25_search=bm25_index.search
+        )
 
-    def _graph_chunk_ids(self, stage: str) -> list[str]:
+    def _graph_chunk_ids(self, runtime, stage: str) -> list[str]:
         from src.v7.graph import build_graph
 
-        result = build_graph().compile().invoke({"query": self.QUERY})
+        result = build_graph(runtime=runtime).compile().invoke({"query": self.QUERY})
         attempts = [
             a for a in (result.get("retrieval_attempts") or []) if a["stage"] == stage
         ]
@@ -347,19 +340,19 @@ class TestRetrievalFnParity:
         return extract_chunk_ids(attempts[-1]["passages"])
 
     def test_simple_matches_graph(self, stub_engine):
-        expected = self._graph_chunk_ids("simple")
-        assert make_retrieval_fn("simple")(self.QUERY) == expected
+        expected = self._graph_chunk_ids(stub_engine, "simple")
+        assert make_retrieval_fn("simple", stub_engine)(self.QUERY) == expected
 
     def test_complex_matches_graph(self, stub_engine):
-        expected = self._graph_chunk_ids("complex")
-        assert make_retrieval_fn("complex")(self.QUERY) == expected
+        expected = self._graph_chunk_ids(stub_engine, "complex")
+        assert make_retrieval_fn("complex", stub_engine)(self.QUERY) == expected
 
     def test_short_query_returns_empty(self, stub_engine):
-        assert make_retrieval_fn("simple")("что?") == []
+        assert make_retrieval_fn("simple", stub_engine)("что?") == []
 
     def test_unknown_path_rejected(self):
         with pytest.raises(ValueError):
-            make_retrieval_fn("medium")
+            make_retrieval_fn("medium", None)
 
 
 class TestReturnPassages(TestRetrievalFnParity):
@@ -371,20 +364,28 @@ class TestReturnPassages(TestRetrievalFnParity):
     """
 
     def test_passages_carry_identity_text_and_source(self, stub_engine):
-        passages = make_retrieval_fn("simple", return_passages=True)(self.QUERY)
+        passages = make_retrieval_fn("simple", stub_engine, return_passages=True)(
+            self.QUERY
+        )
         assert passages, "stub engine returned nothing"
         first = passages[0]
-        assert first["chunk_id"] == make_retrieval_fn("simple")(self.QUERY)[0]
+        assert (
+            first["chunk_id"] == make_retrieval_fn("simple", stub_engine)(self.QUERY)[0]
+        )
         assert first["text"]
         assert first["source"] == "gost.pdf"
 
     def test_order_matches_the_id_form(self, stub_engine):
-        ids = make_retrieval_fn("complex")(self.QUERY)
-        passages = make_retrieval_fn("complex", return_passages=True)(self.QUERY)
+        ids = make_retrieval_fn("complex", stub_engine)(self.QUERY)
+        passages = make_retrieval_fn("complex", stub_engine, return_passages=True)(
+            self.QUERY
+        )
         assert [p["chunk_id"] for p in passages] == ids
 
     def test_short_query_returns_empty(self, stub_engine):
-        assert make_retrieval_fn("simple", return_passages=True)("что?") == []
+        assert (
+            make_retrieval_fn("simple", stub_engine, return_passages=True)("что?") == []
+        )
 
 
 class TestMultipleGoldChunks:
@@ -435,8 +436,8 @@ class TestBackboneShortcut:
 
     @pytest.fixture
     def split_engine(self):
-        from src.v7 import nlp_core
-        from src.v7.nodes import rag_simple as rag_simple_mod
+        from src.v7.nlp_core import BM25Index
+        from src.v7.runtime import V7Runtime
 
         bm25_corpus = [
             {
@@ -460,39 +461,39 @@ class TestBackboneShortcut:
                 for i in range(top_k)
             ]
 
-        prev_bm25 = nlp_core._bm25_index
-        nlp_core.init_bm25_index(bm25_corpus)
-        rag_simple_mod.set_vector_search(fake_vector_search)
-        yield
-        nlp_core._bm25_index = prev_bm25
-        rag_simple_mod.set_vector_search(rag_simple_mod._default_vector_search)
+        bm25_index = BM25Index(bm25_corpus)
+        return V7Runtime(
+            vector_search=fake_vector_search, bm25_search=bm25_index.search
+        )
 
     def test_vector_backbone_returns_only_dense_results(self, split_engine):
-        ids = make_retrieval_fn("vector")(self.QUERY)
+        ids = make_retrieval_fn("vector", split_engine)(self.QUERY)
         assert ids
         assert all(i.startswith("vec.pdf#") for i in ids)
 
     def test_bm25_backbone_returns_only_lexical_results(self, split_engine):
-        ids = make_retrieval_fn("bm25")(self.QUERY)
+        ids = make_retrieval_fn("bm25", split_engine)(self.QUERY)
         assert ids
         assert all(i.startswith("lex.pdf#") for i in ids)
 
     def test_vector_backbone_respects_router_top_k(self, split_engine):
         from src.v7.config import v7_config
 
-        ids = make_retrieval_fn("vector")(self.QUERY)
+        ids = make_retrieval_fn("vector", split_engine)(self.QUERY)
         assert 0 < len(ids) <= v7_config.SIMPLE_TOP_K
 
     def test_backbone_short_query_returns_empty(self, split_engine):
-        assert make_retrieval_fn("vector")("что?") == []
-        assert make_retrieval_fn("bm25")("что?") == []
+        assert make_retrieval_fn("vector", split_engine)("что?") == []
+        assert make_retrieval_fn("bm25", split_engine)("что?") == []
 
     def test_backbone_return_passages_matches_id_form(self, split_engine):
-        ids = make_retrieval_fn("vector", return_passages=True)(self.QUERY)
-        bare = make_retrieval_fn("vector")(self.QUERY)
+        ids = make_retrieval_fn("vector", split_engine, return_passages=True)(
+            self.QUERY
+        )
+        bare = make_retrieval_fn("vector", split_engine)(self.QUERY)
         assert [p["chunk_id"] for p in ids] == bare
         assert all(p["text"] for p in ids)
 
-    def test_vector_and_bm25_are_accepted_paths(self):
-        make_retrieval_fn("vector")
-        make_retrieval_fn("bm25")
+    def test_vector_and_bm25_are_accepted_paths(self, split_engine):
+        make_retrieval_fn("vector", split_engine)
+        make_retrieval_fn("bm25", split_engine)

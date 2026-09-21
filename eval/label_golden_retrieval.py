@@ -679,19 +679,35 @@ def arbitrate_one(
 
 
 def build_candidate_pools(question: str, top_k: int = TOP_K) -> list[list[dict]]:
-    """Candidate pools for one question, one per retrieval path."""
+    """Candidate pools for one question, one per retrieval path.
+
+    Requires ``init_retrieval_engine()`` to have run first — it binds the
+    module-level runtime that ``make_retrieval_fn`` needs.
+    """
     from eval.run_retrieval_eval import make_retrieval_fn  # noqa: PLC0415
+
+    if _RUNTIME is None:
+        raise RuntimeError("build_candidate_pools: call init_retrieval_engine() first")
 
     pools = []
     for path in PATHS:
         retrieve = _RETRIEVERS.setdefault(
-            path, make_retrieval_fn(path, return_passages=True)
+            path, make_retrieval_fn(path, _RUNTIME, return_passages=True)
         )
         pools.append(list(retrieve(question))[:top_k])
     return pools
 
 
 _RETRIEVERS: dict = {}
+_RUNTIME = None
+
+
+def init_retrieval_engine() -> None:
+    """Bind the module-level runtime that build_candidate_pools threads through."""
+    from eval.run_retrieval_eval import init_engine  # noqa: PLC0415
+
+    global _RUNTIME
+    _RUNTIME = init_engine()
 
 
 def main() -> int:
@@ -757,9 +773,7 @@ def main() -> int:
         print(f"оценка выше предохранителя ${COST_ABORT_USD}: прогон не запущен")
         return 1
 
-    from eval.run_retrieval_eval import init_engine  # noqa: PLC0415
-
-    init_engine()
+    init_retrieval_engine()
     llm = _make_llm(args.model)
     arbiter_llm = None if args.no_arbitrate else _make_llm(args.arbiter_model)
 

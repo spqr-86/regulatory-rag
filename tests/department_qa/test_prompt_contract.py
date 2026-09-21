@@ -6,6 +6,7 @@ import pytest
 from jinja2 import Environment, FileSystemLoader, meta
 
 from src.department_qa.contract import (
+    DepartmentPromptVarsV5,
     Evidence,
     ObjectSection,
     PromptVars,
@@ -42,6 +43,11 @@ def test_recorded_object_versions_keep_their_original_contract(version):
 @pytest.mark.unit
 def test_v4_variables_match_contract_fields():
     assert _template_vars("v4") == set(PromptVars.model_fields)
+
+
+@pytest.mark.unit
+def test_v5_variables_match_scoped_contract_fields():
+    assert _template_vars("v5") == set(DepartmentPromptVarsV5.model_fields)
 
 
 @pytest.mark.unit
