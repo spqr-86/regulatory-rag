@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
 from functools import lru_cache
+
+import numpy as np
 
 from src.indexing.vector_store import load_vector_store
 from utils.logging import logger

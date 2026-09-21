@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import structlog
 from typing import List, Optional
 
+import structlog
 from langchain_core.documents import Document
 
 logger = structlog.get_logger()

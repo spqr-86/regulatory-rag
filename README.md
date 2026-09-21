@@ -257,7 +257,8 @@ shows cost, 👍/👎 rate, routes and p50/p95. Without the stack nothing breaks
 
 ## Project status
 
-**Portfolio MVP complete (2026-09-11).** Built:
+**Portfolio MVP complete (2026-09-21).** Core pipeline and eval closed 2026-09-11; the
+Department Q&A / object-profile mode below landed later and closed 2026-09-21. Built:
 
 - **Evidence-gated LangGraph pipeline** — deterministic routing, three-metric sufficiency
   gate, structured triage gap, explicit abstention

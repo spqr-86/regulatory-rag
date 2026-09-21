@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.documents import Document
 
-from src.v7.scope_filter import build_scope_filters, matches_filter
 from src.v7.hard_gates import validate_scope_filters
+from src.v7.scope_filter import build_scope_filters, matches_filter
 
 EXT = {"source": "ppr.pdf", "source_type": "external"}
 COMPANY = {"source": "prikaz.md", "source_type": "internal", "audience": "company"}

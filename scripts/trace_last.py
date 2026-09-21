@@ -1,6 +1,7 @@
 """Show the last LangSmith trace for the regulatory-rag project."""
 
 import sys
+
 from dotenv import load_dotenv
 
 load_dotenv()

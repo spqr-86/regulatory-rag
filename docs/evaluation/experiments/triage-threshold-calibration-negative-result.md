@@ -15,9 +15,8 @@ answering when it should have escalated or abstained) without losing coverage?
   annotated for evidence coverage and critical misses.
 - **Runs:** one pass over **81 profiles**; no LLM judge, no API cost.
 - **Runner:** `eval/triage_calibration.py`.
-- **Artifacts:** plan and result —
-  [`2026-09-11-triage-threshold-calibration.md`](../../superpowers/plans/2026-09-11-triage-threshold-calibration.md);
-  [roadmap](../../roadmap.md).
+- **Artifacts:** plan and result — `2026-09-11-triage-threshold-calibration.md` (removed in
+  the 21.09.2026 portfolio cleanup, see git history at `cf61c1c`); [roadmap](../../roadmap.md).
 
 ## Results
 

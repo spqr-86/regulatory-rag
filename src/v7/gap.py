@@ -9,7 +9,6 @@ from __future__ import annotations
 
 # ANCHOR: Builds a node-free structural gap from passage text and detects
 # enumeration intent. Inputs are passages/query; output is TriageGap/bool.
-
 import re
 from typing import Dict, List, Optional
 

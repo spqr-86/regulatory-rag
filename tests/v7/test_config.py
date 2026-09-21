@@ -133,12 +133,12 @@ class TestV7ConfigType:
 
     def test_is_base_settings(self):
         from pydantic_settings import BaseSettings
+
         from src.v7.config import V7Config
 
         assert issubclass(V7Config, BaseSettings)
 
     def test_singleton_exists(self):
-        from src.v7.config import v7_config
-        from src.v7.config import V7Config
+        from src.v7.config import V7Config, v7_config
 
         assert isinstance(v7_config, V7Config)

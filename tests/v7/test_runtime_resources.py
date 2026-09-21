@@ -2,9 +2,9 @@
 
 # ANCHOR: barriers/events expose races without relying on scheduling sleeps.
 
+import time
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Event, Lock
-import time
 
 import pytest
 
@@ -60,7 +60,7 @@ def test_reranker_is_lazy_shared_and_serialized():
 
 
 def test_reranker_wait_honors_deadline_and_releases_after_failure():
-    from src.v7.reranker import shared_reranker, RerankerError
+    from src.v7.reranker import RerankerError, shared_reranker
 
     entered, release = Event(), Event()
 
@@ -85,9 +85,10 @@ def test_reranker_wait_honors_deadline_and_releases_after_failure():
 
 
 def test_runtime_builds_one_bm25_and_no_generation_clients(monkeypatch):
+    from unittest.mock import Mock
+
     from src.v7 import bridge
     from src.v7.retrieval import retrieve_context
-    from unittest.mock import Mock
 
     class RawChromaStore:
         def get(self, *, include):
@@ -119,9 +120,10 @@ def test_runtime_builds_one_bm25_and_no_generation_clients(monkeypatch):
 
 
 def test_bound_chroma_backends_do_not_use_default_singleton(monkeypatch):
+    from unittest.mock import Mock
+
     from src.backends.chroma_backend import ChromaBackend
     from src.indexing import vector_store
-    from unittest.mock import Mock
 
     loader = Mock(side_effect=[object(), object()])
     monkeypatch.setattr(vector_store, "load_bound_vector_store", loader)
@@ -152,10 +154,11 @@ def test_bm25_snapshot_and_results_do_not_share_mutable_metadata():
 
 def test_reranker_load_failure_remains_visible_in_result(monkeypatch):
     import copy
-    from src.v7.reranker import shared_reranker
-    from src.v7.runtime import V7Runtime
-    from src.v7.retrieval import retrieve_context
+
     from src.v7.config import v7_config
+    from src.v7.reranker import shared_reranker
+    from src.v7.retrieval import retrieve_context
+    from src.v7.runtime import V7Runtime
     from tests.v7.test_retrieval_context import CASES
 
     case = next(c for c in CASES if c["name"] == "escalation_accepted")
@@ -181,6 +184,7 @@ def test_reranker_load_failure_remains_visible_in_result(monkeypatch):
 
 def test_runtime_crossref_uses_its_own_bm25_after_global_replacement(monkeypatch):
     from unittest.mock import Mock
+
     from src.backends.vector_store import VectorStoreBackend
     from src.v7 import bridge, cross_ref
 
@@ -222,8 +226,8 @@ def test_default_reranker_wait_is_finite_without_caller_deadline():
 
 
 def test_legacy_capture_preserves_separate_simple_and_complex_callbacks(monkeypatch):
+    from src.v7.nodes import rag_complex, rag_simple
     from src.v7.runtime import capture_legacy_runtime
-    from src.v7.nodes import rag_simple, rag_complex
 
     a, b = lambda **kw: [], lambda **kw: []
     monkeypatch.setattr(rag_simple, "_vector_search", a)

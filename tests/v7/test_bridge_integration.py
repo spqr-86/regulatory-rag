@@ -11,12 +11,11 @@ def test_init_v7_from_chroma_with_real_backend(tmp_path, monkeypatch):
     from langchain_core.documents import Document
     from langchain_core.embeddings import DeterministicFakeEmbedding
 
-    from src.backends.chroma_backend import ChromaBackend
-    from src.v7.bridge import init_v7_pipeline
-
     import src.indexing.vector_store as vector_store_mod
     import src.v7.nlp_core as nlp_core_mod
     import src.v7.nodes.rag_simple as rag_simple_mod
+    from src.backends.chroma_backend import ChromaBackend
+    from src.v7.bridge import init_v7_pipeline
 
     test_chroma_path = str(tmp_path / "test_chroma")
     monkeypatch.setenv("CHROMA_DB_PATH", test_chroma_path)

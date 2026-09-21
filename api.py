@@ -17,6 +17,7 @@ from __future__ import annotations
 import time
 import uuid
 from contextlib import asynccontextmanager
+
 import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request

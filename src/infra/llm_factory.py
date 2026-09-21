@@ -55,8 +55,8 @@ def apply_ipv6_patch_for_googleapis() -> None:
 apply_ipv6_patch_for_googleapis()
 
 try:
-    from langchain_google_genai import ChatGoogleGenerativeAI
     from google.genai.types import AutomaticFunctionCallingConfig
+    from langchain_google_genai import ChatGoogleGenerativeAI
 except ImportError:
     ChatGoogleGenerativeAI = None
     AutomaticFunctionCallingConfig = None

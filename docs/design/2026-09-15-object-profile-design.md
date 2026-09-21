@@ -1,7 +1,7 @@
 # Regulatory RAG — сведения об объекте подразделения (ObjectProfile): спецификация
 
 Дата: 2026-09-15. Статус: **согласована в brainstorming, исправлена по внешнему ревью
-(gpt-6-astra, 15.09), не реализована.**
+(gpt-6-astra, 15.09), реализована** (issue #44, смержено 16.09.2026).
 Дополняет [спецификацию MVP Q&A для подразделений](./2026-09-14-department-qa-mvp-design.md)
 (§5 модель документов, §8 контракт, §11 evaluation). Второй контракт ответа не заводится (П7).
 
@@ -52,19 +52,20 @@
 
 ```python
 class ObjectSection(BaseModel):
-    id: str                      # obj_s1 … obj_s9
-    number: int                  # номер раздела шаблона
-    title: str                   # «Системы противопожарной защиты объекта»
-    text: str                    # исходный текст раздела
+    id: str  # obj_s1 … obj_s9
+    number: int  # номер раздела шаблона
+    title: str  # «Системы противопожарной защиты объекта»
+    text: str  # исходный текст раздела
     presence: Literal["present", "empty", "missing"]
+
 
 class ObjectProfile(BaseModel):
     unit_id: str
     document_id: str
-    source: str                  # имя файла листа
-    content_sha256: str          # хеш файла на момент загрузки
+    source: str  # имя файла листа
+    content_sha256: str  # хеш файла на момент загрузки
     title: str
-    as_of_date: Optional[date]   # «Дата заполнения»; плейсхолдер [дата] → None
+    as_of_date: Optional[date]  # «Дата заполнения»; плейсхолдер [дата] → None
     sections: dict[str, ObjectSection]
 ```
 
@@ -121,13 +122,15 @@ class ObjectProfile(BaseModel):
 ```python
 class ObjectFact(BaseModel):
     statement: str
-    evidence_ids: list[str] = []     # по промпту — только obj_s*
+    evidence_ids: list[str] = []  # по промпту — только obj_s*
+
 
 class AppliedConclusion(BaseModel):
     statement: str
-    evidence_ids: list[str] = []     # по промпту — ≥1 obj_s* и ≥1 ext_*/int_*
+    evidence_ids: list[str] = []  # по промпту — ≥1 obj_s* и ≥1 ext_*/int_*
 
-class ModelAnswer(ModelAnswerV1):    # ModelAnswerV1 = текущая схема без новых полей
+
+class ModelAnswer(ModelAnswerV1):  # ModelAnswerV1 = текущая схема без новых полей
     object_facts: list[ObjectFact] = []
     applied_conclusions: list[AppliedConclusion] = []
 ```
@@ -173,17 +176,23 @@ def decide(
 ```python
 if answer.out_of_scope:
     return "out_of_scope", []
-if check_citations(answer, evidence):          # любая строка группы «цитаты» ниже
+if check_citations(answer, evidence):  # любая строка группы «цитаты» ниже
     return "failed", ["citation_invalid"]
-if answer.clarifying_questions:                # ЛЮБОЙ непустой список
+if answer.clarifying_questions:  # ЛЮБОЙ непустой список
     return "needs_context", ["applicability_unclear"]
 reasons = []
-if applied_without_norm:     reasons.append("applied_without_norm")
-if normative_fact:           reasons.append("object_fact_normative")
-if not fact_only and not has_ext: reasons.append("external_evidence_missing")
-if not fact_only and not has_int: reasons.append("internal_evidence_missing")
-if cites_object and profile_as_of is None: reasons.append("object_profile_undated")
-if answer.possible_mismatch and has_ext and has_int: reasons.append("possible_mismatch")
+if applied_without_norm:
+    reasons.append("applied_without_norm")
+if normative_fact:
+    reasons.append("object_fact_normative")
+if not fact_only and not has_ext:
+    reasons.append("external_evidence_missing")
+if not fact_only and not has_int:
+    reasons.append("internal_evidence_missing")
+if cites_object and profile_as_of is None:
+    reasons.append("object_profile_undated")
+if answer.possible_mismatch and has_ext and has_int:
+    reasons.append("possible_mismatch")
 return ("needs_review" if reasons else "answered"), reasons
 ```
 

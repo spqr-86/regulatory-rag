@@ -5,9 +5,9 @@ Always work inside the project venv (`source .venv/bin/activate`).
 ## Unit tests
 
 ```bash
-pytest -m unit              # fast unit suite (the CI gate)
-pytest -m integration       # integration tests (need real deps)
-pytest -m "not slow"        # everything except slow tests
+pytest -m "not integration and not slow"   # fast suite (the CI gate)
+pytest -m unit               # narrower: unit-marked tests only
+pytest -m integration        # integration tests (need real deps)
 pytest tests/test_hard_gates.py -v   # a single file
 ```
 

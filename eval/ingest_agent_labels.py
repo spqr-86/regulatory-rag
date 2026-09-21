@@ -97,7 +97,9 @@ def build_verdicts(
             }
             continue
         s = validate_label_spans(parse_labels(strict[n], len(candidates)), candidates)
-        lenient_pass = validate_label_spans(parse_labels(lenient[n], len(candidates)), candidates)
+        lenient_pass = validate_label_spans(
+            parse_labels(lenient[n], len(candidates)), candidates
+        )
         out[n] = merge_passes(s, lenient_pass, candidates)
     return out
 
@@ -119,9 +121,7 @@ def apply_arbitrations(
 
 
 def _records(pools: dict[int, dict]) -> list[dict]:
-    return [
-        {"n": n, "question": pools[n]["question"]} for n in sorted(pools)
-    ]
+    return [{"n": n, "question": pools[n]["question"]} for n in sorted(pools)]
 
 
 def main() -> int:

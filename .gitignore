@@ -231,6 +231,7 @@ eval/results/
 HISTORY.md
 .claude/
 team/
+process.md
 chroma_db_pb/
 source_docs_pb/
 

@@ -13,8 +13,8 @@ from langchain_core.messages import AIMessage
 from src.department_qa.contract import ModelAnswer, ModelAnswerV1, VerificationResult
 from src.department_qa.wiring import (
     build_mode_config,
-    ensure_store_matches,
     ensure_manifest_matches,
+    ensure_store_matches,
     make_hybrid_search_fn,
     make_model_fn,
     stack_cache_key,

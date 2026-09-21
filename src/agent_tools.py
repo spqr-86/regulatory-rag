@@ -1,24 +1,24 @@
 from __future__ import annotations
 
-import json
 import base64
 import io
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List
+
 import fitz  # pymupdf
 import structlog
-from PIL import Image, ImageDraw
-from pathlib import Path
-from typing import List, Dict
-from dataclasses import dataclass
-
-from langchain_core.tools import tool
-from langchain_core.retrievers import BaseRetriever
-from langchain_core.messages import HumanMessage
 from langchain_core.documents import Document
+from langchain_core.messages import HumanMessage
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.tools import tool
+from PIL import Image, ImageDraw
 
 from config.settings import settings
-from src.infra.llm_factory import get_vision_llm
-from src.indexing.vector_store import load_vector_store
 from src.indexing.chroma_helpers import query_chunks_by_range
+from src.indexing.vector_store import load_vector_store
+from src.infra.llm_factory import get_vision_llm
 
 logger = structlog.get_logger()
 

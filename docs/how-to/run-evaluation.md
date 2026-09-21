@@ -33,8 +33,8 @@ python scripts/trace_v7.py "your question"
 ```
 
 For deterministic triage calibration (no judge), use the reviewed annotations and an
-immutable retrieval snapshot as described in
-[`2026-09-11-triage-threshold-calibration.md`](../superpowers/plans/2026-09-11-triage-threshold-calibration.md).
+immutable retrieval snapshot as described in `2026-09-11-triage-threshold-calibration.md`
+(removed in the 21.09.2026 portfolio cleanup, see git history at `cf61c1c`).
 The completed 81-profile run retained the current defaults.
 
 ## Парный прогон ObjectProfile (department Q&A, v1 vs v2)
@@ -42,7 +42,7 @@ The completed 81-profile run retained the current defaults.
 Сравнивает режимы `DEPARTMENT_QA_MODE` (см. [FACTS](../reference/FACTS.md#department-qa)) на
 одном наборе вопросов: `v1` — листы объекта в индексе, `v2` — листы исключены и передаются как
 `ObjectProfile`. Спека:
-[2026-09-15-object-profile-design §5.2](../superpowers/specs/2026-09-15-object-profile-design.md).
+[2026-09-15-object-profile-design §5.2](../design/2026-09-15-object-profile-design.md).
 
 Сборка двух баз (`index.py` удаляет всю папку `CHROMA_DB_PATH`, поэтому у режимов разные пути).
 **Важно:** committed `corpus/manifest.yaml` уже несёт `role: object_profile` на всех листах

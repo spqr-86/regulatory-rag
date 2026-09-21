@@ -10,7 +10,6 @@ from __future__ import annotations
 
 # ANCHOR: one routing topology for full Generic and retrieval-only execution.
 # Dependencies are frozen at assembly; retrieval-only terminal edges stop at END.
-
 from functools import partial
 from typing import Any, Callable, Dict, Optional
 
@@ -24,8 +23,8 @@ from src.v7.nodes.intent_gate import intent_gate, route_by_intent
 from src.v7.nodes.rag_complex import rag_complex
 from src.v7.nodes.rag_simple import rag_simple
 from src.v7.nodes.router import clarify_respond, route_after_router, router
-from src.v7.state_types import RAGState
 from src.v7.runtime import V7Runtime, capture_legacy_runtime
+from src.v7.state_types import RAGState
 
 
 def build_graph(

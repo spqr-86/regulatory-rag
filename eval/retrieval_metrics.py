@@ -11,8 +11,9 @@ Metrics:
 
 from __future__ import annotations
 
+from typing import Dict, List
+
 import numpy as np
-from typing import List, Dict
 
 
 def hit_rate_at_k(

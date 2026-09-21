@@ -14,7 +14,6 @@ from __future__ import annotations
 
 # ANCHOR: BM25 owns a detached corpus snapshot and returns independent passages.
 # Only shared morphological parsing is serialized; ranking remains read-only.
-
 import copy
 import re
 import threading
@@ -22,8 +21,8 @@ from collections import Counter
 from typing import List, Optional
 
 import pymorphy3
-from razdel import tokenize as razdel_tokenize
 from rank_bm25 import BM25Okapi
+from razdel import tokenize as razdel_tokenize
 
 from src.v7.config import v7_config
 from src.v7.scope_filter import matches_filter

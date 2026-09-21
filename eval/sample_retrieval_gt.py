@@ -159,7 +159,7 @@ def sample_distribution(sample: list[dict]) -> dict[str, int]:
 
 def corpus_weights() -> dict[str, int]:
     """Non-junk chunk counts per document, straight from the live collection."""
-    from eval.generate_retrieval_gt import iter_corpus_chunks, is_junk_chunk
+    from eval.generate_retrieval_gt import is_junk_chunk, iter_corpus_chunks
 
     counts: Counter[str] = Counter()
     for chunk in iter_corpus_chunks():

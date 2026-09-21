@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import os
+from typing import Any, Dict
 
 import structlog
 import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFound
-from typing import Any, Dict
 
 _log = structlog.get_logger()
 

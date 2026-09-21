@@ -1,7 +1,7 @@
-"""Docs freshness check: forbidden stale terms + FACTS-vs-source value sync.
+"""Docs freshness check: forbidden stale terms + FACTS-vs-source value sync + link check.
 
-CI scope (committed sources only): stale-term grep + prompt-version sync. Run via
-``python scripts/check_docs.py --ci``.
+CI scope (committed sources only): stale-term grep, broken relative markdown links,
+prompt-version sync. Run via ``python scripts/check_docs.py --ci``.
 
 Also in CI: every ``run_retrieval_eval.py --path X`` in docs, benchmarks and READMEs
 names a path the CLI accepts.
@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +55,48 @@ class VersionMismatch:
     name: str
     registry_version: str
     facts_version: str
+
+
+@dataclass
+class BrokenLink:
+    path: Path
+    line: int
+    target: str
+
+
+LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+
+
+def find_broken_links(root: Path) -> list[BrokenLink]:
+    """Flag relative markdown links (to other tracked files) that resolve to nothing.
+
+    Scoped to ``git ls-files`` (committed sources), matching this script's CI scope.
+    External links (http/mailto) and in-page anchors (#...) are not checked.
+    """
+    tracked = subprocess.run(
+        ["git", "ls-files", "*.md"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    broken: list[BrokenLink] = []
+    for rel in tracked:
+        md = root / rel
+        for i, line in enumerate(md.read_text(encoding="utf-8").splitlines(), 1):
+            if IGNORE_MARKER in line:
+                continue
+            for m in LINK_RE.finditer(line):
+                target = m.group(1).strip()
+                if target.startswith(("http://", "https://", "mailto:", "#")):
+                    continue
+                target_path = target.split("#", 1)[0]
+                if not target_path:
+                    continue
+                resolved = (md.parent / target_path).resolve()
+                if not resolved.exists():
+                    broken.append(BrokenLink(path=md, line=i, target=target))
+    return broken
 
 
 def find_stale_terms(docs_dir: Path) -> list[StaleHit]:
@@ -152,6 +195,13 @@ def main(argv: list[str] | None = None) -> int:
         print("STALE TERMS (use <!--freshness:ignore--> for intentional mentions):")
         for h in stale:
             print(f"  {h.path}:{h.line}  '{h.term}'")
+
+    broken_links = find_broken_links(root)
+    if broken_links:
+        failures += len(broken_links)
+        print("BROKEN MARKDOWN LINKS:")
+        for b in broken_links:
+            print(f"  {b.path}:{b.line}  {b.target}")
 
     mism = check_prompt_versions(registry, facts)
     if mism:

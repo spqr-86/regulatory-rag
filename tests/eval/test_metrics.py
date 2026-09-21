@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 
 from eval.metrics import (
-    compute_completeness,
     compute_abstain_rate,
-    compute_false_abstain_rate,
+    compute_completeness,
     compute_correct_abstain_rate,
+    compute_false_abstain_rate,
     compute_retrieval_stats,
     extract_key_phrases,
 )

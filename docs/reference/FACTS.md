@@ -67,8 +67,8 @@ below. `v2` is kept unchanged so the 2026-09-15 paired run can be re-rendered.
 
 ## department qa
 `src/department_qa/` — separate Q&A stack for units (подразделения), spec
-[2026-09-14-department-qa-mvp-design](../superpowers/specs/2026-09-14-department-qa-mvp-design.md)
-+ [2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
+[2026-09-14-department-qa-mvp-design](../design/2026-09-14-department-qa-mvp-design.md)
++ [2026-09-15-object-profile-design](../design/2026-09-15-object-profile-design.md).
 
 - `DEPARTMENT_QA_MODE` (env, `config/settings.py`): `v1` or `v2` (default, decision 10). Selects one bundle
   atomically — Chroma path/collection, whether unit object sheets are loaded as profiles, and
@@ -109,8 +109,8 @@ normative wording in object facts. It does not mean the citation supports the cl
 the answer is complete — see design-decisions §10. UI banner: "Ссылки сверены: законодательство
 и ЛНА. Смысл ответа не проверен специалистом."
 
-Object sheets use `typed_fields_v1` from
-[2026-09-16-typed-object-sheet-design](../superpowers/specs/2026-09-16-typed-object-sheet-design.md):
+Object sheets use `typed_fields_v1` from `2026-09-16-typed-object-sheet-design` (design doc
+removed in the 21.09.2026 portfolio cleanup, see git history at `cf61c1c`):
 nine strict fields in sections 2, 3, 4, 7 and 8. Prompt v4 renders them as a separate block
 with the existing `obj_sN` evidence ids. `ModelAnswer` and `decide()` do not validate the field
 semantics in this step. Six sheets are committed: `unit_office`, `unit_dispatch`, `unit_depot`,

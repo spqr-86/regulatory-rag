@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
+
 from eval.metrics import (
     compute_citation_doc_match,
     compute_citation_in_retrieval,

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import time
+from pathlib import Path
 
 VISUALS_DIR = Path("static/visuals")
 MAX_AGE_DAYS = 7

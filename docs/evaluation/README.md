@@ -176,4 +176,5 @@ python eval/triage_calibration.py
   --expectations eval/data/object_profile_traps_expectations.yaml
 ```
 
-CI runs `pytest -m unit` and `python scripts/check_docs.py --ci`; neither spends API budget.
+CI runs `pytest -m "not integration and not slow"` and `python scripts/check_docs.py --ci`;
+neither spends API budget.

@@ -116,7 +116,8 @@ Results written to `benchmarks/eval_v7_{date}.jsonl`. See [eval/README.md](../ev
 ## Tests
 
 ```bash
-pytest -m unit          # ~520 unit tests (CI gate)
-pytest                  # full suite (~900 tests; 5 pre-existing failures —
-                        # test_agent_tools, v7/test_bridge_rerank)
+pytest -m "not integration and not slow"   # ~1339 fast tests (CI gate; 3 pre-existing
+                                            # xfails — see tests/test_agent_tools.py,
+                                            # tests/v7/test_state_types.py)
+pytest                                      # full suite (~1342 tests, incl. integration/slow)
 ```

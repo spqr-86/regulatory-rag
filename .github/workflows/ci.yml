@@ -25,11 +25,14 @@ jobs:
       - name: Lint
         run: ruff check .
 
-      - name: Run unit tests
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Run fast tests
         env:
           GEMINI_API_KEY: stub
           OPENAI_API_KEY: stub
-        run: python -m pytest -m unit -v --tb=short
+        run: python -m pytest -m "not integration and not slow" -v --tb=short
 
       - name: Docs freshness check
         run: python scripts/check_docs.py --ci

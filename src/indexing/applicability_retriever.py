@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from langchain_classic.retrievers.multi_query import LineListOutputParser
+from langchain_community.retrievers import BM25Retriever
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
+from langchain_core.prompts import PromptTemplate
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.vectorstores import VectorStore
-from langchain_core.prompts import PromptTemplate
-from langchain_community.retrievers import BM25Retriever
 from pydantic import PrivateAttr
 
 from src.infra.prompt_manager import PromptManager

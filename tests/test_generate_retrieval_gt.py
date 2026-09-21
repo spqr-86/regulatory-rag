@@ -16,14 +16,14 @@ import pytest
 
 from eval.generate_retrieval_gt import (
     Questions,
+    _passage_identity,
+    build_gt_record,
+    dedup_questions,
     is_junk_chunk,
+    iter_corpus_chunks,
     normalize_question,
     parse_questions,
-    dedup_questions,
-    build_gt_record,
     to_passage,
-    iter_corpus_chunks,
-    _passage_identity,
 )
 
 pytestmark = pytest.mark.unit

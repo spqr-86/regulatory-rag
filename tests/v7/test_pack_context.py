@@ -3,8 +3,7 @@ import copy
 import pytest
 
 from src.v7 import pack_context as pc
-from src.v7.pack_context import candidate_version
-from src.v7.pack_context import PackLimits
+from src.v7.pack_context import PackLimits, candidate_version
 
 
 def _p(chunk_id, source="doc.pdf", text="t"):

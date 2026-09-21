@@ -28,23 +28,23 @@ from src.infra.parsers import (
     extract_text,
 )  # noqa: F401  # used by other make_*_fn
 from src.infra.prompt_manager import PromptManager
+from src.v7 import pack_context as pack_context_mod
 from src.v7.config import v7_config
 from src.v7.cross_ref import expand_cross_references
 from src.v7.nlp_core import BM25Index, init_bm25_index
+from src.v7.nodes import generate_answer as generate_answer_mod
+from src.v7.nodes import rag_complex as rag_complex_mod
+from src.v7.nodes import rag_simple as rag_simple_mod
+from src.v7.nodes import visual_enrichment as visual_enrichment_mod
+from src.v7.reranker import shared_reranker
 from src.v7.runtime import (
     V7Runtime,
     capture_legacy_runtime,
     empty_search,
     legacy_runtime_lock,
 )
-from src.v7.reranker import shared_reranker
 from src.v7.scope_filter import matches_filter
 from src.v7.usage import LLMUsage, usage_from_response
-from src.v7 import pack_context as pack_context_mod
-from src.v7.nodes import generate_answer as generate_answer_mod
-from src.v7.nodes import rag_complex as rag_complex_mod
-from src.v7.nodes import rag_simple as rag_simple_mod
-from src.v7.nodes import visual_enrichment as visual_enrichment_mod
 
 logger = structlog.get_logger()
 _pm = PromptManager()
@@ -99,6 +99,7 @@ def make_rerank_fn(
 ) -> Callable[[str, List[dict], int], List[dict]]:
     """Share a lazy FlashRank model across graph instances."""
     import os
+
     from config.settings import settings
 
     return shared_reranker(

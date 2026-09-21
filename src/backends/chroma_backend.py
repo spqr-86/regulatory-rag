@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 # ANCHOR: a backend owns one store; explicit loading never uses the default cache.
-
 from typing import Iterator
 
 from langchain_core.documents import Document

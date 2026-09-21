@@ -4,7 +4,6 @@ from __future__ import annotations
 
 # ANCHOR: existing hybrid algorithm with graph-bound search callbacks.
 # Input: request state and optional dependencies. Output: one simple attempt.
-
 import logging
 from typing import Callable, List, Optional
 

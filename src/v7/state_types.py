@@ -9,8 +9,8 @@ Source spec: docs/feature/migration-v7 (lines 182-323).
 from __future__ import annotations
 
 import operator
-from typing import Annotated, List, Literal, TypedDict
 from dataclasses import dataclass
+from typing import Annotated, List, Literal, TypedDict
 
 # ─── Data Classes ──────────────────────────────────────────────────────────
 

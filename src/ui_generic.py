@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-# ANCHOR: bind the Generic V7 graph to its explicit Chroma store and expose one
-# UI-facing query function; Department settings must never alias this store.
-
-from concurrent.futures import ThreadPoolExecutor
 import os
 import threading
+
+# ANCHOR: bind the Generic V7 graph to its explicit Chroma store and expose one
+# UI-facing query function; Department settings must never alias this store.
+from concurrent.futures import ThreadPoolExecutor
 
 from config.settings import settings
 from src.backends.chroma_backend import ChromaBackend

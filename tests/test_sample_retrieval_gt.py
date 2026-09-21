@@ -17,8 +17,8 @@ import pytest
 from eval.sample_retrieval_gt import (
     allocate,
     load_records,
-    stratified_sample,
     sample_distribution,
+    stratified_sample,
 )
 
 pytestmark = pytest.mark.unit

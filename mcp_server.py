@@ -16,10 +16,10 @@ chunk_id в этом repo уникален только внутри докум�
 
 import re
 from collections.abc import AsyncIterator
-
-import structlog
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+
+import structlog
 
 # ДО любых импортов из src: настроить structlog на stderr, иначе первый же лог
 # уйдёт в stdout и испортит первое JSONRPC-сообщение stdio-транспорта.

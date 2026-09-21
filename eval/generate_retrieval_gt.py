@@ -654,9 +654,7 @@ def run(
                 chunk = futs[fut]
                 try:
                     questions, usage = fut.result()
-                except (
-                    Exception
-                ) as e:  # noqa: BLE001 — one bad chunk must not kill the run
+                except Exception as e:  # noqa: BLE001 — one bad chunk must not kill the run
                     failures += 1
                     print(f"  chunk {_passage_identity(chunk)} failed: {e}")
                     continue

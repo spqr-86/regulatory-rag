@@ -8,7 +8,7 @@ import re
 import unicodedata
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple, Union, Any
+from typing import Any, Iterable, List, Optional, Tuple, Union
 
 from docling.document_converter import DocumentConverter
 from langchain_core.documents import Document
@@ -199,6 +199,7 @@ class DocumentProcessor:
     ) -> List[Document]:
         """Extract text directly from DOCX via lxml when Docling fails (broken .rels paths)."""
         import zipfile
+
         from lxml import etree
 
         logger.info(f"[fallback] lxml extraction for {source_name}")

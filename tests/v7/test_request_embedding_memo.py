@@ -1,7 +1,7 @@
 """Request-local embedding reuse for scoped retrieval."""
 
-from concurrent.futures import ThreadPoolExecutor
 import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 

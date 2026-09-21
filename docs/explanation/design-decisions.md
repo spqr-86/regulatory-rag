@@ -284,7 +284,7 @@ unit). v2 matched 8/9 (11/17 sub-answers credited, 1 forbidden conclusion found 
 `applied_conclusions` drew a plan-required conclusion from an 8-person headcount that meets
 neither the building nor floor threshold). Full per-question breakdown and quotes:
 [`eval/runs/object_profile_pair_2026-09-15/summary.md`](../../eval/runs/object_profile_pair_2026-09-15/summary.md).
-Spec: [2026-09-15-object-profile-design](../superpowers/specs/2026-09-15-object-profile-design.md).
+Spec: [2026-09-15-object-profile-design](../design/2026-09-15-object-profile-design.md).
 
 **Default mode.** `v2` (decided by Petr, 2026-09-15). v2 beat v1 on all three numbers and
 produced no answered-without-unit and no norm substituted for a missing fact. **Known error, not

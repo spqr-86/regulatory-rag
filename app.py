@@ -25,11 +25,11 @@ apply_ipv6_patch_for_googleapis()
 
 from config.settings import settings  # noqa: E402
 from src import ui_generic  # noqa: E402
+from src.department_qa.contract import RequestContext  # noqa: E402
 from src.department_qa.object_profile import (  # noqa: E402
     ObjectProfileError,
     typed_fields_prompt_lines,
 )
-from src.department_qa.contract import RequestContext  # noqa: E402
 from src.department_qa.service import answer_scoped_question  # noqa: E402
 from src.department_qa.view import (  # noqa: E402
     basis_cards,

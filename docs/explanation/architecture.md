@@ -94,7 +94,7 @@ Triage internals (3-way classification, enumeration handling): [triage.md](./tri
 | `prompts/` | Jinja2 templates + `registry.yaml` (3 live families) |
 | `eval/` | `run_v7_eval.py`, metrics modules, gold datasets |
 | `scripts/` | `trace_v7.py` (E2E smoke test), `measure_cps.py`, `check_docs.py` (docs freshness) |
-| `tests/` | Unit and integration tests (`pytest -m unit`) |
+| `tests/` | Unit and integration tests (CI gate: `pytest -m "not integration and not slow"`) |
 
 ## Pluggable backends
 

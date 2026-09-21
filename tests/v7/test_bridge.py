@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import MagicMock, patch
 from langchain_chroma import Chroma  # noqa: F401 — used as MagicMock spec
 
 from src.v7.bridge import (

@@ -28,8 +28,18 @@ def _pool(n=1):
         "n": n,
         "question": "Как часто проводится повторный инструктаж?",
         "candidates": [
-            {"index": 1, "chunk_id": "2464#1", "source": "2464", "text": "не реже одного раза в шесть месяцев"},
-            {"index": 2, "chunk_id": "2464#2", "source": "2464", "text": "вводный инструктаж проводится при приеме"},
+            {
+                "index": 1,
+                "chunk_id": "2464#1",
+                "source": "2464",
+                "text": "не реже одного раза в шесть месяцев",
+            },
+            {
+                "index": 2,
+                "chunk_id": "2464#2",
+                "source": "2464",
+                "text": "вводный инструктаж проводится при приеме",
+            },
         ],
     }
 
@@ -71,7 +81,9 @@ def test_agreement_becomes_gold(tmp_path):
 def test_quote_absent_from_chunk_is_not_silently_gold(tmp_path):
     pools = {1: _pool()}
     made_up = [{"index": 1, "quote": "один раз в три месяца"}]
-    verdicts = build_verdicts(pools, {1: {"relevant": made_up}}, {1: {"relevant": made_up}})
+    verdicts = build_verdicts(
+        pools, {1: {"relevant": made_up}}, {1: {"relevant": made_up}}
+    )
     assert verdicts[1]["status"] == "unverified_quote"
 
 
@@ -122,7 +134,11 @@ def test_arbitration_tasks_carry_only_open_indices(tmp_path):
 
     pools = {1: _pool(1), 2: _pool(2)}
     verdicts = {
-        1: {"status": "disputed", "disputed_indices": [2], "gold_chunk_ids": ["2464#1"]},
+        1: {
+            "status": "disputed",
+            "disputed_indices": [2],
+            "gold_chunk_ids": ["2464#1"],
+        },
         2: {"status": "agreed", "disputed_indices": [], "gold_chunk_ids": ["2464#1"]},
     }
     tasks = build_tasks(pools, verdicts)
@@ -134,7 +150,9 @@ def test_none_found_sends_the_whole_pool_to_the_arbiter(tmp_path):
     from eval.dump_arbitration_tasks import build_tasks
 
     pools = {1: _pool(1)}
-    verdicts = {1: {"status": "none_found", "disputed_indices": [], "gold_chunk_ids": []}}
+    verdicts = {
+        1: {"status": "none_found", "disputed_indices": [], "gold_chunk_ids": []}
+    }
     tasks = build_tasks(pools, verdicts)
     assert tasks[0]["open_indices"] == [1, 2]
 
@@ -159,7 +177,10 @@ def test_arbitration_from_directory_is_applied(tmp_path):
     _write(
         tmp_path,
         "shard_01.arbiter.json",
-        _pass("arbiter", [{"index": 2, "quote": "вводный инструктаж проводится при приеме"}]),
+        _pass(
+            "arbiter",
+            [{"index": 2, "quote": "вводный инструктаж проводится при приеме"}],
+        ),
     )
     arb = load_passes(tmp_path, "arbiter")
     out = apply_arbitrations(pools, verdicts, arb)

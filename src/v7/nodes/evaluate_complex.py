@@ -8,7 +8,6 @@ from __future__ import annotations
 
 # ANCHOR: evaluate the existing candidate queue using graph-bound pack callbacks.
 # The cache and candidate snapshots belong to this invocation only.
-
 from typing import Any, Dict, List, cast
 
 import structlog

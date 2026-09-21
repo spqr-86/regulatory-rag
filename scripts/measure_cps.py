@@ -33,9 +33,9 @@ PRICE_OUTPUT_PER_M = 2.50
 def run(n: int, dataset_path: Path, out_path: Path | None) -> dict[str, Any]:
     from langchain_core.callbacks import UsageMetadataCallbackHandler
 
+    from src.backends.vector_store import get_vector_store_backend
     from src.v7.bridge import init_v7_pipeline
     from src.v7.graph import build_graph
-    from src.backends.vector_store import get_vector_store_backend
 
     print("[init] loading vector store…", flush=True)
     vs = get_vector_store_backend(load_existing=True)

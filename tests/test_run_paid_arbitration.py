@@ -34,7 +34,11 @@ def _pool(n: int, texts: list[str]) -> dict:
 
 
 def test_select_rejected_takes_only_empty_arbiter_with_a_cited_pass():
-    arbiter = {1: {"relevant": []}, 2: {"relevant": [{"index": 1}]}, 3: {"relevant": []}}
+    arbiter = {
+        1: {"relevant": []},
+        2: {"relevant": [{"index": 1}]},
+        3: {"relevant": []},
+    }
     cited = {1: [{"index": 1, "quote": "а"}], 2: [{"index": 1, "quote": "б"}]}
     assert select_rejected(arbiter, cited) == [1]
 

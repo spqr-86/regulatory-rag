@@ -13,7 +13,6 @@ from __future__ import annotations
 
 # ANCHOR: enrich a branch-local passage copy using its bound visual callback.
 # Explicit None disables the callback even when legacy globals are configured.
-
 import logging
 from concurrent.futures import (
     ThreadPoolExecutor,

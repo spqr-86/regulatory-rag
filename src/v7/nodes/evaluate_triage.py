@@ -9,7 +9,6 @@ from __future__ import annotations
 
 # ANCHOR: preserve the simple decision table while binding enrichment and pack I/O.
 # Input: simple attempt/dependencies. Output: the existing terminal contract or escalation.
-
 from typing import cast
 
 from src.v7.config import v7_config

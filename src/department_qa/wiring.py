@@ -29,13 +29,13 @@ from src.department_qa.contract import ModelAnswer, ModelAnswerV1, VerificationR
 from src.department_qa.object_profile import ObjectProfile, load_profiles
 from src.indexing.manifest import Manifest
 from src.v7.nlp_core import bm25_search, rrf_merge
-from src.v7.scope_filter import to_chroma_where
 from src.v7.pack_context import PackLimits
 from src.v7.retrieval import (
     RequestEmbeddingMemo,
     bind_request_embedding,
     retrieve_context,
 )
+from src.v7.scope_filter import to_chroma_where
 
 
 def make_hybrid_search_fn(
@@ -238,11 +238,10 @@ def build_department_stack(
     """The only assembly of the department Q&A stack: Streamlit page and eval share it."""
     from config.settings import settings
     from src.backends.chroma_backend import ChromaBackend
-    from src.infra.llm_factory import get_embedding_model
-    from src.indexing.manifest import load_manifest
-    from src.infra.llm_factory import get_simple_llm
-    from src.v7.bridge import build_v7_runtime
     from src.department_qa.service import ServiceLimits
+    from src.indexing.manifest import load_manifest
+    from src.infra.llm_factory import get_embedding_model, get_simple_llm
+    from src.v7.bridge import build_v7_runtime
 
     manifest = load_manifest(settings.CORPUS_MANIFEST_PATH)
     config = build_mode_config(

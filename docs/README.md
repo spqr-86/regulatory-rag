@@ -48,7 +48,8 @@ The roadmap retains optional experiments for future work.
 - [reference/api.md](./reference/api.md) — REST endpoints
 - [reference/configuration.md](./reference/configuration.md) — backend swaps (LLM, embeddings, vector store) and domain adaptation (glossary, prompts, corpus)
 
-Historical plans and the V7 migration spec live in [archive/](./archive/).
+Historical plans and the V7 migration spec were removed in the 21.09.2026 portfolio cleanup;
+git history at `cf61c1c` has the last copy.
 
 ---
 

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 # ANCHOR: all source fetches and lexical lookups use this call's bound corpus.
 # Legacy callers may omit bm25_fn; graph runtime factories always supply it.
-
 import re
 import time
 

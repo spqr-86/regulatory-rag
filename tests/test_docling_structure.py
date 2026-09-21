@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock
+
 import pytest
+
 from src.indexing.file_handler import DocumentProcessor
 
 

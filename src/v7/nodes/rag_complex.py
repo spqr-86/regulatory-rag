@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
+import inspect
+
 # ANCHOR: existing complex retrieval with per-graph dependencies.
 # Input: request state/dependencies. Output: complex attempt under its own plan.
-
 import logging
-import inspect
 from typing import Callable, List, Optional
 
 from src.v7.config import v7_config
 from src.v7.hard_gates import compute_attempt_metrics, validate_filters
 from src.v7.nlp_core import bm25_search, rrf_merge
 from src.v7.nodes.utils import make_retrieval_id
-from src.v7.state_types import RAGState, RetrievalAttempt, RetrievalPlan
 from src.v7.reranker import RerankerError
 from src.v7.scope_filter import matches_filter
+from src.v7.state_types import RAGState, RetrievalAttempt, RetrievalPlan
 
 logger = logging.getLogger(__name__)
 

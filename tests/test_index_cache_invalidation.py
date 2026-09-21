@@ -91,9 +91,8 @@ def test_empty_source_dir_keeps_existing_index(fake_env):
 
 
 def test_missing_source_dir_keeps_existing_index(fake_env, monkeypatch):
-    from config.settings import settings
-
     import index
+    from config.settings import settings
 
     monkeypatch.setattr(settings, "SOURCE_DOCS_PATH", str(fake_env["src"] / "absent"))
     with patch.object(index, "get_vector_store_backend") as backend:

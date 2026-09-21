@@ -18,9 +18,9 @@ from pydantic import BaseModel, Field, model_validator
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.v7.nlp_core import passage_identity  # noqa: E402
 from src.v7.contract import PackStatus  # noqa: E402
 from src.v7.decide import accept, decide_simple, terminal_update  # noqa: E402
+from src.v7.nlp_core import passage_identity  # noqa: E402
 from src.v7.validate import required_obligations, validate_context  # noqa: E402
 
 # ANCHOR: typed annotation boundary and pure coverage metrics for triage calibration.

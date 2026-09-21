@@ -63,9 +63,9 @@ def test_retrieval_only_matches_original_terminal_context(case, monkeypatch):
 
 
 def test_bound_graphs_keep_search_pack_and_generation_callbacks(monkeypatch):
-    from src.v7.runtime import V7Runtime
-    from src.v7.nodes import rag_simple, rag_complex
     from src.v7 import nlp_core
+    from src.v7.nodes import rag_complex, rag_simple
+    from src.v7.runtime import V7Runtime
 
     barrier = Barrier(2)
     calls = []

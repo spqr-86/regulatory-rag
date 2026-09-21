@@ -17,12 +17,12 @@
 
 from __future__ import annotations
 
+import threading
+import time
 import uuid
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-import threading
-import time
 from typing import Callable, Optional
 
 import structlog
@@ -51,8 +51,8 @@ from src.department_qa.object_profile import (
 )
 from src.infra.prompt_manager import PromptManager
 from src.v7 import telemetry
-from src.v7.scope_filter import build_scope_filters
 from src.v7.retrieval import RequestEmbeddingMemo, ScopedRetrievalResult
+from src.v7.scope_filter import build_scope_filters
 
 logger = structlog.get_logger()
 

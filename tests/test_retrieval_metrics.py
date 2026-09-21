@@ -8,14 +8,15 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 import pytest
+
 from eval.retrieval_metrics import (
-    hit_rate_at_k,
-    mean_reciprocal_rank,
-    precision_at_k,
-    recall_at_k,
-    ndcg_at_k,
     evaluate_retrieval,
     evaluate_retrieval_batch,
+    hit_rate_at_k,
+    mean_reciprocal_rank,
+    ndcg_at_k,
+    precision_at_k,
+    recall_at_k,
 )
 
 

@@ -10,6 +10,7 @@ import pytest
 def test_two_explicit_chroma_stores_remain_isolated(tmp_path):
     from langchain_chroma import Chroma
     from langchain_core.embeddings import Embeddings
+
     from src.backends.chroma_backend import ChromaBackend
 
     class LocalEmbedding(Embeddings):

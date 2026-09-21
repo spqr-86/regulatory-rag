@@ -62,7 +62,9 @@ def select_rejected(
 
     Именно на них контрольная выборка 07.09 показала пропуски: там, где обе
     стороны молчали, спорить не о чем."""
-    return sorted(n for n, v in arbiter.items() if not (v.get("relevant") or []) and n in cited)
+    return sorted(
+        n for n, v in arbiter.items() if not (v.get("relevant") or []) and n in cited
+    )
 
 
 def arbitrate_tasks(
@@ -112,7 +114,11 @@ def write_verdicts(verdicts: Sequence[dict], out_dir: Path, name: str = "paid") 
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{name}.arbiter.json"
     path.write_text(
-        json.dumps({"pass": "arbiter", "verdicts": list(verdicts)}, ensure_ascii=False, indent=1),
+        json.dumps(
+            {"pass": "arbiter", "verdicts": list(verdicts)},
+            ensure_ascii=False,
+            indent=1,
+        ),
         encoding="utf-8",
     )
     return path

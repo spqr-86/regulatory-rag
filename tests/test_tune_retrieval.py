@@ -96,17 +96,17 @@ class TestScanParam:
 
     def test_restores_config_after_the_scan(self):
         original = v7_config.RRF_K
-        scan_param("RRF_K", [10, 20], _gt(), lambda: (lambda q: []), ks=(5,))
+        scan_param("RRF_K", [10, 20], _gt(), lambda: lambda q: [], ks=(5,))
         assert v7_config.RRF_K == original
 
     def test_records_the_parameter_name_and_question_count(self):
-        scan = scan_param("RRF_K", [10], _gt(3), lambda: (lambda q: []), ks=(5,))
+        scan = scan_param("RRF_K", [10], _gt(3), lambda: lambda q: [], ks=(5,))
         assert scan["param"] == "RRF_K"
         assert scan["n"] == 3
 
     def test_rejects_an_empty_value_list(self):
         with pytest.raises(ValueError, match="values"):
-            scan_param("RRF_K", [], _gt(), lambda: (lambda q: []), ks=(5,))
+            scan_param("RRF_K", [], _gt(), lambda: lambda q: [], ks=(5,))
 
 
 class TestBestValue:
@@ -116,8 +116,7 @@ class TestBestValue:
             "n": 3,
             "ks": [5],
             "results": [
-                {"value": v, "metrics": {metric: m, "hit_rate@5": m}}
-                for v, m in pairs
+                {"value": v, "metrics": {metric: m, "hit_rate@5": m}} for v, m in pairs
             ],
         }
 

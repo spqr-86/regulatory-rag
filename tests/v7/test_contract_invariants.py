@@ -12,7 +12,8 @@ import copy
 
 import pytest
 
-from src.v7 import bridge, pack_context as pc
+from src.v7 import bridge
+from src.v7 import pack_context as pc
 from src.v7.contract import OBL_ENUM, OBL_REFS
 from src.v7.decide import accept
 from src.v7.nodes.evaluate_complex import evaluate_complex

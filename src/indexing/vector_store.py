@@ -2,15 +2,14 @@ from __future__ import annotations
 
 # ANCHOR: default cached store for legacy callers; explicit bound loading for
 # multiple collection/path/embedding spaces without process-global cache aliasing.
-
 import datetime
 import json
 import os
 from functools import lru_cache
 from typing import Any, Iterable, List
 
-from langchain_core.documents import Document
 from langchain_chroma import Chroma
+from langchain_core.documents import Document
 
 from config.settings import settings
 from src.infra.llm_factory import get_embedding_model
