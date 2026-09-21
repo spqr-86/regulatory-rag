@@ -81,14 +81,16 @@ CHROMA_COLLECTION_NAME=department_demo_v2 \
 streamlit run app.py --server.port 8502
 ```
 
-Open `http://localhost:8502`. Select a unit and a scope: `Закон`, `ЛНА`, or
-`Закон + ЛНА`. The scoped service runs the shared V7 graph in retrieval-only mode for the
-selected external/internal corpora, combines that evidence with the unit's object profile,
+Open `http://localhost:8502`. Select where to search: `Закон для объекта`,
+`ЛНА для объекта`, `Закон + ЛНА для объекта`, or `Общая нормативная база`. The first three
+options select a unit. The scoped service runs the shared V7 graph in retrieval-only mode for
+the selected external/internal corpora, combines that evidence with the unit's object profile,
 and generates one Department answer. External and internal retrieval branches run in
 parallel by default (`DEPARTMENT_RETRIEVAL_WORKERS=4`).
 
-The generic regulatory chat is the secondary Streamlit page
-`pages/2_Общий_поиск.py`. Its query goes through the full V7 graph:
+`Общая нормативная база` hides unit/profile controls and uses
+`GENERIC_CHROMA_DB_PATH` / `GENERIC_CHROMA_COLLECTION` (defaults:
+`./chroma_db` / `documents`). Its query goes through the full V7 graph:
 `intent_gate → router → rag_simple → evaluate_triage → [rag_complex] → generate_answer`
 (insufficient results escalate to `rag_complex`, then answer or abstain).
 

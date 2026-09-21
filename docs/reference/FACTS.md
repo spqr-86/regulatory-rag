@@ -84,7 +84,8 @@ Scoped Department service (Issue #58) uses `department_answer` v5 and the same V
 manifest/index through the retrieval-only V7 graph. Historical v1/v2 pair artifacts
 keep their recorded prompt versions. The root UI is wired to this scoped service by Issue
 #59; `DEPARTMENT_QA_MODE=v1` is rejected explicitly because the scoped service requires the
-v2 object-profile contract. Generic Q&A remains on `pages/2_Общий_поиск.py`.
+v2 object-profile contract. Generic Q&A is the `Общая нормативная база` option on the same
+screen and uses its own explicit `./chroma_db` / `documents` store.
 
 Cutover evidence (20.09.2026): the parallel scoped service (`workers=4`, production default)
 passed 9/9 contract checks on the object-profile pair set, with 0

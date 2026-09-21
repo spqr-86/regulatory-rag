@@ -183,7 +183,8 @@ contract.
 This is the main Streamlit screen. The user selects a unit and the corpus scope (law, local
 acts, or both); the service runs external and internal scoped retrieval through the shared V7
 runtime, then generates one answer over the retrieved norms and the full object profile.
-Generic regulatory chat remains available as the secondary page.
+Generic regulatory search is the fourth option in the same source selector; it hides object
+controls and runs the full Generic V7 graph without claiming applicability to a site.
 
 `answered` means **"citations checked"**, not "content verified": every cited id exists with
 the right role, no clarifying question is pending, both norm levels are present, a cited
@@ -217,8 +218,8 @@ uvicorn api:app --port 8503                # REST API at http://localhost:8503/d
 
 The root UI is Department Q&A and therefore also needs its manifest, object-profile source
 directory, and dedicated Chroma collection. The complete Department launch command and mode
-contract are in [Quick Start](./docs/getting-started.md#run-the-ui). Generic chat is the
-`pages/2_Общий_поиск.py` page in the same Streamlit app.
+contract are in [Quick Start](./docs/getting-started.md#run-the-ui). The same screen also
+offers `Общая нормативная база`, backed by the separate Generic index.
 
 Defaults: ChromaDB, OpenAI embeddings, and a two-provider LLM split (OpenRouter on the simple
 path, OpenAI on the complex path). Every layer — LLM, embeddings, reranker, vector store — is

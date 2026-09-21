@@ -1,5 +1,6 @@
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -49,6 +50,12 @@ class Settings(BaseSettings):
     # Vector store
     CHROMA_DB_PATH: str = "./chroma_db"
     CHROMA_COLLECTION_NAME: str = "documents"
+    # Generic normative search keeps its own store even when the root UI is
+    # launched with CHROMA_DB_PATH pointed at the Department V2 collection.
+    GENERIC_CHROMA_DB_PATH: str = "./chroma_db"
+    GENERIC_CHROMA_COLLECTION: str = "documents"
+    GENERIC_QUERY_WORKERS: int = Field(default=2, gt=0)
+    GENERIC_QUERY_PENDING: int = Field(default=2, ge=0)
     VECTOR_STORE: str = "chroma"
 
     # HTTP

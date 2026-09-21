@@ -1,10 +1,8 @@
 """Regulatory Compliance Assistant — department Q&A portfolio screen.
 
-Spec streamlit-portfolio-demo §5–§18: the root screen is the Department Q&A
-first-contact view (header, unit selector, compact profile, examples, one input)
-and, after a request, the structured result screen (answer, reasoning chain,
-bases, sources, technical details). The generic Regulatory RAG chat is the
-secondary line on ``pages/2_Общий_поиск.py``.
+The root screen unifies Department Q&A and Generic normative search through one
+"Где искать" choice. Object modes render the structured applicability result;
+the normative mode uses the existing Generic V7 graph without object context.
 """
 
 import os
@@ -26,6 +24,7 @@ from src.infra.llm_factory import apply_ipv6_patch_for_googleapis  # noqa: E402
 apply_ipv6_patch_for_googleapis()
 
 from config.settings import settings  # noqa: E402
+from src import ui_generic  # noqa: E402
 from src.department_qa.object_profile import (  # noqa: E402
     ObjectProfileError,
     typed_fields_prompt_lines,
@@ -68,10 +67,11 @@ _CSS = """
 st.markdown(_CSS, unsafe_allow_html=True)
 
 # Spec §8: default is both corpora ("Закон + ЛНА"), radio order fixed.
-_CORPUS_OPTIONS: dict[str, tuple[str, ...]] = {
-    "Закон": ("external",),
-    "ЛНА": ("internal",),
-    "Закон + ЛНА": ("external", "internal"),
+_CORPUS_OPTIONS: dict[str, tuple[str, ...] | None] = {
+    "Закон для объекта": ("external",),
+    "ЛНА для объекта": ("internal",),
+    "Закон + ЛНА для объекта": ("external", "internal"),
+    "Общая нормативная база": None,
 }
 
 _EXAMPLES = [
@@ -110,8 +110,13 @@ def load_department_stack(cache_key):
 
 @st.cache_resource(show_spinner=False)
 def get_telemetry_writer():
-    """One writer per Streamlit process, same pattern as pages/2_Общий_поиск.py."""
+    """One writer per Streamlit process for both UI modes."""
     return default_writer()
+
+
+@st.cache_resource(show_spinner=False)
+def load_generic_graph():
+    return ui_generic.load_generic_graph()
 
 
 def _unit_names(manifest) -> dict[str, str]:
@@ -281,30 +286,41 @@ def _render_result(entry: dict) -> None:
     render_feedback(response.trace_id)
 
 
-if not settings.CORPUS_MANIFEST_PATH or not os.path.exists(
-    settings.CORPUS_MANIFEST_PATH
-):
-    st.error(
-        "Не задан корпус подразделений: укажите CORPUS_MANIFEST_PATH и переиндексируйте."
-    )
-    st.stop()
+def _render_generic_result(entry: dict) -> None:
+    result = entry["result"]
+    st.divider()
+    st.subheader("Ваш вопрос")
+    st.markdown(entry["question"])
 
-try:
-    stack = load_department_stack(stack_cache_key())
-except (RuntimeError, ObjectProfileError) as exc:  # fail-fast config errors, shown
-    st.error(str(exc))
-    st.stop()
+    if result.get("clarify_message"):
+        answer = result["clarify_message"]
+    elif result.get("abstain_reason"):
+        answer = f"Не могу ответить: {result['abstain_reason']}"
+    elif result.get("answer"):
+        answer = result["answer"]
+    elif result.get("final_passages"):
+        answer = "\n\n---\n\n".join(
+            passage.get("text", "") for passage in result["final_passages"][:10]
+        )
+    elif result.get("intent") == "noise":
+        answer = "Задайте вопрос по нормативной документации."
+    else:
+        answer = "Не удалось получить ответ."
 
-if stack.config.mode != "v2":
-    st.error(
-        "Этот экран поддерживает только DEPARTMENT_QA_MODE=v2. Режим v1 доступен "
-        "только через eval/run_object_profile_pair.py для воспроизведения baseline."
-    )
-    st.stop()
+    st.subheader("Ответ")
+    st.markdown(answer)
+    passages = result.get("final_passages", [])
+    if passages:
+        with st.expander(f"Источники ({len(passages)})", expanded=False):
+            for i, passage in enumerate(passages[:8], 1):
+                metadata = passage.get("metadata", {}) or {}
+                source = metadata.get("source", "N/A")
+                score = passage.get("score", 0.0)
+                preview = passage.get("text", "")[:500].strip().replace("\n", " ")
+                st.markdown(f"**{i}.** `{source}` · score {score:.2f}")
+                st.code(preview, language="markdown")
+    render_feedback(entry["query_id"])
 
-manifest, config = stack.manifest, stack.config
-units = sorted({m["unit_id"] for m in manifest.documents.values() if m.get("unit_id")})
-names = _unit_names(manifest)
 
 st.title("Regulatory Compliance Assistant")
 st.caption(
@@ -312,38 +328,73 @@ st.caption(
 )
 
 st.subheader("Контекст запроса")
-unit = st.selectbox(
-    "Подразделение",
-    [None, *units],
-    index=1 if units else 0,
-    format_func=lambda u: (
-        "Без подразделения — общие требования" if u is None else names.get(u, u)
-    ),
-)
-
-profile = config.profiles.get(unit) if unit else None
-
 corpus_label = st.radio(
-    "Корпус",
+    "Где искать",
     list(_CORPUS_OPTIONS.keys()),
     index=2,
     horizontal=True,
 )
 selected_corpora = _CORPUS_OPTIONS[corpus_label]
+generic_mode = selected_corpora is None
 
-include_profile = st.checkbox(
-    "Учитывать данные объекта",
-    value=profile is not None,
-    disabled=profile is None,
-    key=f"include_profile_{unit}",
-)
+if generic_mode:
+    stack = manifest = config = None
+    units = []
+    names = {}
+    unit = None
+    profile = None
+    include_profile = False
+    st.caption(
+        "Поиск только по общей базе нормативных документов, без привязки к объекту."
+    )
+else:
+    if not settings.CORPUS_MANIFEST_PATH or not os.path.exists(
+        settings.CORPUS_MANIFEST_PATH
+    ):
+        st.error(
+            "Не задан корпус подразделений: укажите CORPUS_MANIFEST_PATH и переиндексируйте."
+        )
+        st.stop()
+    try:
+        stack = load_department_stack(stack_cache_key())
+    except (RuntimeError, ObjectProfileError) as exc:
+        st.error(str(exc))
+        st.stop()
+    if stack.config.mode != "v2":
+        st.error(
+            "Этот экран поддерживает только DEPARTMENT_QA_MODE=v2. Режим v1 доступен "
+            "только через eval/run_object_profile_pair.py для воспроизведения baseline."
+        )
+        st.stop()
+    manifest, config = stack.manifest, stack.config
+    units = sorted(
+        {m["unit_id"] for m in manifest.documents.values() if m.get("unit_id")}
+    )
+    names = _unit_names(manifest)
+    unit = st.selectbox(
+        "Подразделение",
+        [None, *units],
+        index=1 if units else 0,
+        format_func=lambda u: (
+            "Без подразделения — общие требования" if u is None else names.get(u, u)
+        ),
+    )
+    profile = config.profiles.get(unit) if unit else None
+    include_profile = st.checkbox(
+        "Учитывать данные объекта",
+        value=profile is not None,
+        disabled=profile is None,
+        key=f"include_profile_{unit}",
+    )
 
 if (
-    st.session_state.get("last_unit") != unit
+    st.session_state.get("last_search_mode") != corpus_label
+    or st.session_state.get("last_unit") != unit
     or st.session_state.get("last_corpora") != selected_corpora
     or st.session_state.get("last_profile_flag") != include_profile
 ):
     st.session_state.pop("last_answer", None)
+    st.session_state["last_search_mode"] = corpus_label
     st.session_state["last_unit"] = unit
     st.session_state["last_corpora"] = selected_corpora
     st.session_state["last_profile_flag"] = include_profile
@@ -370,11 +421,16 @@ for column, example in zip(st.columns(len(_EXAMPLES)), _EXAMPLES):
 question = st.text_input(
     "Вопрос",
     key="question_input",
-    placeholder="Задайте вопрос по требованиям к выбранному подразделению",
+    placeholder=(
+        "Задайте вопрос по нормативным документам"
+        if generic_mode
+        else "Задайте вопрос по требованиям к выбранному подразделению"
+    ),
 )
 submit = st.button("Спросить", type="primary")
 
 if (submit or example_clicked) and question.strip():
+    st.session_state.pop("last_answer", None)
     with st.status("Обработка запроса…", expanded=True) as progress:
 
         def on_progress(stage: str) -> None:
@@ -383,35 +439,64 @@ if (submit or example_clicked) and question.strip():
                 progress.write(label)
 
         started = time.perf_counter()
-        context = RequestContext(
-            corpora=selected_corpora,
-            unit_id=unit,
-            include_object_profile=include_profile,
-        )
-        scoped_kwargs = {
-            "known_units": stack.known_units,
-            "snapshot_id": manifest.snapshot_id,
-            "profiles": config.profiles,
-            "progress_fn": on_progress,
-        }
-        if stack.service_limits is not None:
-            scoped_kwargs["limits"] = stack.service_limits
-        response = answer_scoped_question(
-            question.strip(),
-            context,
-            stack.retrieve_fn,
-            stack.model_fn,
-            writer=get_telemetry_writer(),
-            **scoped_kwargs,
-        )
+        request_failed = False
+        if generic_mode:
+            progress.write("Поиск по нормативной базе")
+            try:
+                result, query_id = ui_generic.answer_generic_question(
+                    load_generic_graph(),
+                    question.strip(),
+                    writer=get_telemetry_writer(),
+                )
+            except ui_generic.GenericSearchError as exc:
+                progress.update(label="Ошибка", state="error", expanded=False)
+                st.error(str(exc))
+                result = query_id = None
+                request_failed = True
+        else:
+            context = RequestContext(
+                corpora=selected_corpora,
+                unit_id=unit,
+                include_object_profile=include_profile,
+            )
+            scoped_kwargs = {
+                "known_units": stack.known_units,
+                "snapshot_id": manifest.snapshot_id,
+                "profiles": config.profiles,
+                "progress_fn": on_progress,
+            }
+            if stack.service_limits is not None:
+                scoped_kwargs["limits"] = stack.service_limits
+            response = answer_scoped_question(
+                question.strip(),
+                context,
+                stack.retrieve_fn,
+                stack.model_fn,
+                writer=get_telemetry_writer(),
+                **scoped_kwargs,
+            )
         latency_s = time.perf_counter() - started
-        progress.update(label="Готово", state="complete", expanded=False)
-    st.session_state["last_answer"] = {
-        "question": question.strip(),
-        "unit_id": unit,
-        "response": response,
-        "latency_s": latency_s,
-    }
+        if not request_failed:
+            progress.update(label="Готово", state="complete", expanded=False)
+    if generic_mode and result is not None:
+        st.session_state["last_answer"] = {
+            "mode": "generic",
+            "question": question.strip(),
+            "result": result,
+            "query_id": query_id,
+            "latency_s": latency_s,
+        }
+    elif not generic_mode:
+        st.session_state["last_answer"] = {
+            "mode": "department",
+            "question": question.strip(),
+            "unit_id": unit,
+            "response": response,
+            "latency_s": latency_s,
+        }
 
 if last := st.session_state.get("last_answer"):
-    _render_result(last)
+    if last.get("mode") == "generic":
+        _render_generic_result(last)
+    else:
+        _render_result(last)

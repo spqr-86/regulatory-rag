@@ -206,8 +206,9 @@ def test_page_stops_with_error_when_stack_mode_is_not_v2(monkeypatch, tmp_path):
     assert not at.exception
     assert len(at.error) == 1
     assert "v2" in at.error[0].value
-    # Nothing past the guard ran: no unit selector, no question screen.
-    assert not at.subheader
+    # The mode selector remains usable, but object controls and question screen stop.
+    assert not at.selectbox
+    assert "Что хотите проверить?" not in [h.value for h in at.subheader]
 
 
 EVIDENCE = [
@@ -484,8 +485,107 @@ def test_corpus_radio_default_and_options(monkeypatch, tmp_path):
 
     assert not at.exception
     assert len(at.radio) == 1
-    assert at.radio[0].options == ["Закон", "ЛНА", "Закон + ЛНА"]
-    assert at.radio[0].value == "Закон + ЛНА"
+    assert at.radio[0].options == [
+        "Закон для объекта",
+        "ЛНА для объекта",
+        "Закон + ЛНА для объекта",
+        "Общая нормативная база",
+    ]
+    assert at.radio[0].value == "Закон + ЛНА для объекта"
+
+
+def test_generic_mode_hides_object_controls(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    monkeypatch.setattr(wiring, "build_department_stack", _fake_stack)
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+    at.radio[0].set_value("Общая нормативная база").run()
+
+    assert not at.exception
+    assert not at.selectbox
+    assert not at.checkbox
+    assert at.text_input[0].placeholder == "Задайте вопрос по нормативным документам"
+
+
+def test_generic_mode_calls_generic_runtime(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    monkeypatch.setattr(wiring, "build_department_stack", _fake_stack)
+    captured = {}
+
+    monkeypatch.setattr("src.ui_generic.load_generic_graph", lambda: object())
+
+    def fake_answer(graph, question, *, writer):
+        captured["graph"] = graph
+        captured["question"] = question
+        return {
+            "answer": "Ширина определяется применимой нормой.",
+            "final_passages": [
+                {
+                    "text": "Ширина эвакуационного пути.",
+                    "score": 0.8,
+                    "metadata": {"source": "СП.pdf"},
+                }
+            ],
+        }, "generic-trace"
+
+    monkeypatch.setattr("src.ui_generic.answer_generic_question", fake_answer)
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+    at.radio[0].set_value("Общая нормативная база").run()
+    at.text_input[0].set_value("Какая ширина эвакуационного пути?").run()
+    [b for b in at.button if b.label == "Спросить"][0].click().run()
+
+    assert not at.exception
+    assert captured["question"] == "Какая ширина эвакуационного пути?"
+    body = " ".join(m.value for m in at.markdown)
+    assert "Ширина определяется применимой нормой." in body
+    assert "СП.pdf" in body
+
+
+def test_generic_mode_remains_available_when_department_manifest_is_missing(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        settings, "CORPUS_MANIFEST_PATH", str(tmp_path / "missing.yaml")
+    )
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+    assert len(at.error) == 1
+    at.radio[0].set_value("Общая нормативная база").run()
+
+    assert not at.exception
+    assert len(at.text_input) == 1
+    assert not at.selectbox
+
+
+def test_generic_failure_is_shown_without_traceback(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "CORPUS_MANIFEST_PATH", str(_manifest_path(tmp_path)))
+    monkeypatch.setattr(wiring, "build_department_stack", _fake_stack)
+
+    def fail_load():
+        from src.ui_generic import GenericSearchError
+
+        raise GenericSearchError("Общая нормативная база сейчас недоступна.")
+
+    monkeypatch.setattr("src.ui_generic.load_generic_graph", fail_load)
+
+    at = AppTest.from_file(PAGE, default_timeout=30).run()
+    at.radio[0].set_value("Общая нормативная база").run()
+    at.session_state["last_answer"] = {
+        "mode": "generic",
+        "question": "Старый вопрос",
+        "result": {"answer": "СТАРЫЙ ОТВЕТ"},
+        "query_id": "old-trace",
+    }
+    at.run()
+    assert "СТАРЫЙ ОТВЕТ" in " ".join(m.value for m in at.markdown)
+    at.text_input[0].set_value("Что требует норма?").run()
+    [b for b in at.button if b.label == "Спросить"][0].click().run()
+
+    assert not at.exception
+    assert len(at.error) == 1
+    assert at.error[0].value == "Общая нормативная база сейчас недоступна."
+    assert "СТАРЫЙ ОТВЕТ" not in " ".join(m.value for m in at.markdown)
 
 
 def test_profile_checkbox_enabled_only_with_profile(monkeypatch, tmp_path):
@@ -522,7 +622,7 @@ def test_submit_calls_scoped_service_with_context(monkeypatch, tmp_path):
 
     at = AppTest.from_file(PAGE, default_timeout=30).run()
     at.selectbox[0].select_index(2).run()  # unit_office — has a profile
-    at.radio[0].set_value("Закон").run()
+    at.radio[0].set_value("Закон для объекта").run()
     at.checkbox[0].set_value(False).run()
     at.text_input[0].set_value("Как часто требуется проверка?").run()
     [b for b in at.button if b.label == "Спросить"][0].click().run()
@@ -538,7 +638,7 @@ def test_changing_corpus_clears_last_answer(monkeypatch, tmp_path):
     at = _submit(monkeypatch, tmp_path, _answered_response())
     assert "Ваш вопрос" in [h.value for h in at.subheader]
 
-    at.radio[0].set_value("Закон").run()
+    at.radio[0].set_value("Закон для объекта").run()
 
     assert not at.exception
     assert "Ваш вопрос" not in [h.value for h in at.subheader]

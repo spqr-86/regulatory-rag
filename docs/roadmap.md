@@ -45,7 +45,7 @@ retrieval-only runtime) и #57 (сквозной scope и общий retrieval c
 - ✅ Онлайн-мониторинг — каждый запрос строкой в Postgres (цена, латентность, маршрут, токены, `source`), дашборд Grafana, 👍/👎 под ответом; весь стек — один `docker compose up`
 - ✅ Q&A подразделений — отдельный стек для вопросов об объекте подразделения поверх внешних и внутренних норм плюс структурированный профиль объекта; типизированный лист, детерминированные гейты цитат и `unknown`-полей; дефолт `v2`
 - ✅ Общий scoped retrieval — V7 retrieval-only runtime, сквозной scope, request-local reuse embedding, общий lazy reranker и ограниченно-параллельные external/internal ветви (#56–#58)
-- ✅ Корневой Streamlit переключён на scoped Department service; generic Q&A оставлен вторичной страницей (#59, PR #62)
+- ✅ Один корневой Streamlit объединяет scoped Department service и Generic V7: три объектных источника плюс «Общая нормативная база»; отдельная Generic-страница удалена
 - ✅ Scoped Department cutover смержен и задеплоен localhost-only на VPS (порт 8502, Streamlit)
 - ✅ Post-deploy live generation smoke: q5, contract 1/1, 0 deterministic violations
 

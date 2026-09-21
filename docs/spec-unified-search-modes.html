@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Единый экран режимов Regulatory RAG</title>
+  <style>
+    :root { color-scheme: light; --ink:#17202a; --muted:#607080; --line:#dce3e8; --accent:#1f6f78; --soft:#f4f8f8; }
+    body { margin:0; font:16px/1.55 system-ui,sans-serif; color:var(--ink); background:#fff; }
+    main { max-width:980px; margin:auto; padding:44px 24px 80px; }
+    h1 { font-size:2.2rem; line-height:1.15; margin-bottom:.4rem; }
+    h2 { margin-top:2.4rem; border-top:1px solid var(--line); padding-top:1.4rem; }
+    h3 { margin-bottom:.3rem; } .muted { color:var(--muted); }
+    .decision,.card { border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:16px 0; }
+    .decision { background:var(--soft); border-color:#aacdd0; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; }
+    .mock { border:1px solid var(--line); border-radius:10px; padding:16px; background:#fafcfc; }
+    .switch { display:flex; gap:8px; margin-bottom:14px; }
+    .pill { border:1px solid var(--line); border-radius:999px; padding:8px 12px; }
+    .active { color:white; background:var(--accent); border-color:var(--accent); }
+    code { background:#eef2f3; padding:2px 5px; border-radius:4px; }
+    li { margin:.35rem 0; }
+  </style>
+</head>
+<body><main>
+  <h1>Единый экран: объект или нормативная база</h1>
+  <p class="muted">Regulatory RAG · UX/implementation spec · 21.09.2026</p>
+
+  <section class="decision">
+    <strong>Решение:</strong> один главный экран и один расширенный выбор источника вместо
+    двух переключателей. По умолчанию — «Закон + ЛНА для объекта». Generic-контур
+    сохраняется, но отдельная пользовательская страница исчезает. Контракты и backend-пути
+    не смешиваются.
+  </section>
+
+  <h2>Задача</h2>
+  <p>Сейчас Department Q&amp;A и Generic V7 выглядят как два приложения. Нужно оставить один
+    понятный вход: пользователь либо проверяет применимость требований к выбранному объекту,
+    либо ищет ответ только в нормативной базе. Во втором режиме интерфейс не должен показывать
+    подразделение, профиль объекта и ЛНА.</p>
+
+  <h2>Варианты</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>A. Один расширенный выбор источника</h3>
+      <div class="mock"><div class="switch"><span class="pill">Закон для объекта</span><span class="pill">ЛНА для объекта</span><span class="pill active">Закон + ЛНА для объекта</span><span class="pill">Общая нормативная база</span></div><div>Подразделение · Профиль объекта</div><hr><div>Задайте вопрос…</div></div>
+      <p><strong>Плюсы:</strong> один продукт и один контрол; пользователь выбирает намерение через понятный источник.</p>
+      <p><strong>Минусы:</strong> четыре варианта длиннее прежнего radio и требуют компактной раскладки.</p>
+    </article>
+    <article class="card">
+      <h3>B. Один вопрос, автоматический выбор</h3>
+      <p>Система сама решает, нужен ли объект, и маршрутизирует запрос.</p>
+      <p><strong>Плюсы:</strong> минимум контролов.</p>
+      <p><strong>Минусы:</strong> скрытая магия, неоднозначный контракт, ошибки маршрутизации трудно объяснить.</p>
+    </article>
+    <article class="card">
+      <h3>C. Один смешанный ответ</h3>
+      <p>Всегда искать нормы, ЛНА и объект, затем строить единый ответ.</p>
+      <p><strong>Плюсы:</strong> единый backend-вызов.</p>
+      <p><strong>Минусы:</strong> нормативный поиск загрязняется объектом, растут цена и задержка, теряется воспроизводимость Generic eval.</p>
+    </article>
+  </div>
+
+  <h2>Принятый вариант A</h2>
+  <ul>
+    <li>Существующий radio «Корпус» переименован в «Где искать» и содержит четыре варианта.</li>
+    <li>Дефолт: <strong>«Закон + ЛНА для объекта»</strong>.</li>
+    <li>Три объектных варианта сохраняют unit, профиль и текущий scoped Department service.</li>
+    <li>«Общая нормативная база» скрывает unit/profile; вопрос идёт в существующий Generic V7 runtime.</li>
+    <li>Результат нормативного режима показывает ответ, маршрут и источники; никаких выводов «применимо к объекту».</li>
+    <li>При смене режима результат и зависящее от формы session state сбрасываются.</li>
+    <li><code>pages/2_Общий_поиск.py</code> удаляется из Streamlit-навигации; Generic backend, API и eval остаются.</li>
+  </ul>
+
+  <h2>Критерии приёмки</h2>
+  <ul>
+    <li>[ ] Главная страница открывается с «Закон + ЛНА для объекта» по умолчанию.</li>
+    <li>[ ] «Общая нормативная база» скрывает все объектные контролы.</li>
+    <li>[ ] Объектный запрос по-прежнему вызывает <code>answer_scoped_question</code>.</li>
+    <li>[ ] Нормативный запрос вызывает bound Generic V7 runtime, без Department service.</li>
+    <li>[ ] Смена режима не показывает ответ, полученный в другом режиме.</li>
+    <li>[ ] Отдельной страницы «Общий поиск» нет в sidebar.</li>
+    <li>[ ] API, eval-раннеры и Generic unit-тесты не затронуты.</li>
+    <li>[ ] Streamlit AppTest покрывает дефолт, переключение, скрытие контролов и оба вызова.</li>
+    <li>[ ] Targeted tests, <code>pytest -m unit</code>, docs check и smoke проходят.</li>
+  </ul>
+</main></body></html>
