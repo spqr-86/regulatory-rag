@@ -13,7 +13,8 @@ retrieval-only runtime) и #57 (сквозной scope и общий retrieval c
 #62. Cutover принят по сравнению old / workers=1 / workers=4: параллельный scoped service
 прошёл 9/9 контрактов. PR #62 смержен и localhost-only Streamlit поднят на merge-коммите
 `18ad818`; публичные listener'ы 8502/8504 закрыты. HTTP health, загрузка v2-конфигурации и
-77 целевых тестов прошли; live generation smoke остаётся открытым. Отчёт:
+77 целевых тестов прошли; live q5 smoke вернул ожидаемый
+`needs_context/applicability_unclear`, contract 1/1 без нарушений. Отчёт:
 [`department-scoped-service-pr4-wiring.md`](./evaluation/experiments/department-scoped-service-pr4-wiring.md).
 
 Единственное место, где собран маршрут проекта. До этого файла он был размазан по трём
@@ -46,7 +47,7 @@ retrieval-only runtime) и #57 (сквозной scope и общий retrieval c
 - ✅ Общий scoped retrieval — V7 retrieval-only runtime, сквозной scope, request-local reuse embedding, общий lazy reranker и ограниченно-параллельные external/internal ветви (#56–#58)
 - ✅ Корневой Streamlit переключён на scoped Department service; generic Q&A оставлен вторичной страницей (#59, PR #62)
 - ✅ Scoped Department cutover смержен и задеплоен localhost-only на VPS (порт 8502, Streamlit)
-- 🟡 Post-deploy live generation smoke ещё не выполнен
+- ✅ Post-deploy live generation smoke: q5, contract 1/1, 0 deterministic violations
 
 ## Рамка
 

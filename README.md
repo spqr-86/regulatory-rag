@@ -267,8 +267,8 @@ shows cost, 👍/👎 rate, routes and p50/p95. Without the stack nothing breaks
   the whole stack is one `docker compose up`
 
 The scoped Department build is deployed on a VPS as a localhost-only Streamlit service
-(port 8502). HTTP health, configuration loading and local tests pass; a post-deploy live
-generation smoke is still pending. The full shipped-capability checklist and the
+(port 8502). HTTP health, configuration loading, local tests and a post-deploy live
+generation smoke pass. The full shipped-capability checklist and the
 optional post-MVP backlog (independent judge validation, error attribution between retrieval
 and generation, a chunking experiment for tables and headers) are in
 [docs/roadmap.md](./docs/roadmap.md); results, rejected variants and threats to validity are
