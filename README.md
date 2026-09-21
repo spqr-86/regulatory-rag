@@ -18,12 +18,15 @@ that a wrong answer can be attributed to a missing chunk or to a bad decision ov
 
 **Retrieval** (90 questions taken verbatim from OT/PB practitioner forums, never used for
 tuning): HR@5 **0.63** · HR@12 **0.81** · MRR **0.50**.
-**Generation** (56-question golden set, `gpt-4o` judge): in-scope correctness **7.47 / 10** ·
-faithfulness **0.891** · answer relevance **0.879** · **~$0.0039/query**, p50 **4.5 s**.
+**Generation** (56-question golden set, `gpt-4o` judge, showcase default
+`deepseek/deepseek-v4.1-flash`): in-scope correctness **7.91 / 10** ·
+faithfulness **0.926** · answer relevance **0.887** · **~$0.0066/query**, p50 **24.0 s**.
 
-Two of the numbers miss their targets and are reported anyway: in-scope correctness 7.47
-against a >7.5 target, and false-sufficiency 11.4% against a <10% target. Sample sizes and
-what each metric actually denominates are in [Metrics](#metrics).
+One number still misses its target and is reported anyway: false-sufficiency 10.0% against a
+<10% target (0.1 pp outside). The showcase default also runs ~5× slower than the prior
+GPT-4o-mini baseline (p50 4.5 s → 24 s), unexplained so far. Sample sizes and what each metric
+actually denominates are in [Metrics](#metrics); the pricing fix behind the cost number is in
+[the memo](./docs/evaluation/experiments/showcase-default-golden-set.md).
 
 > Canonical values live in [docs/reference/FACTS.md](./docs/reference/FACTS.md). Design
 > reasoning: [docs/explanation/design-decisions.md](./docs/explanation/design-decisions.md).
@@ -81,15 +84,15 @@ your own. Exact counts: [FACTS § corpus](./docs/reference/FACTS.md#corpus).
 | Metric | Value | Measured on |
 |---|---|---|
 | Retrieval HR@5 / HR@12 / MRR (hybrid) | 0.63 / 0.81 / 0.50 | 90 practitioner questions |
-| In-scope correctness | 7.47 / 10 | 43 in-scope questions (target >7.5) |
-| Correctness, all questions | 7.26 / 10 | 56-question golden set |
-| Faithfulness | 0.891 | 56-question golden set |
-| Answer relevance | 0.879 | 56-question golden set |
+| In-scope correctness | 7.91 / 10 | 43 in-scope questions (target >7.5, met) |
+| Correctness, all questions | 7.98 / 10 | 56-question golden set |
+| Faithfulness | 0.926 | 56-question golden set |
+| Answer relevance | 0.887 | 56-question golden set |
 | OOS abstain rate | 1.00 | out-of-scope subset only — 7 questions, a small sample |
-| False-sufficiency rate | 11.4% | share of simple-path answers the judge scored < 5/10 (target <10%) |
-| Complex-path rate | 17% | 56-question golden set |
-| Latency p50 / p95 / mean | 4.51 / 15.70 / 6.83 s | per query, end to end |
-| Cost / query | $0.00387 ($0.205 / run) | provider token usage, not an estimate |
+| False-sufficiency rate | 10.0% | share of simple-path answers the judge scored < 5/10 (target <10%, 0.1 pp outside) |
+| Complex-path rate | 24.5% | 56-question golden set |
+| Latency p50 / p95 / mean | 24.0 / 71.3 / 30.95 s | per query, end to end |
+| Cost / query | $0.00657 ($0.348 / run) | provider token usage, `src/pricing.py` rate card |
 
 **How to read these.** The golden set is 56 questions — 43 in-scope, 7 out-of-scope, 6 with a
 false premise; 53 of 56 answers were valid in the reported run. *False-sufficiency* is not a

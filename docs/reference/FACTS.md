@@ -141,25 +141,33 @@ intent_gate ─(noise)→ END
 - **`evaluate_triage` is a single hard-gate path** (`check_full_triage`: `top_score` / `passage_count` / `keyword_overlap`). On a sufficient verdict it emits a structured `triage_gap` (`TriageGap`/`GapRef`, issue #13) describing which referenced п./ст. are missing from the top-5; the gap is closed in place by appending cross-referenced passages to the tail (no reorder), and escalation to `rag_complex` happens only if the gap stays open. The V8 `_evidence_assess` variant and its `V7_V8_ENABLE_EVIDENCE_ASSESS` flag were removed 2026-09-08 (variant B).
 
 ## metrics
-Source: `benchmarks/eval_v7_triage_contract_final_2026-09-11.jsonl` (dataset 56,
-valid 53). Pipeline: the final terminal triage contract, OpenAI `gpt-4o-mini` (simple) /
-`gpt-4o` (complex), `gpt-4o` judge, CrossEncoder reranker, cap 100.
+Source: `benchmarks/eval_v7_deepseek_2026-09-17.jsonl` (dataset 56, valid 53). Pipeline: the
+final terminal triage contract, showcase default `deepseek/deepseek-v4.1-flash` (simple) /
+`gpt-4o` (complex — moved to DeepSeek too on 18.09.2026, after this run), `gpt-4o` judge,
+CrossEncoder reranker, cap 100. Cost recomputed from the run's own token usage against
+`src/pricing.py::PRICE_PER_1M`, not the run's self-reported total — DeepSeek had no rate card
+entry at run time, so every simple-path query originally priced at $0. Details:
+[showcase-default-golden-set](../evaluation/experiments/showcase-default-golden-set.md).
 
-| metric | value | pre-contract baseline (2026-09-08) |
-|---|---|---|
-| in-scope correctness | 7.47 / 10 | 7.40 |
-| correctness mean | 7.26 / 10 | 7.09 |
-| faithfulness | 0.891 | 0.808 |
-| answer relevance | 0.879 | 0.881 |
-| OOS rejection rate | 1.00 | 1.00 |
-| false-sufficiency rate | 0.114 | 0.130 |
-| complex-path rate | 0.170 | 0.132 |
-| latency p50 / p95 / mean | 4.51 / 15.70 / 6.83 s | 4.8 / 14.7 / 5.9 s |
-| cost / query | $0.00387 ($0.205 run total) | $0.0033 |
+| metric | value (17.09-7, showcase default) | 2026-09-11 terminal-contract baseline | pre-contract baseline (2026-09-08) |
+|---|---|---|---|
+| in-scope correctness | **7.91 / 10** | 7.47 | 7.40 |
+| correctness mean | 7.98 / 10 | 7.26 | 7.09 |
+| faithfulness | 0.926 | 0.891 | 0.808 |
+| answer relevance | 0.887 | 0.879 | 0.881 |
+| OOS rejection rate | 1.00 | 1.00 | 1.00 |
+| false-sufficiency rate | **0.100** | 0.114 | 0.130 |
+| complex-path rate | 0.245 | 0.170 | 0.132 |
+| latency p50 / p95 | 24.0 / 71.3 s | 4.51 / 15.70 / 6.83 s | 4.8 / 14.7 / 5.9 s |
+| cost / query | $0.00657 ($0.348 run total) | $0.00387 ($0.205 run total) | $0.0033 |
 
-The terminal contract improved faithfulness and false sufficiency without losing
-correctness or relevance beyond judge variance. It costs about 18% more per query and
-adds about 7% to p95 latency relative to the pre-contract hard-gate baseline.
+In-scope correctness clears the >7.5 target for the first time; false-sufficiency sits at
+10.0%, still formally 0.1 pp outside the <10% target. The gains came with a ~5× latency
+regression (p50 4.5 s → 24 s, unexplained) and a real cost about 70% above the previous
+baseline, not below it — see the memo for why the run's own reported cost ($0.00430) was
+wrong. The 2026-09-11 vs 2026-09-08 comparison below is unchanged: the terminal contract
+improved faithfulness and false sufficiency without losing correctness or relevance beyond
+judge variance, at about 18% more cost per query and 7% more p95 latency.
 
 > **Judge note (fix 2026-09-02).** Every run before this date was judged by
 > **`gpt-4o-mini`, not `gpt-4o`** — `llm_factory` carried the resolved settings model into

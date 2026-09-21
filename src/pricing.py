@@ -21,6 +21,12 @@ PRICE_PER_1M = {
     # Длинный контекст (>272K) идёт вдвое дороже; наши промпты в него не входят.
     "gpt-5.6-sol": {"input": 4.00, "output": 20.00},
     "gpt-5.6-terra": {"input": 2.00, "output": 12.00},
+    # DeepSeek's own official off-peak rate (checked 21.09.2026, not from memory) — used as
+    # the stable reference instead of OpenRouter's fluctuating per-provider price, which on
+    # the same day ranged $0.12-0.375 input / $0.48-1.50 output across ~21 routes (headline
+    # discount $0.12/$0.48, most common undiscounted base $0.30/$1.20). Peak hours
+    # (01:00-04:00, 06:00-10:00 UTC weekdays) double this rate; not modeled here.
+    "deepseek/deepseek-v4.1-flash": {"input": 0.15, "output": 0.60},
 }
 
 
