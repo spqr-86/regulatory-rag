@@ -18,7 +18,7 @@ retrieval-only runtime) и #57 (сквозной scope и общий retrieval c
 [`department-scoped-service-pr4-wiring.md`](./evaluation/experiments/department-scoped-service-pr4-wiring.md).
 
 Единственное место, где собран маршрут проекта. До этого файла он был размазан по трём
-источникам: конспект курса и аудит покрытия (вне репо, `~/career/courses/llm-zoomcamp/`),
+источникам: конспект курса и аудит покрытия (вне репо, `~/career/learning/courses/llm-zoomcamp/`),
 спек текущего инкремента (`archive/spec-retrieval-eval.html`), состояние сессий
 (`~/assistant-core/handoffs/`).
 
