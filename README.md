@@ -28,6 +28,11 @@ retrieval HR@5 **0.63** on 90 practitioner questions never used for tuning.
 Screenshots of the live Streamlit UI (DeepSeek V4.1 Flash, 23.09.2026). The UI is in Russian;
 the unit data is synthetic.
 
+![Unit-scoped question: the answer cites the norms, then asks for the missing fact](docs/assets/demo/unit-depot.gif)
+
+*A warehouse asks when its fire escape must be tested: the system cites the norm and the local act,
+sees the last test date is unknown and asks for it. The ~90 s wait for the answer is cut.*
+
 | General regulatory base — direct answer | General regulatory base — direct answer |
 |---|---|
 | [<img src="docs/assets/demo/01-generic-internship.png" width="400">](docs/assets/demo/01-generic-internship.png) | [<img src="docs/assets/demo/02-generic-microenterprise.png" width="400">](docs/assets/demo/02-generic-microenterprise.png) |

@@ -28,6 +28,11 @@ retrieval HR@5 **0.63** на 90 вопросах практиков, не исп
 Снимки живого Streamlit-интерфейса (DeepSeek V4.1 Flash, 23.09.2026). Данные подразделений
 синтетические.
 
+![Вопрос подразделения: ответ цитирует нормы и просит недостающий факт](docs/assets/demo/unit-depot.gif)
+
+*Склад спрашивает, когда испытывать пожарную лестницу: система цитирует норму и ЛНА, видит, что дата
+последнего испытания неизвестна, и просит её. Ожидание ответа (~90 с) вырезано.*
+
 | Общая нормативная база — прямой ответ | Общая нормативная база — прямой ответ |
 |---|---|
 | [<img src="docs/assets/demo/01-generic-internship.png" width="400">](docs/assets/demo/01-generic-internship.png) | [<img src="docs/assets/demo/02-generic-microenterprise.png" width="400">](docs/assets/demo/02-generic-microenterprise.png) |
