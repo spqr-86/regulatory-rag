@@ -354,10 +354,31 @@ def _create_local_embeddings():
     )
 
 
+def _create_openrouter_embeddings():
+    """text-embedding-3-small via OpenRouter: same model, so the index stays valid.
+
+    check_embedding_ctx_length=False: LangChain otherwise sends tiktoken id
+    arrays, an OpenAI-only input shape; OpenRouter gets plain strings.
+    """
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY not set")
+    model = settings.EMBEDDING_MODEL_NAME or "text-embedding-3-small"
+    if "/" not in model:
+        model = f"openai/{model}"
+    return OpenAIEmbeddings(
+        model=model,
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1",
+        check_embedding_ctx_length=False,
+    )
+
+
 _EMBEDDING_PROVIDERS = {
     "openai": lambda: OpenAIEmbeddings(
         model=settings.EMBEDDING_MODEL_NAME or "text-embedding-3-small"
     ),
+    "openrouter": _create_openrouter_embeddings,
     "hf_api": _create_hf_embeddings,
     "local": _create_local_embeddings,
     "huggingface": _create_local_embeddings,

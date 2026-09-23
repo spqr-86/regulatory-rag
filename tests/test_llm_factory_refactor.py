@@ -228,3 +228,49 @@ def test_openrouter_chat_exposes_serving_provider(monkeypatch):
     )
     message = result.generations[0].message
     assert message.response_metadata["openrouter_provider"] == "DeepInfra"
+
+
+# --- Embeddings through OpenRouter -------------------------------------------
+# The OpenAI account ran out of credits; OpenRouter serves the same
+# text-embedding-3-small, so the existing Chroma index stays valid.
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "model_name, expected",
+    [
+        ("text-embedding-3-small", "openai/text-embedding-3-small"),
+        ("openai/text-embedding-3-small", "openai/text-embedding-3-small"),
+        (None, "openai/text-embedding-3-small"),
+    ],
+)
+def test_openrouter_embeddings_use_its_key_endpoint_and_raw_text(
+    monkeypatch, model_name, expected
+):
+    import src.infra.llm_factory as lf
+
+    spy = MagicMock(name="OpenAIEmbeddings")
+    monkeypatch.setattr(lf, "OpenAIEmbeddings", spy)
+    monkeypatch.setattr(lf.settings, "EMBEDDING_PROVIDER", "openrouter")
+    monkeypatch.setattr(lf.settings, "EMBEDDING_MODEL_NAME", model_name)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
+
+    lf.get_embedding_model()
+
+    kwargs = spy.call_args.kwargs
+    assert kwargs["model"] == expected
+    assert kwargs["api_key"] == "router-key"
+    assert kwargs["base_url"] == "https://openrouter.ai/api/v1"
+    # Token-id arrays are an OpenAI-only input shape; send strings.
+    assert kwargs["check_embedding_ctx_length"] is False
+
+
+@pytest.mark.unit
+def test_openrouter_embeddings_require_key(monkeypatch):
+    import src.infra.llm_factory as lf
+
+    monkeypatch.setattr(lf.settings, "EMBEDDING_PROVIDER", "openrouter")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+        lf.get_embedding_model()
