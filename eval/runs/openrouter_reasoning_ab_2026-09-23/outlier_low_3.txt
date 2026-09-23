@@ -1,0 +1,87 @@
+
+[1mQUERY:[0m С какой периодичностью водители автотранспорта проходят обязательный периодический медицинский осмотр?
+[2mЗагружаю vector store…[0m2026-09-23 08:59:49 [info     ] Chroma DB loaded: 7842 documents
+2026-09-23 08:59:49 [info     ] llm_factory.openrouter_request max_tokens=None model=deepseek/deepseek-v4.1-flash provider={'sort': 'latency'} reasoning={'effort': 'low'} thinking_budget=4096
+2026-09-23 08:59:49 [info     ] llm_factory.openrouter_request max_tokens=None model=deepseek/deepseek-v4.1-flash provider={'sort': 'latency'} reasoning={'effort': 'low'} thinking_budget=4096
+2026-09-23 08:59:49 [info     ] llm_factory.openrouter_request max_tokens=None model=deepseek/deepseek-v4.1-flash provider={'sort': 'latency'} reasoning={'enabled': False} thinking_budget=0
+2026-09-23 08:59:49 [info     ] v7 LLM generator and expander built successfully
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+2026-09-23 08:59:49 [info     ] v7 visual proof built successfully
+ [92mготово[0m
+2026-09-23 09:00:16 [info     ] Domain gate: centroid computed from 7842 docs, dim=1536
+2026-09-23 09:00:16 [debug    ] domain gate                    cosine_sim=0.3751 threshold=0.25
+2026-09-23 09:00:16 [info     ] prompt_manager.rendered        hash=4f97ecff inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-09-23 09:00:18 [info     ] vector_search.timing           search_s=0.181 top_k=12
+2026-09-23 09:00:18 [info     ] vector_search.timing           search_s=0.129 top_k=12
+2026-09-23 09:00:18 [info     ] vector_search.timing           search_s=0.152 top_k=12
+2026-09-23 09:00:18 [info     ] vector_search.timing           search_s=0.166 top_k=12
+2026-09-23 09:00:19 [debug    ] cross_ref.mech1_added          count=15
+2026-09-23 09:00:19 [debug    ] cross_ref.mech2_added          count=24
+2026-09-23 09:00:19 [debug    ] cross_ref.mech3_added          count=0
+2026-09-23 09:00:19 [info     ] cross_ref.timing               added=49 mech1_s=0.196 mech2_s=0.019 mech3_s=0.0 mech4_s=0.021 sources_fetched=3 total_s=0.236
+2026-09-23 09:00:19 [debug    ] cross_ref.mech4_added          count=10
+2026-09-23 09:00:19 [info     ] prompt_manager.rendered        hash=8dc595f1 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-09-23 09:00:19 [info     ] generate.timing.context        passages_in=30 passages_out=30 prompt_tokens_approx=5162
+2026-09-23 09:00:38 [info     ] generate.timing.llm            answer_chars=975 completion_tokens=1137 llm_s=19.048 provider=DeepInfra reasoning_tokens=844
+
+[96m[1m────────────────────────────────────────────────────────────[0m
+[96m[1m  PLAN (from router)[0m
+[96m────────────────────────────────────────────────────────────[0m
+  hard gate similarity           0.5
+  borderline zone                0.38
+  min evidence count             5
+  keyword overlap                0.15
+  max single-doc ratio           0.8
+  multi-doc required             False
+  MMR lambda                     0.7
+  top_k                          12
+
+[96m[1m────────────────────────────────────────────────────────────[0m
+[96m[1m  RETRIEVAL ATTEMPT #1  stage=SIMPLE[0m
+[96m────────────────────────────────────────────────────────────[0m
+  passages found:   23
+  top score:        [93m0.571[0m
+  kw overlap active:0.75
+  unique docs:      3
+  max_doc_ratio:    0.739
+
+  [2mTop-3 passages:[0m
+    [1] score=[93m0.571[0m doc=29н.pdf
+        [2mIII. Порядок проведения периодических осмотров работодателем направления на внео…[0m
+    [2] score=[93m0.527[0m doc=223н.pdf
+        [2mЗАКЛЮЧЕНИЕ государственного инспектора труда периодический): (нужное подчеркнуть…[0m
+    [3] score=[93m0.539[0m doc=29н.pdf
+        [2mIII. Порядок проведения периодических осмотров <7> Собрание законодательства Рос…[0m
+
+[96m[1m────────────────────────────────────────────────────────────[0m
+[96m[1m  TRIAGE RESULT (evaluate_triage)[0m
+[96m────────────────────────────────────────────────────────────[0m
+  triage:           [92m[1msufficient[0m
+  sufficient:       True
+  top_score:        [93m0.571[0m
+  above_threshold:  True
+  enough_evidence:  True
+  keyword_overlap:  True
+  diversity_ok:     True
+  escalation_hint:  False
+  unique_docs:      3
+  max_doc_ratio:    0.8
+
+[96m[1m────────────────────────────────────────────────────────────[0m
+[96m[1m  FINAL STATE[0m
+[96m────────────────────────────────────────────────────────────[0m
+  sufficient:       [92m[1mTrue[0m
+  final_passages:   30
+
+[1mANSWER:[0m
+  Вывод: Прямого ответа в фрагментах нет.  
+Близкая информация: периодические медицинские осмотры проходят работники, занятые на работах, связанных с движением транспорта [Фрагмент 1]. При этом частота проведения периодических медицинских осмотров «определяется типами вредных и (или) опасных производственных факторов, воздействующих на работника, или видами выполняемых работ», а сами осмотры проводятся «не реже чем в сроки, предусмотренные приложением к настоящему Порядку» [Фрагмент 24; Фрагмент 30].  
+Чего не хватает: конкретной периодичности для водителей автотранспорта — в предоставленных фра…
+
+[96m[1m────────────────────────────────────────────────────────────[0m
+[96m[1m  INFERRED PATH[0m
+[96m────────────────────────────────────────────────────────────[0m
+  [1mintent_gate → router → rag_simple → evaluate_triage[sufficient] → generate_answer → END[0m
+
+[96m────────────────────────────────────────────────────────────[0m
+

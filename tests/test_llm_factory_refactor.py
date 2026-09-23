@@ -26,7 +26,7 @@ def test_openrouter_uses_its_key_and_endpoint(monkeypatch):
     import src.infra.llm_factory as lf
 
     spy = MagicMock(name="ChatOpenAI")
-    monkeypatch.setattr(lf, "ChatOpenAI", spy)
+    monkeypatch.setattr(lf, "_OpenRouterChat", spy)
     monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
 
     lf._create_openrouter_llm(model_name="openai/gpt-4o-mini")
@@ -137,3 +137,149 @@ def test_explicit_model_name_overrides_settings(monkeypatch, openai_spy):
     lf.get_judge_llm(model_name="gpt-4o-mini")
 
     assert openai_spy.call_args.kwargs["model"] == "gpt-4o-mini"
+
+
+# --- OpenRouter reasoning / output caps / provider routing --------------------
+
+
+def _openrouter_kwargs(monkeypatch, **factory_kwargs):
+    import src.infra.llm_factory as lf
+
+    spy = MagicMock(name="ChatOpenAI")
+    monkeypatch.setattr(lf, "_OpenRouterChat", spy)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
+    lf._create_openrouter_llm(
+        model_name="deepseek/deepseek-v4.1-flash", **factory_kwargs
+    )
+    return spy.call_args.kwargs
+
+
+@pytest.mark.unit
+def test_openrouter_reasoning_effort_defaults_to_low():
+    """Default effort is low: 23.09 eval — same retrieval, faster/cheaper answers."""
+    from config.settings import Settings
+
+    assert Settings.model_fields["OPENROUTER_REASONING_EFFORT"].default == "low"
+    assert Settings.model_fields["OPENROUTER_PROVIDER_SORT"].default is None
+
+
+@pytest.mark.unit
+def test_openrouter_unset_controls_leave_request_unchanged(monkeypatch):
+    """Controls explicitly unset → no reasoning/max_tokens/provider fields."""
+    import src.infra.llm_factory as lf
+
+    monkeypatch.setattr(lf.settings, "OPENROUTER_REASONING_EFFORT", None)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_MAX_TOKENS", None)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_PROVIDER_SORT", None)
+
+    kwargs = _openrouter_kwargs(monkeypatch, thinking_budget=4096)
+
+    assert "max_tokens" not in kwargs
+    assert not kwargs.get("extra_body")
+
+
+@pytest.mark.unit
+def test_openrouter_sends_native_reasoning_effort_max_tokens_and_sort(monkeypatch):
+    import src.infra.llm_factory as lf
+
+    monkeypatch.setattr(lf.settings, "OPENROUTER_REASONING_EFFORT", "low")
+    monkeypatch.setattr(lf.settings, "OPENROUTER_MAX_TOKENS", 2000)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_PROVIDER_SORT", "latency")
+
+    kwargs = _openrouter_kwargs(monkeypatch, thinking_budget=4096)
+
+    assert kwargs["max_tokens"] == 2000
+    assert kwargs["extra_body"] == {
+        "reasoning": {"effort": "low"},
+        "provider": {"sort": "latency"},
+    }
+
+
+@pytest.mark.unit
+def test_openrouter_thinking_budget_zero_disables_reasoning(monkeypatch):
+    """thinking_budget=0 means 'no thinking' — honoured, not silently dropped."""
+    import src.infra.llm_factory as lf
+
+    monkeypatch.setattr(lf.settings, "OPENROUTER_REASONING_EFFORT", "low")
+    monkeypatch.setattr(lf.settings, "OPENROUTER_MAX_TOKENS", None)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_PROVIDER_SORT", None)
+
+    kwargs = _openrouter_kwargs(monkeypatch, thinking_budget=0)
+
+    assert kwargs["extra_body"] == {"reasoning": {"enabled": False}}
+
+
+@pytest.mark.unit
+def test_openrouter_chat_exposes_serving_provider(monkeypatch):
+    """OpenRouter's top-level `provider` must reach response_metadata."""
+    import src.infra.llm_factory as lf
+
+    llm = lf._OpenRouterChat(model="deepseek/deepseek-v4.1-flash", api_key="k")
+    result = llm._create_chat_result(
+        {
+            "id": "gen-1",
+            "model": "deepseek/deepseek-v4.1-flash",
+            "provider": "DeepInfra",
+            "choices": [
+                {
+                    "index": 0,
+                    "finish_reason": "stop",
+                    "message": {"role": "assistant", "content": "ok"},
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 50,
+                "total_tokens": 60,
+                "completion_tokens_details": {"reasoning_tokens": 40},
+            },
+        }
+    )
+    message = result.generations[0].message
+    assert message.response_metadata["openrouter_provider"] == "DeepInfra"
+
+
+# --- Embeddings through OpenRouter -------------------------------------------
+# The OpenAI account ran out of credits; OpenRouter serves the same
+# text-embedding-3-small, so the existing Chroma index stays valid.
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "model_name, expected",
+    [
+        ("text-embedding-3-small", "openai/text-embedding-3-small"),
+        ("openai/text-embedding-3-small", "openai/text-embedding-3-small"),
+        (None, "openai/text-embedding-3-small"),
+    ],
+)
+def test_openrouter_embeddings_use_its_key_endpoint_and_raw_text(
+    monkeypatch, model_name, expected
+):
+    import src.infra.llm_factory as lf
+
+    spy = MagicMock(name="OpenAIEmbeddings")
+    monkeypatch.setattr(lf, "OpenAIEmbeddings", spy)
+    monkeypatch.setattr(lf.settings, "EMBEDDING_PROVIDER", "openrouter")
+    monkeypatch.setattr(lf.settings, "EMBEDDING_MODEL_NAME", model_name)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
+
+    lf.get_embedding_model()
+
+    kwargs = spy.call_args.kwargs
+    assert kwargs["model"] == expected
+    assert kwargs["api_key"] == "router-key"
+    assert kwargs["base_url"] == "https://openrouter.ai/api/v1"
+    # Token-id arrays are an OpenAI-only input shape; send strings.
+    assert kwargs["check_embedding_ctx_length"] is False
+
+
+@pytest.mark.unit
+def test_openrouter_embeddings_require_key(monkeypatch):
+    import src.infra.llm_factory as lf
+
+    monkeypatch.setattr(lf.settings, "EMBEDDING_PROVIDER", "openrouter")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+        lf.get_embedding_model()

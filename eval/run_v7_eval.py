@@ -146,9 +146,34 @@ def run_query(
         "usage": usages,
         "prompt_tokens": sum(u.get("prompt_tokens", 0) for u in usages),
         "completion_tokens": sum(u.get("completion_tokens", 0) for u in usages),
+        "reasoning_tokens": sum(u.get("reasoning_tokens", 0) for u in usages),
+        "providers": sorted({u["provider"] for u in usages if u.get("provider")}),
         "cost_usd": priced["cost_usd"],
         "unpriced_models": priced["unpriced_models"],
     }
+
+
+_RECORD_FIELDS = (
+    "elapsed_sec",
+    "retrieval_attempts",
+    "llm_calls",
+    "usage",
+    "prompt_tokens",
+    "completion_tokens",
+    "reasoning_tokens",
+    "providers",
+    "cost_usd",
+    "unpriced_models",
+)
+
+
+def record_fields(run_result: dict[str, Any]) -> dict[str, Any]:
+    """Per-question telemetry copied from run_query into the result record.
+
+    One list for both record shapes (with and without judge), so a field added
+    to run_query cannot silently miss the summary again.
+    """
+    return {key: run_result[key] for key in _RECORD_FIELDS}
 
 
 def summarize_cost(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -170,6 +195,7 @@ def summarize_cost(results: list[dict[str, Any]]) -> dict[str, Any]:
             "mean_cost_usd": (sum(costs) / n) if n else 0.0,
             "prompt_tokens": sum(r.get("prompt_tokens", 0) for r in rows),
             "completion_tokens": sum(r.get("completion_tokens", 0) for r in rows),
+            "reasoning_tokens": sum(r.get("reasoning_tokens", 0) for r in rows),
             "latency_p50_sec": percentile(latencies, 50),
             "latency_p95_sec": percentile(latencies, 95),
         }
@@ -324,14 +350,7 @@ def run(
                 "ground_truth": ground_truth,
                 "answer": answer,
                 "path": path,
-                "elapsed_sec": run_result["elapsed_sec"],
-                "retrieval_attempts": run_result["retrieval_attempts"],
-                "llm_calls": run_result["llm_calls"],
-                "usage": run_result["usage"],
-                "prompt_tokens": run_result["prompt_tokens"],
-                "completion_tokens": run_result["completion_tokens"],
-                "cost_usd": run_result["cost_usd"],
-                "unpriced_models": run_result["unpriced_models"],
+                **record_fields(run_result),
             }
             results.append(record)
             print(
@@ -364,14 +383,7 @@ def run(
             "ground_truth": ground_truth,
             "answer": answer,
             "path": path,
-            "elapsed_sec": run_result["elapsed_sec"],
-            "retrieval_attempts": run_result["retrieval_attempts"],
-            "llm_calls": run_result["llm_calls"],
-            "usage": run_result["usage"],
-            "prompt_tokens": run_result["prompt_tokens"],
-            "completion_tokens": run_result["completion_tokens"],
-            "cost_usd": run_result["cost_usd"],
-            "unpriced_models": run_result["unpriced_models"],
+            **record_fields(run_result),
             "oos_type": oos_type,
             **faithfulness,
             **relevance,
