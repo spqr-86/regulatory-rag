@@ -6,29 +6,31 @@
 **Локально:** `eval_v7_*.jsonl`, `retrieval_*_*.json`, `triage_gap_*.json`, `cps_*.json` —
 артефакты прогонов, в `.gitignore`.
 
-## Актуальный baseline — 2026-09-17
+## Актуальный baseline — 2026-09-23
 
 Генеративный eval (`eval/run_v7_eval.py`, судья `gpt-4o`, `tests/dataset.csv` — 56
-вопросов, 53 валидных) — витринный дефолт (`deepseek/deepseek-v4.1-flash` на simple-пути):
+вопросов, 53 валидных) — текущий дефолт (`deepseek/deepseek-v4.1-flash` на обоих путях,
+reasoning effort `low`):
 
-| Метрика | Значение | Терминальный контракт (11.09) | Baseline до контракта (08.09) |
-|---------|----------|--------------------------------|-------------------------------|
-| In-scope correctness (0–10) | **7.91** | 7.47 | 7.40 |
-| Correctness, все вопросы | **7.98** | 7.26 | 7.09 |
-| Faithfulness (0–1) | **0.926** | 0.891 | 0.808 |
-| Answer relevance (0–1) | **0.887** | 0.879 | 0.881 |
-| OOS abstain rate | **1.00** | 1.00 | 1.00 |
-| False-sufficiency rate | **10.0%** | 11.4% | 13.0% |
-| Complex-path rate | 24.5% | 17.0% | 13.2% |
-| Латентность p50 / p95 / средняя | 24.0 / 71.3 / 30.95 с | 4.51 / 15.70 / 6.83 с | 4.8 / 14.7 / 5.9 с |
-| Стоимость на запрос, реальная | $0.00657 ($0.348 весь прогон) | $0.00387 ($0.205 весь прогон) | $0.0033 |
+| Метрика | Значение | Витринный прогон 17.09 | Терминальный контракт (11.09) | Baseline до контракта (08.09) |
+|---------|----------|------------------------|--------------------------------|-------------------------------|
+| In-scope correctness (0–10) | **8.09** | 7.91 | 7.47 | 7.40 |
+| Correctness, все вопросы | **8.32** | 7.98 | 7.26 | 7.09 |
+| Faithfulness (0–1) | **0.974** | 0.926 | 0.891 | 0.808 |
+| Answer relevance (0–1) | **0.853** | 0.887 | 0.879 | 0.881 |
+| OOS abstain rate | **1.00** | 1.00 | 1.00 | 1.00 |
+| False-sufficiency rate | **7.1%** | 10.0% | 11.4% | 13.0% |
+| Complex-path rate | 20.8% | 24.5% | 17.0% | 13.2% |
+| Латентность p50 / p95 / средняя | 9.5 / 25.9 / 12.0 с | 24.0 / 71.3 / 30.95 с | 4.51 / 15.70 / 6.83 с | 4.8 / 14.7 / 5.9 с |
+| Стоимость на запрос | $0.0021 ($0.111 весь прогон) | $0.00657 ($0.348) | $0.00387 ($0.205 весь прогон) | $0.0033 |
 
-**Конфиг:** V7 LangGraph, OpenAI `text-embedding-3-small`, `deepseek/deepseek-v4.1-flash`
-(simple) / `gpt-4o` (complex — тоже перешёл на DeepSeek 18.09.2026, уже после этого прогона),
-единый hard-gate triage с терминальным контрактом маршрута, CrossEncoder-реранкер (cap 100),
-HybridChunker (`max_tokens=400`), 12 документов, датасет 56 вопросов. Стоимость — по реальному
-расходу токенов прогона против `src/pricing.py::PRICE_PER_1M`, не по self-reported total прогона
-(у DeepSeek на момент прогона не было записи в rate card). Подробности:
+**Конфиг:** V7 LangGraph, OpenAI `text-embedding-3-small`, `deepseek/deepseek-v4.1-flash` на
+обоих путях через OpenRouter с `OPENROUTER_REASONING_EFFORT=low`, единый hard-gate triage с
+терминальным контрактом маршрута, CrossEncoder-реранкер (cap 100), HybridChunker
+(`max_tokens=400`), 12 документов, датасет 56 вопросов. Стоимость — по расходу токенов прогона
+против `src/pricing.py::PRICE_PER_1M`. Прогон 17.09 шёл с `gpt-4o` на complex-пути и reasoning
+effort провайдера по умолчанию (high). Подробности:
+[golden-set-effort-low](../docs/evaluation/experiments/golden-set-effort-low.md),
 [showcase-default-golden-set](../docs/evaluation/experiments/showcase-default-golden-set.md).
 
 Retrieval eval (`eval/run_retrieval_eval.py`, held-out 133, 2026-09-08):

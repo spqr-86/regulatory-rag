@@ -29,29 +29,30 @@ Pipeline cost is measured per query from provider token usage (`src/v7/usage.py`
 
 ### Generation — 56-question golden set, judge `gpt-4o`
 
-Showcase default (17.09.2026, `deepseek/deepseek-v4.1-flash` simple path) against the terminal
+Current default (23.09.2026: `deepseek/deepseek-v4.1-flash` on both paths, reasoning effort
+`low`) against the 17.09 showcase run (effort high, `gpt-4o` complex path), the terminal
 triage contract (2026-09-11) and the pre-contract baseline (2026-09-08), same judge, 53/56
 valid:
 
-| Metric | Showcase default | Terminal contract | Pre-contract baseline |
-|---|---:|---:|---:|
-| In-scope correctness (0–10) | **7.91** | 7.47 | 7.40 |
-| Correctness, all questions | **7.98** | 7.26 | 7.09 |
-| Faithfulness (0–1) | **0.926** | 0.891 | 0.808 |
-| Answer relevance (0–1) | **0.887** | 0.879 | 0.881 |
-| OOS abstain rate | **1.00** | 1.00 | 1.00 |
-| False-sufficiency rate | **10.0%** | 11.4% | 13.0% |
-| Complex-path rate | 24.5% | 17.0% | 13.2% |
-| Latency p50 / p95 (s) | 24.0 / 71.3 | 4.51 / 15.70 | 4.8 / 14.7 |
-| Cost per query, real | $0.00657 | $0.00387 | $0.0033 |
+| Metric | Current default | 17.09 showcase | Terminal contract | Pre-contract baseline |
+|---|---:|---:|---:|---:|
+| In-scope correctness (0–10) | **8.09** | 7.91 | 7.47 | 7.40 |
+| Correctness, all questions | **8.32** | 7.98 | 7.26 | 7.09 |
+| Faithfulness (0–1) | **0.974** | 0.926 | 0.891 | 0.808 |
+| Answer relevance (0–1) | 0.853 | 0.887 | 0.879 | 0.881 |
+| OOS abstain rate | **1.00** | 1.00 | 1.00 | 1.00 |
+| False-sufficiency rate | **7.1%** | 10.0% | 11.4% | 13.0% |
+| Complex-path rate | 20.8% | 24.5% | 17.0% | 13.2% |
+| Latency p50 / p95 (s) | 9.5 / 25.9 | 24.0 / 71.3 | 4.51 / 15.70 | 4.8 / 14.7 |
+| Cost per query | $0.0021 | $0.00657 | $0.00387 | $0.0033 |
 
-The showcase default clears the >7.5 in-scope correctness target for the first time and
-improves faithfulness, relevance and false-sufficiency further, but at a ~5× latency
-regression (unexplained) and a real cost ~70% above the terminal-contract baseline — the
-run's own self-reported $0.00430 undercounted it, since DeepSeek had no rate-card entry at
-run time. Against the targets in [reference/evaluation.md](../reference/evaluation.md):
-faithfulness, relevance and OOS abstention are met; false-sufficiency (10.0% vs a <10%
-target) still sits 0.1 pp outside. Details, including the pricing fix:
+Every target in [reference/evaluation.md](../reference/evaluation.md) is met, relevance only
+just (0.853 vs >0.85). The reasoning-effort fix
+([#63](https://github.com/spqr-86/regulatory-rag/pull/63)) removed most of the 17.09 latency
+regression and cut cost to a third without losing correctness or faithfulness; relevance fell
+(in-scope 0.953 → 0.912), and latency is still ~2× the GPT-4o-mini baseline. Details:
+[experiments/golden-set-effort-low.md](./experiments/golden-set-effort-low.md); the 17.09 run
+and the pricing fix behind its cost:
 [experiments/showcase-default-golden-set.md](./experiments/showcase-default-golden-set.md).
 
 ### Retrieval — 90 practitioner questions (headline)
@@ -115,7 +116,8 @@ model selection was done on semantics, not on the validator. Details:
 | Does a structured triage gap help? | escalations 0.248 → 0.128, no hit lost, on 133 | shipped ([memo](./experiments/triage-gap-terminal-contract.md)) |
 | Sheet as chunks or as a profile? | v2 beats v1 on all three department metrics | `v2` default ([memo](./experiments/department-qa-object-profile.md)) |
 | Can a cheaper model hold the traps? | DeepSeek V4.1 Flash 4/4 at ~1/8 the cost of GPT-5 mini | showcase default ([memo](./experiments/cheap-model-selection.md)) |
-| Does the showcase default hold on the full golden set, and what does it really cost? | In-scope correctness 7.91 clears the >7.5 target for the first time; real cost (DeepSeek priced) is ~70% above the prior baseline, not below, and latency regresses ~5× | headline numbers updated to this run; DeepSeek priced in `src/pricing.py`; full-contract rerun on current (post-18.09) wiring still open ([memo](./experiments/showcase-default-golden-set.md)) |
+| Does the showcase default hold on the full golden set, and what does it really cost? | In-scope correctness 7.91 clears the >7.5 target for the first time; real cost (DeepSeek priced) is ~70% above the prior baseline, not below, and latency regresses ~5× | headline numbers updated to this run; DeepSeek priced in `src/pricing.py`; superseded by the 23.09 rerun below ([memo](./experiments/showcase-default-golden-set.md)) |
+| Does the reasoning-effort fix hold on the full golden set? | p50 24.0 → 9.5 s, cost $0.0066 → $0.0021, correctness and faithfulness not worse, false-sufficiency 7.1% (target met); relevance 0.887 → 0.853 | headline numbers moved to this run; relevance dip listed as a limitation ([memo](./experiments/golden-set-effort-low.md)) |
 | Does scoped-service wiring (PR4/#59) change retrieval behaviour vs the old Department path? | Old vs new: 8/9 evidence byte-identical, both regressions are a prompt version change; workers=1 vs 4: identical prompt/evidence on every question | cutover accepted, no new paid run for wiring-only PR4 ([memo](./experiments/department-scoped-service-pr4-wiring.md)) |
 
 ## Threats to validity

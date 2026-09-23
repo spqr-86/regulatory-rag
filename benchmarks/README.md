@@ -6,29 +6,30 @@ Current baseline metrics and local eval artifacts.
 **Local only:** `eval_v7_*.jsonl`, `retrieval_*_*.json`, `triage_gap_*.json`, `cps_*.json` —
 eval run artifacts, listed in `.gitignore`.
 
-## Current baseline — 2026-09-17
+## Current baseline — 2026-09-23
 
 Generation eval (`eval/run_v7_eval.py`, judge `gpt-4o`, `tests/dataset.csv` 56 questions,
-53 valid) — showcase default (`deepseek/deepseek-v4.1-flash` simple path):
+53 valid) — current default (`deepseek/deepseek-v4.1-flash` on both paths, reasoning effort `low`):
 
-| Metric | Value | Terminal contract (2026-09-11) | Pre-contract baseline (2026-09-08) |
-|--------|-------|---------------------------------|------------------------------------|
-| In-scope correctness (0–10) | **7.91** | 7.47 | 7.40 |
-| Correctness, all questions | **7.98** | 7.26 | 7.09 |
-| Faithfulness (0–1) | **0.926** | 0.891 | 0.808 |
-| Answer relevance (0–1) | **0.887** | 0.879 | 0.881 |
-| OOS abstain rate | **1.00** | 1.00 | 1.00 |
-| False-sufficiency rate | **10.0%** | 11.4% | 13.0% |
-| Complex-path rate | 24.5% | 17.0% | 13.2% |
-| Latency p50 / p95 / mean | 24.0 / 71.3 / 30.95 s | 4.51 / 15.70 / 6.83 s | 4.8 / 14.7 / 5.9 s |
-| Cost per query, real | $0.00657 ($0.348 run total) | $0.00387 ($0.205 run total) | $0.0033 |
+| Metric | Value | 17.09 showcase run | Terminal contract (2026-09-11) | Pre-contract baseline (2026-09-08) |
+|--------|-------|--------------------|---------------------------------|------------------------------------|
+| In-scope correctness (0–10) | **8.09** | 7.91 | 7.47 | 7.40 |
+| Correctness, all questions | **8.32** | 7.98 | 7.26 | 7.09 |
+| Faithfulness (0–1) | **0.974** | 0.926 | 0.891 | 0.808 |
+| Answer relevance (0–1) | **0.853** | 0.887 | 0.879 | 0.881 |
+| OOS abstain rate | **1.00** | 1.00 | 1.00 | 1.00 |
+| False-sufficiency rate | **7.1%** | 10.0% | 11.4% | 13.0% |
+| Complex-path rate | 20.8% | 24.5% | 17.0% | 13.2% |
+| Latency p50 / p95 / mean | 9.5 / 25.9 / 12.0 s | 24.0 / 71.3 / 30.95 s | 4.51 / 15.70 / 6.83 s | 4.8 / 14.7 / 5.9 s |
+| Cost per query | $0.0021 ($0.111 run total) | $0.00657 ($0.348) | $0.00387 ($0.205 run total) | $0.0033 |
 
-**Config:** V7 LangGraph, OpenAI `text-embedding-3-small`, `deepseek/deepseek-v4.1-flash`
-(simple) / `gpt-4o` (complex — moved to DeepSeek too on 18.09.2026, after this run), single
-hard-gate triage with a terminal route contract, CrossEncoder reranker (cap 100), HybridChunker
-(`max_tokens=400`), 12 documents, dataset 56 questions. Cost is the run's real token usage
-priced against `src/pricing.py::PRICE_PER_1M`, not the run's self-reported total (DeepSeek had
-no rate-card entry at run time). Details:
+**Config:** V7 LangGraph, OpenAI `text-embedding-3-small`, `deepseek/deepseek-v4.1-flash` on
+both paths via OpenRouter with `OPENROUTER_REASONING_EFFORT=low`, single hard-gate triage with a
+terminal route contract, CrossEncoder reranker (cap 100), HybridChunker (`max_tokens=400`),
+12 documents, dataset 56 questions. Cost is the run's token usage priced against
+`src/pricing.py::PRICE_PER_1M`. The 17.09 run used `gpt-4o` on the complex path and the
+provider's default (high) reasoning effort. Details:
+[golden-set-effort-low](../docs/evaluation/experiments/golden-set-effort-low.md),
 [showcase-default-golden-set](../docs/evaluation/experiments/showcase-default-golden-set.md).
 
 Retrieval eval (`eval/run_retrieval_eval.py`, held-out 133, 2026-09-08):

@@ -1,5 +1,9 @@
 # Showcase default on the full golden set, and a real price for it
 
+> Superseded for headline numbers by [golden-set-effort-low](./golden-set-effort-low.md)
+> (23.09.2026): the latency regression below was the provider default reasoning effort,
+> fixed in #63.
+
 ## Question
 
 The showcase default (`deepseek/deepseek-v4.1-flash`, simple path) was chosen on a 4-question

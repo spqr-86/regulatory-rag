@@ -7,6 +7,10 @@ All notable changes are documented here. Format: [Keep a Changelog](https://keep
 ## [Unreleased]
 
 ### Added
+- Golden-set rerun on the current default (DeepSeek on both paths, reasoning effort `low`):
+  p50 24.0 → 9.5 s, cost $0.0066 → $0.0021 per query, false-sufficiency 7.1% (target met);
+  headline numbers moved to this run
+  ([memo](docs/evaluation/experiments/golden-set-effort-low.md)).
 - Evaluation report and per-experiment decision memos under `docs/evaluation/`:
   methodology, headline results, dataset cards, and the measurements behind the shipped
   choices and the rejected ones (RRF_K sweep, 81-profile threshold grid, retrieval
@@ -23,7 +27,13 @@ All notable changes are documented here. Format: [Keep a Changelog](https://keep
   [2026-09-15-object-profile-design](docs/design/2026-09-15-object-profile-design.md),
   facts in [FACTS.md](docs/reference/FACTS.md#department-qa) (issue #44).
 
+### Fixed
+- Eval OOS rejection rate kept domain-gate refusals (empty answers) out of the denominator
+  and only looked for «нет» in the first 50 characters of an answer.
+
 ### Changed
+- README (EN+RU) cut from ~300 to ~185 lines: headline in one line, per-experiment tables
+  moved to the evaluation report, new Limitations section.
 - README quick start, stack table and `.env.example` now state the showcase LLM split
   (OpenRouter `deepseek/deepseek-v4.1-flash` on the simple path, OpenAI `gpt-4o` on the
   complex path) instead of "OpenAI default".

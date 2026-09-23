@@ -142,37 +142,35 @@ intent_gate ─(noise)→ END
 - **`evaluate_triage` is a single hard-gate path** (`check_full_triage`: `top_score` / `passage_count` / `keyword_overlap`). On a sufficient verdict it emits a structured `triage_gap` (`TriageGap`/`GapRef`, issue #13) describing which referenced п./ст. are missing from the top-5; the gap is closed in place by appending cross-referenced passages to the tail (no reorder), and escalation to `rag_complex` happens only if the gap stays open. The V8 `_evidence_assess` variant and its `V7_V8_ENABLE_EVIDENCE_ASSESS` flag were removed 2026-09-08 (variant B).
 
 ## metrics
-Source: `benchmarks/eval_v7_deepseek_2026-09-17.jsonl` (dataset 56, valid 53). Pipeline: the
-final terminal triage contract, showcase default `deepseek/deepseek-v4.1-flash` (simple) /
-`gpt-4o` (complex — moved to DeepSeek too on 18.09.2026, after this run), `gpt-4o` judge,
-CrossEncoder reranker, cap 100. Cost recomputed from the run's own token usage against
-`src/pricing.py::PRICE_PER_1M`, not the run's self-reported total — DeepSeek had no rate card
-entry at run time, so every simple-path query originally priced at $0. Details:
-[showcase-default-golden-set](../evaluation/experiments/showcase-default-golden-set.md).
+Source: `benchmarks/eval_v7_deepseek_low_2026-09-23.jsonl` (dataset 56, valid 53 — the three
+empty answers are domain-gate refusals). Pipeline: the final terminal triage contract,
+`deepseek/deepseek-v4.1-flash` on both paths via OpenRouter, `OPENROUTER_REASONING_EFFORT=low`,
+`gpt-4o` judge, CrossEncoder reranker, cap 100. Cost priced from the run's token usage against
+`src/pricing.py::PRICE_PER_1M`. OOS rejection recomputed from the saved answers with the fixed
+counter (`c9b907f`; the run itself printed 0.75). Details:
+[golden-set-effort-low](../evaluation/experiments/golden-set-effort-low.md).
 
-| metric | value (17.09-7, showcase default) | 2026-09-11 terminal-contract baseline | pre-contract baseline (2026-09-08) |
-|---|---|---|---|
-| in-scope correctness | **7.91 / 10** | 7.47 | 7.40 |
-| correctness mean | 7.98 / 10 | 7.26 | 7.09 |
-| faithfulness | 0.926 | 0.891 | 0.808 |
-| answer relevance | 0.887 | 0.879 | 0.881 |
-| OOS rejection rate | 1.00 | 1.00 | 1.00 |
-| false-sufficiency rate | **0.100** | 0.114 | 0.130 |
-| complex-path rate | 0.245 | 0.170 | 0.132 |
-| latency p50 / p95 | 24.0 / 71.3 s | 4.51 / 15.70 / 6.83 s | 4.8 / 14.7 / 5.9 s |
-| cost / query | $0.00657 ($0.348 run total) | $0.00387 ($0.205 run total) | $0.0033 |
+| metric | value (2026-09-23, current default) | 17.09 showcase run (effort high, GPT-4o complex) | 2026-09-11 terminal-contract baseline | pre-contract baseline (2026-09-08) |
+|---|---|---|---|---|
+| in-scope correctness | **8.09 / 10** | 7.91 | 7.47 | 7.40 |
+| correctness mean | 8.32 / 10 | 7.98 | 7.26 | 7.09 |
+| faithfulness | **0.974** | 0.926 | 0.891 | 0.808 |
+| answer relevance | 0.853 | 0.887 | 0.879 | 0.881 |
+| OOS rejection rate | 1.00 | 1.00 | 1.00 | 1.00 |
+| false-sufficiency rate | **0.071** | 0.100 | 0.114 | 0.130 |
+| complex-path rate | 0.208 | 0.245 | 0.170 | 0.132 |
+| latency p50 / p95 / mean | 9.5 / 25.9 / 12.0 s | 24.0 / 71.3 / 31.0 s | 4.51 / 15.70 / 6.83 s | 4.8 / 14.7 / 5.9 s |
+| cost / query | $0.0021 ($0.111 run total) | $0.00657 ($0.348) | $0.00387 ($0.205) | $0.0033 |
 
-In-scope correctness clears the >7.5 target for the first time; false-sufficiency sits at
-10.0%, still formally 0.1 pp outside the <10% target. The gains came with a ~5× latency
-regression (p50 4.5 s → 24 s) — cause found 2026-09-23: OpenRouter dropped the thinking
-budget, so DeepSeek ran with the provider default reasoning (effort=high); fixed in #63
-(default `OPENROUTER_REASONING_EFFORT=low`), 20-question A/B with low effort + latency-sorted
-provider: p50 15.5 → 9.3 s, p95 62 → 35 s, correctness 9.1 → 8.9; the 56-question set is not
-re-run yet — and a real cost about 70% above the previous
-baseline, not below it — see the memo for why the run's own reported cost ($0.00430) was
-wrong. The 2026-09-11 vs 2026-09-08 comparison below is unchanged: the terminal contract
-improved faithfulness and false sufficiency without losing correctness or relevance beyond
-judge variance, at about 18% more cost per query and 7% more p95 latency.
+All targets are met: in-scope correctness >7.5, faithfulness, relevance >0.85 (0.853, just),
+OOS abstention, false-sufficiency <10%. Against the 17.09 run the reasoning-effort fix (#63)
+cut p50 2.5× and cost to a third without losing correctness or faithfulness (the correctness
+gain is inside judge variance). Answer relevance fell 0.887 → 0.853, on in-scope questions
+alone 0.953 → 0.912 — likely the price of low effort, not separated from the complex-path model
+change in this run. Latency is still ~2× the GPT-4o-mini baseline. The 2026-09-11 vs 2026-09-08
+comparison is unchanged: the terminal contract improved faithfulness and false sufficiency
+without losing correctness or relevance beyond judge variance, at about 18% more cost per query
+and 7% more p95 latency.
 
 > **Judge note (fix 2026-09-02).** Every run before this date was judged by
 > **`gpt-4o-mini`, not `gpt-4o`** — `llm_factory` carried the resolved settings model into
@@ -215,6 +213,11 @@ honest headline number.
 Финальный замер 11.09.2026 (53 валидных запроса, судья gpt-4o): $0.00387 / запрос,
 $0.205 весь прогон. По путям: simple $0.00107 / запрос (n=44, p50 4.31 с), complex
 $0.01755 / запрос (n=9, p50 14.04 с) — разница ~16× при доле complex 17.0%.
+
+Текущий дефолт, 23.09.2026 (DeepSeek V4.1 Flash на обоих путях, effort `low`, 53 валидных,
+судья gpt-4o): $0.0021 / запрос, $0.111 весь прогон. По путям: simple $0.00214 / запрос
+(n=42, p50 7.7 с), complex $0.00196 / запрос (n=11, p50 20.0 с) — с одной моделью на обоих
+путях цена запроса почти не зависит от пути, разница только в латентности.
 
 ## deploy
 - port: 8502
