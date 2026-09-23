@@ -230,6 +230,11 @@ OpenAI на complex). Любой слой — LLM, embeddings, реранкер,
 в `logs/events.jsonl` и заливаются позже. Настройка, порты и разбор проблем:
 [how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md).
 
+[<img src="docs/assets/grafana-queries.png" width="800">](docs/assets/grafana-queries.png)
+
+*Дашборд на демо-стенде за 30 дней. Цена учитывает только общий режим — запросы режима
+подразделения считаются, но пока пишутся с нулевой стоимостью ([#66](https://github.com/spqr-86/regulatory-rag/issues/66)); доля 👎 — по 3 оценкам.*
+
 **REST API:** `POST /query` (весь пайплайн), `POST /retrieve` (только поиск, без LLM),
 `GET /corpus`, `GET /health`. Форматы запроса и ответа, примеры и лимиты:
 [reference/api.md](./docs/reference/api.md); интерактивная документация — `http://localhost:8503/docs`.

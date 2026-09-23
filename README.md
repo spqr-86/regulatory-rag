@@ -248,6 +248,11 @@ shows cost, 👍/👎 rate, routes and p50/p95. Without the stack nothing breaks
 `logs/events.jsonl` and can be replayed later. Setup, ports and troubleshooting:
 [how-to/run-monitoring-stack.md](./docs/how-to/run-monitoring-stack.md).
 
+[<img src="docs/assets/grafana-queries.png" width="800">](docs/assets/grafana-queries.png)
+
+*Dashboard on the demo stand, last 30 days. Cost covers only the general mode — Department Q&A
+requests are counted but written with zero cost for now ([#66](https://github.com/spqr-86/regulatory-rag/issues/66)); the 👎 rate is based on 3 ratings.*
+
 **REST API:** `POST /query` (full pipeline), `POST /retrieve` (retrieval only, no LLM),
 `GET /corpus`, `GET /health`. Request/response shapes, examples and rate limits:
 [reference/api.md](./docs/reference/api.md); interactive docs at `http://localhost:8503/docs`.
