@@ -131,7 +131,7 @@ streamlit run app.py --server.port 8502    # UI
 uvicorn api:app --port 8503                 # REST API, docs at /docs
 ```
 
-The Department screen needs its manifest and object profiles:
+The unit-scoped screen needs its manifest and object profiles:
 [getting started](./docs/getting-started.md#run-the-ui). LLM, embeddings, reranker and vector
 store are swappable via `.env` ([configuration](./docs/reference/configuration.md)).
 
@@ -147,7 +147,7 @@ becomes a row with cost, latency, route and 👍/👎
 
 | Layer | Technology |
 |-------|-----------|
-| Orchestration | LangGraph (V7 deterministic graph) |
+| Orchestration | LangGraph (deterministic graph) |
 | LLM | OpenRouter `deepseek/deepseek-v4.1-flash` (both paths); OpenAI, Gemini, DeepSeek, OpenRouter configurable per path |
 | Embeddings | OpenAI text-embedding-3-small (local sentence-transformers optional) |
 | Vector store | ChromaDB |
@@ -161,7 +161,7 @@ becomes a row with cost, latency, route and 👍/👎
 
 ## Limitations
 
-- **Small samples:** out-of-scope 7 questions, Department 9, threshold traps 4 — sanity
+- **Small samples:** out-of-scope 7 questions, units 9, threshold traps 4 — sanity
   checks, not guarantees.
 - **The judge is not independently validated** (`gpt-4o`, on the [roadmap](./docs/roadmap.md)).
 - **Answer relevance only just clears its target** (0.853): it fell from 0.887 with the
@@ -170,7 +170,7 @@ becomes a row with cost, latency, route and 👍/👎
 - **`answered` checks citations, not content** — content is measured in eval.
 - **Tables from Order 29н lose their header when chunked**
   ([#64](https://github.com/spqr-86/regulatory-rag/issues/64)).
-- **Department queries are logged at zero cost**
+- **Unit-scoped queries are logged at zero cost**
   ([#66](https://github.com/spqr-86/regulatory-rag/issues/66)); 👍/👎 counts are in single digits.
 - **Unit data is synthetic; the demo stand is localhost-only**, there is no public demo.
 
@@ -178,7 +178,7 @@ becomes a row with cost, latency, route and 👍/👎
 
 ## Project status
 
-Portfolio MVP complete (2026-09-21): evidence-gated pipeline, hybrid retrieval, Department
+Portfolio MVP complete (2026-09-21): evidence-gated pipeline, hybrid retrieval, unit-scoped
 Q&A, offline evaluation and online telemetry. Deployed on a VPS as a localhost-only service.
 Post-MVP backlog: [roadmap](./docs/roadmap.md) · [changelog](./CHANGELOG.md).
 
