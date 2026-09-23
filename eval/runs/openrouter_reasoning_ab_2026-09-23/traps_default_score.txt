@@ -1,0 +1,11 @@
+# Офлайн-оценка прогона (детерминированная)
+
+| q | статус | reasons | поля obj_f_* | нарушения |
+|---:|---|---|---|---|
+| 1 | needs_review | internal_evidence_missing | — | — |
+| 2 | needs_context | applicability_unclear | obj_f_aupt_present=known | — |
+| 3 | answered | — | obj_f_room_categories=known | — |
+| 4 | answered | — | obj_f_outside_ladder_last_test_date=known | — |
+
+Итог: контракт 4/4; applied_on_unknown 0; запрещённые строки 0; всего нарушений 0.
+
