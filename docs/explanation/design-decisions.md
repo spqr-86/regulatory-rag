@@ -243,7 +243,7 @@ interview shows it matters.
 
 ## 10. Unit object sheet as a structured profile, not retrieved chunks
 
-**Context.** Department Q&A indexed each unit's "object features sheet" (headcount, fire
+**Context.** Unit-scoped Q&A indexed each unit's "object features sheet" (headcount, fire
 protection systems, duty staff) as ordinary internal chunks. A 6-question smoke run on
 2026-09-15 showed facts about the unit crowded out of top-8 by company-wide documents, a
 unit fact being ignored even when retrieved, and a unit-dependent question answered "yes"

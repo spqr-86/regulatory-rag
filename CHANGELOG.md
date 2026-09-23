@@ -32,6 +32,8 @@ All notable changes are documented here. Format: [Keep a Changelog](https://keep
   and only looked for «нет» in the first 50 characters of an answer.
 
 ### Changed
+- Renamed the "Department Q&A" mode to **Unit-scoped Q&A** in the docs; code identifiers
+  (`src/department_qa/`, `DEPARTMENT_QA_MODE`) are unchanged.
 - README (EN+RU) cut from ~300 to ~185 lines: headline in one line, per-experiment tables
   moved to the evaluation report, new Limitations section.
 - README quick start, stack table and `.env.example` now state the showcase LLM split

@@ -104,7 +104,7 @@ are judge-dependent (±0.25 run to run); denominators and the full comparison wi
 
 ---
 
-## Department Q&A
+## Unit-scoped Q&A
 
 Questions asked **by a specific unit** about its own object, answered over company-wide
 legislation, the unit's local acts and the unit's object sheet. The sheet is not ranked as a

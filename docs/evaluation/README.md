@@ -20,7 +20,7 @@ a missing chunk or from a bad decision over a good chunk.
 | Generation | Is the answer correct, grounded, and does it refuse when it should? | 56-question golden set | correctness, faithfulness, relevance, OOS abstain, false-sufficiency, cost, latency | `eval/run_v7_eval.py` |
 | Retrieval | Is the right chunk in the top-k? | 90 practitioner questions (headline), 133 dev questions | Hit Rate@k, MRR, p50/p95 latency | `eval/run_retrieval_eval.py` |
 | Routing | Are escalate/answer decisions safe? | 43 reviewed questions, no judge | escalation rate, coverage, critical misses | `eval/triage_calibration.py` |
-| Department Q&A | Are object facts applied correctly, or is a norm's threshold used on the wrong quantity? | 9-question pair set, 4-question trap set | expected status match, required sub-answers, forbidden conclusions | `eval/run_object_profile_pair.py` + `eval/score_object_profile_run.py` |
+| Unit-scoped Q&A | Are object facts applied correctly, or is a norm's threshold used on the wrong quantity? | 9-question pair set, 4-question trap set | expected status match, required sub-answers, forbidden conclusions | `eval/run_object_profile_pair.py` + `eval/score_object_profile_run.py` |
 
 Pipeline cost is measured per query from provider token usage (`src/v7/usage.py`,
 `eval/pricing.py`), not estimated from a constant, and is reported next to quality.
@@ -70,7 +70,7 @@ retrieval config, frozen before any tuning ([datasets.md](./datasets.md)).
 development set scores higher (hybrid HR@12 0.827) because 43 of its questions are
 chunk-derived and easier — see the threat note below.
 
-### Department Q&A — object-profile mode
+### Unit-scoped Q&A — object-profile mode
 
 Mode `v2` (object sheet passed whole as a profile, not retrieved) is the default. On the
 pre-registered 9-question pair run (`gpt-4o-mini`, temperature 0):
@@ -149,10 +149,10 @@ Read every number above with these caveats next to it, not after it.
   synthetic set is a development set only; the 90 practitioner questions are the headline.
 - **Raw run artifacts are not all in git.** `benchmarks/*.json(l)` are gitignored; the
   tables in [FACTS](../reference/FACTS.md), [roadmap](../roadmap.md) and this report are
-  copied from them. Department Q&A runs are committed in full under `eval/runs/`, including
+  copied from them. Unit-scoped Q&A runs are committed in full under `eval/runs/`, including
   prompts and raw model outputs. Reproduction requires the index and source documents,
   which are not in git.
-- **Runtime guarantees are not content guarantees.** For department Q&A, `answered` means
+- **Runtime guarantees are not content guarantees.** For unit-scoped Q&A, `answered` means
   "citations checked", not "the cited text supports the claim". Support and completeness are
   measured in eval, not enforced at runtime.
 
@@ -173,7 +173,7 @@ python eval/run_retrieval_eval.py --path bm25   --gt eval/data/golden_retrieval_
 # routing: deterministic threshold audit and grid (no judge)
 python eval/triage_calibration.py
 
-# department Q&A: trap set and offline scoring (paid; see how-to)
+# unit-scoped Q&A: trap set and offline scoring (paid; see how-to)
 .venv/bin/python eval/score_object_profile_run.py --run <run>/v2 \
   --expectations eval/data/object_profile_traps_expectations.yaml
 ```

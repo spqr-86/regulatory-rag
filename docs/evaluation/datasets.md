@@ -140,7 +140,7 @@ is sufficient. No generation quality is measured here.
 
 ---
 
-## 6. Department Q&A pair set — 9 questions
+## 6. Unit-scoped Q&A pair set — 9 questions
 
 **File.** `eval/data/object_profile_pair_expectations.yaml`
 
@@ -168,7 +168,7 @@ semantic scoring stays manual.
 
 ---
 
-## 7. Department Q&A trap set — 4 questions
+## 7. Unit-scoped Q&A trap set — 4 questions
 
 **File.** `eval/data/object_profile_traps_expectations.yaml`
 

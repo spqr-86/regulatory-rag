@@ -1,4 +1,4 @@
-# Department Q&A: PR4 wiring gate (old service vs scoped service, workers=1 vs parallel)
+# Unit-scoped Q&A: PR4 wiring gate (old service vs scoped service, workers=1 vs parallel)
 
 ## Question
 

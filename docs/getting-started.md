@@ -69,7 +69,7 @@ documents (see [FACTS](reference/FACTS.md#corpus)).
 
 ## Run the UI
 
-The root screen is Department Q&A. It requires the v2 Department index, corpus manifest and
+The root screen is Unit-scoped Q&A. It requires the v2 Department index, corpus manifest and
 object-profile source directory:
 
 ```bash

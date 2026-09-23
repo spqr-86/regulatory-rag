@@ -1,4 +1,4 @@
-# Department Q&A: object profile, typed sheet, verifier, strong model
+# Unit-scoped Q&A: object profile, typed sheet, verifier, strong model
 
 ## Question
 
