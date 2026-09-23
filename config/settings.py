@@ -71,9 +71,12 @@ class Settings(BaseSettings):
     # OpenRouter request controls. None = field not sent, provider default applies
     # (DeepSeek V4.1 Flash: reasoning on, effort "high"). thinking_budget is
     # Gemini-only; for OpenRouter these are the knobs that actually reach the model.
+    # Effort default "low" (23.09.2026): retrieval unaffected (expand runs with
+    # reasoning off), answers faster and cheaper; see
+    # eval/runs/openrouter_reasoning_ab_2026-09-23/. Set "high" for provider behaviour.
     OPENROUTER_REASONING_EFFORT: (
         Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"] | None
-    ) = None
+    ) = "low"
     OPENROUTER_MAX_TOKENS: int | None = Field(default=None, gt=0)
     OPENROUTER_PROVIDER_SORT: Literal["latency", "throughput", "price"] | None = None
     # Eval judge — independent from pipeline provider

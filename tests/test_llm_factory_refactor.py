@@ -155,8 +155,17 @@ def _openrouter_kwargs(monkeypatch, **factory_kwargs):
 
 
 @pytest.mark.unit
-def test_openrouter_defaults_leave_request_unchanged(monkeypatch):
-    """No settings → no reasoning/max_tokens/provider fields: current behaviour."""
+def test_openrouter_reasoning_effort_defaults_to_low():
+    """Default effort is low: 23.09 eval — same retrieval, faster/cheaper answers."""
+    from config.settings import Settings
+
+    assert Settings.model_fields["OPENROUTER_REASONING_EFFORT"].default == "low"
+    assert Settings.model_fields["OPENROUTER_PROVIDER_SORT"].default is None
+
+
+@pytest.mark.unit
+def test_openrouter_unset_controls_leave_request_unchanged(monkeypatch):
+    """Controls explicitly unset → no reasoning/max_tokens/provider fields."""
     import src.infra.llm_factory as lf
 
     monkeypatch.setattr(lf.settings, "OPENROUTER_REASONING_EFFORT", None)
