@@ -29,6 +29,8 @@ class TestUsageFromResponse:
             "node": "generate",
             "prompt_tokens": 120,
             "completion_tokens": 30,
+            "reasoning_tokens": 0,
+            "provider": "",
         }
 
     def test_openai_legacy_keys(self):
