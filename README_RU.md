@@ -56,26 +56,26 @@ faithfulness **0.926** · answer relevance **0.887** · **~$0.0066/запрос*
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion
-        Docs[PDF / DOCX] --> Docling[Docling Parser]
-        Docling --> Split[HybridChunker max_tokens=400, merge_peers]
-        Split --> Embed[OpenAI Embeddings]
-        Embed --> DB[(ChromaDB)]
+    subgraph Ingestion ["1 · Индексация (офлайн)"]
+        direction LR
+        Docs[PDF / DOCX] --> Parse[Docling<br/>парсер] --> Chunk[Чанки<br/>≤ 400 токенов] --> Embed[Эмбеддинги] --> DB[(ChromaDB)]
     end
 
-    subgraph V7 [V7 LangGraph Pipeline]
-        Q[Query] --> Gate{intent_gate + domain gate}
-        Gate -->|noise / out-of-scope| End[END / abstain]
-        Gate -->|in-domain| Router[router + glossary + multi-query]
-        Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
-        Simple --> Triage{evaluate_triage hard gate + gap}
-        Triage -->|sufficient| Gen[generate_answer]
-        Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
-        Complex --> Eval[evaluate_complex]
-        Eval -->|pass| Gen
-        Eval -->|fail| Abstain[abstain]
-        Gen --> Answer[Answer + sources]
+    subgraph V7 ["2 · Ответ на вопрос (LangGraph)"]
+        direction TB
+        Q[Вопрос] --> Gate{Вопрос по теме?}
+        Gate -->|нет| Abstain[Отказ]
+        Gate -->|да| Router[Переформулировка<br/>глоссарий + multi-query]
+        Router --> Simple[Быстрый поиск<br/>гибридный top-12 + rerank]
+        Simple --> Triage{Данных<br/>достаточно?}
+        Triage -->|да| Gen[Ответ<br/>с источниками]
+        Triage -->|нет| Complex[Глубокий поиск<br/>top-60 + MMR]
+        Complex --> Eval{Данных<br/>достаточно?}
+        Eval -->|да| Gen
+        Eval -->|нет| Abstain
     end
+
+    Ingestion -. поиск по индексу .-> V7
 ```
 
 Ключевые проектные решения:

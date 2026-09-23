@@ -56,26 +56,26 @@ the unit data is synthetic.
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion
-        Docs[PDF / DOCX] --> Docling[Docling Parser]
-        Docling --> Split[HybridChunker max_tokens=400, merge_peers]
-        Split --> Embed[OpenAI Embeddings]
-        Embed --> DB[(ChromaDB)]
+    subgraph Ingestion ["1 · Indexing (offline)"]
+        direction LR
+        Docs[PDF / DOCX] --> Parse[Docling<br/>parser] --> Chunk[Chunks<br/>≤ 400 tokens] --> Embed[Embeddings] --> DB[(ChromaDB)]
     end
 
-    subgraph V7 [V7 LangGraph Pipeline]
-        Q[Query] --> Gate{intent_gate + domain gate}
-        Gate -->|noise / out-of-scope| End[END / abstain]
-        Gate -->|in-domain| Router[router + glossary + multi-query]
-        Router --> Simple[rag_simple hybrid top-12 + CrossEncoder]
-        Simple --> Triage{evaluate_triage hard gate + gap}
-        Triage -->|sufficient| Gen[generate_answer]
-        Triage -->|insufficient| Complex[rag_complex top-60 + MMR]
-        Complex --> Eval[evaluate_complex]
-        Eval -->|pass| Gen
-        Eval -->|fail| Abstain[abstain]
-        Gen --> Answer[Answer + sources]
+    subgraph V7 ["2 · Answering (LangGraph)"]
+        direction TB
+        Q[Question] --> Gate{In domain?}
+        Gate -->|no| Abstain[Abstain]
+        Gate -->|yes| Router[Query rewrite<br/>glossary + multi-query]
+        Router --> Simple[Fast search<br/>hybrid top-12 + rerank]
+        Simple --> Triage{Enough<br/>evidence?}
+        Triage -->|yes| Gen[Answer<br/>with sources]
+        Triage -->|no| Complex[Deep search<br/>top-60 + MMR]
+        Complex --> Eval{Enough<br/>evidence?}
+        Eval -->|yes| Gen
+        Eval -->|no| Abstain
     end
+
+    Ingestion -. index used by search .-> V7
 ```
 
 Key design decisions:
