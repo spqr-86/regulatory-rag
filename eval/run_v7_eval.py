@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import sys
 import time
 import uuid
@@ -52,6 +53,8 @@ from src.v7.graph import build_graph  # noqa: E402
 from src.v7.runner import default_writer  # noqa: E402
 from src.v7.runner import run_query as run_with_telemetry  # noqa: E402
 from utils.logging import configure_logging  # noqa: E402
+
+_REFUSAL_RE = re.compile(r"\bнет\b|не могу")
 
 configure_logging()
 
@@ -220,6 +223,23 @@ def summarize_cost(results: list[dict[str, Any]]) -> dict[str, Any]:
 # ── Correctness judge ─────────────────────────────────────────────────────────
 
 
+def is_oos_rejection(answer: str) -> bool:
+    """Empty answer (domain gate) or a refusal marker near the start of the answer."""
+    return not answer or bool(_REFUSAL_RE.search(answer.lower()[:200]))
+
+
+def oos_rejection_rate(results: list[dict[str, Any]]) -> float:
+    """Share of out-of-scope questions the pipeline refused, over all OOS rows.
+
+    Rows with an empty answer stay in the denominator: that is how the domain
+    gate refuses. Graph errors (no ``answer`` key) are not refusals.
+    """
+    oos = [r for r in results if r.get("oos_type") == "out_of_scope" and "answer" in r]
+    if not oos:
+        return 0.0
+    return sum(1 for r in oos if is_oos_rejection(r["answer"])) / len(oos)
+
+
 def evaluate_correctness(
     question: str, ground_truth: str, answer: str, llm
 ) -> dict[str, Any]:
@@ -339,6 +359,7 @@ def run(
                     "ground_truth": ground_truth,
                     "answer": "",
                     "path": path,
+                    "oos_type": oos_type,
                     "error": "empty answer",
                 }
             )
@@ -427,7 +448,6 @@ def run(
     if not skip_judge:
         # Split: in-scope vs OOS
         in_scope = [r for r in valid if not r.get("oos_type")]
-        oos_results = [r for r in valid if r.get("oos_type") == "out_of_scope"]
         n_in_scope = len(in_scope) or 1
 
         avg_faith = sum(r.get("faithfulness_score", 0) for r in valid) / n
@@ -437,13 +457,6 @@ def run(
         avg_correct_inscope = (
             sum(r.get("correctness_score", 0) for r in in_scope) / n_in_scope
         )
-        # OOS rejection rate: empty answer or abstain = correct rejection
-        oos_rejected = sum(
-            1
-            for r in oos_results
-            if not r.get("answer") or "нет" in r.get("answer", "").lower()[:50]
-        )
-        oos_rejection_rate = len(oos_results) and oos_rejected / len(oos_results)
 
         simple_path = [r for r in valid if r.get("path") == "simple"]
         false_sufficiency_cases = [
@@ -460,7 +473,7 @@ def run(
                 "answer_relevance": round(avg_rel, 3),
                 "correctness_mean": round(avg_correct, 2),
                 "correctness_inscope": round(avg_correct_inscope, 2),
-                "oos_rejection_rate": round(oos_rejection_rate, 3),
+                "oos_rejection_rate": round(oos_rejection_rate(results), 3),
                 "false_sufficiency_rate": round(false_sufficiency_rate, 3),
             }
         )
