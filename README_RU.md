@@ -37,6 +37,21 @@ faithfulness **0.926** · answer relevance **0.887** · **~$0.0066/запрос*
 
 ---
 
+## Демо
+
+Снимки живого Streamlit-интерфейса (DeepSeek V4.1 Flash, 23.09.2026). Данные подразделений
+синтетические.
+
+| Общая нормативная база — прямой ответ | Общая нормативная база — прямой ответ |
+|---|---|
+| [<img src="docs/assets/demo/01-generic-internship.png" width="400">](docs/assets/demo/01-generic-internship.png) | [<img src="docs/assets/demo/02-generic-microenterprise.png" width="400">](docs/assets/demo/02-generic-microenterprise.png) |
+| Минимальная продолжительность стажировки: ответ со ссылкой на раздел каждого из двух источников. | Проверка знаний на микропредприятии без комиссии: да, с точным пунктом. |
+| **Подразделение (склад) — `needs_context`** | **Подразделение (офис) — `needs_context`** |
+| [<img src="docs/assets/demo/03-department-depot.png" width="400">](docs/assets/demo/03-department-depot.png) | [<img src="docs/assets/demo/04-department-office.png" width="400">](docs/assets/demo/04-department-office.png) |
+| Срок испытания лестницы зависит от даты прошлого испытания, а в листе объекта она «неизвестно» — система показывает норму и известные факты и спрашивает дату, а не угадывает. | Огнетушители и план эвакуации зависят от численности людей в здании и категорий помещений, которых в листе нет, — вывод не выдаётся, недостающие факты запрашиваются. |
+
+---
+
 ## Как работает
 
 ```mermaid

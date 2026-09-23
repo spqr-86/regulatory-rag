@@ -385,7 +385,9 @@ def basis_cards(
 
     Titles and locators come from stored evidence, never from model text. An item
     citing several sources yields one card per source; an item citing nothing
-    yields a statement-only card.
+    yields a statement-only card. An object fact yields exactly one card: it
+    usually cites both a typed field (``obj_f_*``) and its section (``obj_s*``),
+    and the typed field wins.
     """
     by_id = {e.id: e for e in evidence}
     cards: list[BasisCard] = []
@@ -394,6 +396,9 @@ def basis_cards(
         if not refs:
             cards.append(BasisCard(statement=item.statement))
             continue
+        if isinstance(item, ObjectFact):
+            typed = [ref for ref in refs if ref.id.startswith("obj_f_")]
+            refs = (typed or refs)[:1]
         for ref in refs:
             cards.append(
                 BasisCard(

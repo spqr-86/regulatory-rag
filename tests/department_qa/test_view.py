@@ -120,6 +120,39 @@ def test_basis_cards_keep_statement_when_source_is_not_in_evidence():
 
 
 @pytest.mark.unit
+def test_basis_cards_one_card_per_object_fact_preferring_typed_field():
+    evidence = [
+        Evidence(
+            id="obj_s2",
+            level="object",
+            text="Персонал: 24",
+            source="sheet.md",
+            title="Лист объекта",
+            locator="раздел 2",
+        ),
+        Evidence(
+            id="obj_f_headcount",
+            level="object",
+            text="24",
+            source="sheet.md",
+            title="Лист объекта",
+            locator="Численность персонала",
+        ),
+    ]
+    facts = [
+        ObjectFact(
+            statement="24 сотрудника", evidence_ids=["obj_s2", "obj_f_headcount"]
+        ),
+        ObjectFact(statement="Раздел без поля", evidence_ids=["obj_s2"]),
+    ]
+    cards = basis_cards(facts, evidence)
+    assert [(c.statement, c.locator) for c in cards] == [
+        ("24 сотрудника", "Численность персонала"),
+        ("Раздел без поля", "раздел 2"),
+    ]
+
+
+@pytest.mark.unit
 def test_object_fact_lines_resolve_section_locator():
     obj = Evidence(
         id="obj_s5",

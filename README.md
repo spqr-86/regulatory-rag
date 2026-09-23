@@ -37,6 +37,21 @@ actually denominates are in [Metrics](#metrics); the pricing fix behind the cost
 
 ---
 
+## Demo
+
+Screenshots of the live Streamlit UI (DeepSeek V4.1 Flash, 23.09.2026). The UI is in Russian;
+the unit data is synthetic.
+
+| General regulatory base — direct answer | General regulatory base — direct answer |
+|---|---|
+| [<img src="docs/assets/demo/01-generic-internship.png" width="400">](docs/assets/demo/01-generic-internship.png) | [<img src="docs/assets/demo/02-generic-microenterprise.png" width="400">](docs/assets/demo/02-generic-microenterprise.png) |
+| Minimum on-the-job internship length: answer citing the section of each of two sources. | Knowledge check at a micro-enterprise without a commission: yes, with the exact clause. |
+| **Unit (warehouse) — `needs_context`** | **Unit (office) — `needs_context`** |
+| [<img src="docs/assets/demo/03-department-depot.png" width="400">](docs/assets/demo/03-department-depot.png) | [<img src="docs/assets/demo/04-department-office.png" width="400">](docs/assets/demo/04-department-office.png) |
+| Stair test deadline depends on the last test date, which the unit sheet marks unknown — the system shows the norm and the known facts and asks for the date instead of guessing. | Extinguishers and evacuation plan depend on building headcount and room categories the sheet does not record — the answer is withheld, the missing facts are asked for. |
+
+---
+
 ## How it works
 
 ```mermaid
