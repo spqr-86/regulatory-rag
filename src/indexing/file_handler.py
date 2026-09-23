@@ -14,6 +14,7 @@ from docling.document_converter import DocumentConverter
 from langchain_core.documents import Document
 
 from config.settings import settings
+from src.indexing.structural_context import add_structural_context
 from utils.logging import logger
 
 FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
@@ -21,7 +22,8 @@ FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
 # ⚙️ Bump version: storage format has changed significantly.
 # v2.2-grouped: bbox filter no longer drops text (only nulls bbox);
 # MAX_CHUNK_SIZE from settings; page change flushes the chunk.
-PIPELINE_VERSION = "v3.0-hybrid"
+# v3.1-context: list stems / parent table rows prepended to chunks (issue #64).
+PIPELINE_VERSION = "v3.1-context"
 
 # --- Constants for filtering and grouping ---
 # bbox height threshold: below this the bbox is considered noise (visual artifacts, footer).
@@ -240,7 +242,7 @@ class DocumentProcessor:
         return chunks
 
     def _process_docling_document(self, doc: Any, source: str) -> List[Document]:
-        chunks = []
+        pending: list[tuple[str, dict, str]] = []
         for chunk in self._chunker.chunk(doc):
             text = _clean_noise(chunk.text.strip())
             if not text:
@@ -284,6 +286,18 @@ class DocumentProcessor:
                         if abs(bbox[3] - bbox[1]) >= MIN_BBOX_HEIGHT:
                             meta["bbox"] = json.dumps(bbox)
 
+            pending.append((text, meta, parent_section))
+
+        # List stems / parent table rows cut off by chunking (issue #64).
+        # An inlined heading is split off first so the rules see the body's
+        # first line; the heading goes back on top below.
+        bodies = [
+            text[len(section) + 1 :] if text.startswith(f"{section}\n") else text
+            for text, _, section in pending
+        ]
+        texts = add_structural_context(bodies)
+        chunks = []
+        for text, body, (raw_text, meta, parent_section) in zip(texts, bodies, pending):
             # Contextual embedding: prepend the section/article title to the
             # embedded text so retrieval can disambiguate near-duplicate wording
             # across different norms (e.g. ст.228.1 «Порядок извещения» vs 223н
@@ -294,7 +308,7 @@ class DocumentProcessor:
             if (
                 parent_section
                 and parent_section != "Document start"
-                and not text.startswith(parent_section)
+                and (body is not raw_text or not raw_text.startswith(parent_section))
             ):
                 embed_text = f"{parent_section}\n{text}"
             else:
