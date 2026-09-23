@@ -162,3 +162,36 @@ def test_summary_reports_reasoning_tokens():
     summary = summarize_cost(rows)
     assert summary["reasoning_tokens"] == 5100
     assert summary["by_path"]["simple"]["reasoning_tokens"] == 5030
+
+
+class TestRecordFields:
+    """The per-question record must carry every usage field run_query reports.
+
+    Before: the record was assembled by hand in two places and dropped
+    reasoning_tokens and providers, so the run summary always showed 0.
+    """
+
+    def test_record_keeps_reasoning_tokens_and_providers(self):
+        from eval.run_v7_eval import record_fields
+
+        graph = _FakeGraph(
+            {
+                "answer": "a",
+                "retrieval_attempts": [{"stage": "simple"}],
+                "llm_usage": [
+                    {
+                        "model": "deepseek/deepseek-v4.1-flash",
+                        "node": "generate",
+                        "stage": "simple",
+                        "prompt_tokens": 100,
+                        "completion_tokens": 50,
+                        "reasoning_tokens": 30,
+                        "provider": "DeepInfra",
+                    }
+                ],
+            }
+        )
+        record = record_fields(run_query(graph, "вопрос"))
+        assert record["reasoning_tokens"] == 30
+        assert record["providers"] == ["DeepInfra"]
+        assert summarize_cost([record])["reasoning_tokens"] == 30

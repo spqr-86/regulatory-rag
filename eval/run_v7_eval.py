@@ -153,6 +153,29 @@ def run_query(
     }
 
 
+_RECORD_FIELDS = (
+    "elapsed_sec",
+    "retrieval_attempts",
+    "llm_calls",
+    "usage",
+    "prompt_tokens",
+    "completion_tokens",
+    "reasoning_tokens",
+    "providers",
+    "cost_usd",
+    "unpriced_models",
+)
+
+
+def record_fields(run_result: dict[str, Any]) -> dict[str, Any]:
+    """Per-question telemetry copied from run_query into the result record.
+
+    One list for both record shapes (with and without judge), so a field added
+    to run_query cannot silently miss the summary again.
+    """
+    return {key: run_result[key] for key in _RECORD_FIELDS}
+
+
 def summarize_cost(results: list[dict[str, Any]]) -> dict[str, Any]:
     """Cost and latency summary for a run, split by retrieval path.
 
@@ -327,14 +350,7 @@ def run(
                 "ground_truth": ground_truth,
                 "answer": answer,
                 "path": path,
-                "elapsed_sec": run_result["elapsed_sec"],
-                "retrieval_attempts": run_result["retrieval_attempts"],
-                "llm_calls": run_result["llm_calls"],
-                "usage": run_result["usage"],
-                "prompt_tokens": run_result["prompt_tokens"],
-                "completion_tokens": run_result["completion_tokens"],
-                "cost_usd": run_result["cost_usd"],
-                "unpriced_models": run_result["unpriced_models"],
+                **record_fields(run_result),
             }
             results.append(record)
             print(
@@ -367,14 +383,7 @@ def run(
             "ground_truth": ground_truth,
             "answer": answer,
             "path": path,
-            "elapsed_sec": run_result["elapsed_sec"],
-            "retrieval_attempts": run_result["retrieval_attempts"],
-            "llm_calls": run_result["llm_calls"],
-            "usage": run_result["usage"],
-            "prompt_tokens": run_result["prompt_tokens"],
-            "completion_tokens": run_result["completion_tokens"],
-            "cost_usd": run_result["cost_usd"],
-            "unpriced_models": run_result["unpriced_models"],
+            **record_fields(run_result),
             "oos_type": oos_type,
             **faithfulness,
             **relevance,
