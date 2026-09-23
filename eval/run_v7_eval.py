@@ -146,6 +146,8 @@ def run_query(
         "usage": usages,
         "prompt_tokens": sum(u.get("prompt_tokens", 0) for u in usages),
         "completion_tokens": sum(u.get("completion_tokens", 0) for u in usages),
+        "reasoning_tokens": sum(u.get("reasoning_tokens", 0) for u in usages),
+        "providers": sorted({u["provider"] for u in usages if u.get("provider")}),
         "cost_usd": priced["cost_usd"],
         "unpriced_models": priced["unpriced_models"],
     }
@@ -170,6 +172,7 @@ def summarize_cost(results: list[dict[str, Any]]) -> dict[str, Any]:
             "mean_cost_usd": (sum(costs) / n) if n else 0.0,
             "prompt_tokens": sum(r.get("prompt_tokens", 0) for r in rows),
             "completion_tokens": sum(r.get("completion_tokens", 0) for r in rows),
+            "reasoning_tokens": sum(r.get("reasoning_tokens", 0) for r in rows),
             "latency_p50_sec": percentile(latencies, 50),
             "latency_p95_sec": percentile(latencies, 95),
         }

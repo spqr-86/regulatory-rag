@@ -26,7 +26,7 @@ def test_openrouter_uses_its_key_and_endpoint(monkeypatch):
     import src.infra.llm_factory as lf
 
     spy = MagicMock(name="ChatOpenAI")
-    monkeypatch.setattr(lf, "ChatOpenAI", spy)
+    monkeypatch.setattr(lf, "_OpenRouterChat", spy)
     monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
 
     lf._create_openrouter_llm(model_name="openai/gpt-4o-mini")
@@ -137,3 +137,94 @@ def test_explicit_model_name_overrides_settings(monkeypatch, openai_spy):
     lf.get_judge_llm(model_name="gpt-4o-mini")
 
     assert openai_spy.call_args.kwargs["model"] == "gpt-4o-mini"
+
+
+# --- OpenRouter reasoning / output caps / provider routing --------------------
+
+
+def _openrouter_kwargs(monkeypatch, **factory_kwargs):
+    import src.infra.llm_factory as lf
+
+    spy = MagicMock(name="ChatOpenAI")
+    monkeypatch.setattr(lf, "_OpenRouterChat", spy)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
+    lf._create_openrouter_llm(
+        model_name="deepseek/deepseek-v4.1-flash", **factory_kwargs
+    )
+    return spy.call_args.kwargs
+
+
+@pytest.mark.unit
+def test_openrouter_defaults_leave_request_unchanged(monkeypatch):
+    """No settings → no reasoning/max_tokens/provider fields: current behaviour."""
+    import src.infra.llm_factory as lf
+
+    monkeypatch.setattr(lf.settings, "OPENROUTER_REASONING_EFFORT", None)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_MAX_TOKENS", None)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_PROVIDER_SORT", None)
+
+    kwargs = _openrouter_kwargs(monkeypatch, thinking_budget=4096)
+
+    assert "max_tokens" not in kwargs
+    assert not kwargs.get("extra_body")
+
+
+@pytest.mark.unit
+def test_openrouter_sends_native_reasoning_effort_max_tokens_and_sort(monkeypatch):
+    import src.infra.llm_factory as lf
+
+    monkeypatch.setattr(lf.settings, "OPENROUTER_REASONING_EFFORT", "low")
+    monkeypatch.setattr(lf.settings, "OPENROUTER_MAX_TOKENS", 2000)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_PROVIDER_SORT", "latency")
+
+    kwargs = _openrouter_kwargs(monkeypatch, thinking_budget=4096)
+
+    assert kwargs["max_tokens"] == 2000
+    assert kwargs["extra_body"] == {
+        "reasoning": {"effort": "low"},
+        "provider": {"sort": "latency"},
+    }
+
+
+@pytest.mark.unit
+def test_openrouter_thinking_budget_zero_disables_reasoning(monkeypatch):
+    """thinking_budget=0 means 'no thinking' — honoured, not silently dropped."""
+    import src.infra.llm_factory as lf
+
+    monkeypatch.setattr(lf.settings, "OPENROUTER_REASONING_EFFORT", "low")
+    monkeypatch.setattr(lf.settings, "OPENROUTER_MAX_TOKENS", None)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_PROVIDER_SORT", None)
+
+    kwargs = _openrouter_kwargs(monkeypatch, thinking_budget=0)
+
+    assert kwargs["extra_body"] == {"reasoning": {"enabled": False}}
+
+
+@pytest.mark.unit
+def test_openrouter_chat_exposes_serving_provider(monkeypatch):
+    """OpenRouter's top-level `provider` must reach response_metadata."""
+    import src.infra.llm_factory as lf
+
+    llm = lf._OpenRouterChat(model="deepseek/deepseek-v4.1-flash", api_key="k")
+    result = llm._create_chat_result(
+        {
+            "id": "gen-1",
+            "model": "deepseek/deepseek-v4.1-flash",
+            "provider": "DeepInfra",
+            "choices": [
+                {
+                    "index": 0,
+                    "finish_reason": "stop",
+                    "message": {"role": "assistant", "content": "ok"},
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 50,
+                "total_tokens": 60,
+                "completion_tokens_details": {"reasoning_tokens": 40},
+            },
+        }
+    )
+    message = result.generations[0].message
+    assert message.response_metadata["openrouter_provider"] == "DeepInfra"

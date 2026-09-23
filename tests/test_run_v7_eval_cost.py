@@ -149,3 +149,16 @@ class TestSummarizeCost:
         s = summarize_cost([])
         assert s["total_cost_usd"] == 0.0
         assert s["by_path"] == {}
+
+
+@pytest.mark.unit
+def test_summary_reports_reasoning_tokens():
+    from eval.run_v7_eval import summarize_cost
+
+    rows = [
+        {"path": "simple", "elapsed_sec": 1.0, "reasoning_tokens": 5030},
+        {"path": "complex", "elapsed_sec": 2.0, "reasoning_tokens": 70},
+    ]
+    summary = summarize_cost(rows)
+    assert summary["reasoning_tokens"] == 5100
+    assert summary["by_path"]["simple"]["reasoning_tokens"] == 5030

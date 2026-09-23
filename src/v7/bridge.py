@@ -365,6 +365,8 @@ def _zero_usage(model: str, node: str) -> LLMUsage:
         "node": node,
         "prompt_tokens": 0,
         "completion_tokens": 0,
+        "reasoning_tokens": 0,
+        "provider": "",
     }
 
 
@@ -490,6 +492,8 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
                 "generate.timing.llm",
                 llm_s=round(time.perf_counter() - t1, 3),
                 completion_tokens=usage["completion_tokens"],
+                reasoning_tokens=usage["reasoning_tokens"],
+                provider=usage["provider"],
                 answer_chars=len(result),
             )
             return result, usage

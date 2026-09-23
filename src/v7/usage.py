@@ -33,6 +33,10 @@ class LLMUsage(TypedDict, total=False):
     stage: str
     prompt_tokens: int
     completion_tokens: int
+    # Part of completion_tokens spent on hidden reasoning (0 when not reported).
+    reasoning_tokens: int
+    # Upstream provider that served the call (OpenRouter only; "" otherwise).
+    provider: str
     # How many passages the call put in its prompt. Only the generate call sets
     # it, and only it can: cross-reference expansion happens inside the fn,
     # after the graph state was written (issue #22).
@@ -64,12 +68,20 @@ def usage_from_response(response: Any, model: str, node: str) -> LLMUsage:
 
     prompt = meta.get("input_tokens", meta.get("prompt_tokens"))
     completion = meta.get("output_tokens", meta.get("completion_tokens"))
+    reasoning = (meta.get("output_token_details") or {}).get("reasoning")
+    if reasoning is None:
+        reasoning = (meta.get("completion_tokens_details") or {}).get(
+            "reasoning_tokens"
+        )
+    response_meta = getattr(response, "response_metadata", None) or {}
 
     return {
         "model": model,
         "node": node,
         "prompt_tokens": _as_int(prompt),
         "completion_tokens": _as_int(completion),
+        "reasoning_tokens": _as_int(reasoning),
+        "provider": str(response_meta.get("openrouter_provider") or ""),
     }
 
 

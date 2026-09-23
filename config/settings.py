@@ -68,6 +68,14 @@ class Settings(BaseSettings):
     SIMPLE_MODEL_NAME: str = "deepseek/deepseek-v4.1-flash"
     COMPLEX_LLM_PROVIDER: str = "openrouter"
     COMPLEX_MODEL_NAME: str = "deepseek/deepseek-v4.1-flash"
+    # OpenRouter request controls. None = field not sent, provider default applies
+    # (DeepSeek V4.1 Flash: reasoning on, effort "high"). thinking_budget is
+    # Gemini-only; for OpenRouter these are the knobs that actually reach the model.
+    OPENROUTER_REASONING_EFFORT: (
+        Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"] | None
+    ) = None
+    OPENROUTER_MAX_TOKENS: int | None = Field(default=None, gt=0)
+    OPENROUTER_PROVIDER_SORT: Literal["latency", "throughput", "price"] | None = None
     # Eval judge — independent from pipeline provider
     JUDGE_LLM_PROVIDER: str = "openai"
     JUDGE_MODEL_NAME: str = "gpt-4o"

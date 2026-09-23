@@ -105,7 +105,51 @@ def _create_openai_llm(**kwargs):
     )
 
 
+class _OpenRouterChat(ChatOpenAI):
+    """ChatOpenAI that keeps OpenRouter's top-level ``provider`` field.
+
+    langchain-openai drops unknown response keys, so which upstream provider
+    served the call was invisible — and routing is the main suspect for p95.
+    """
+
+    def _create_chat_result(self, response, generation_info=None):
+        result = super()._create_chat_result(response, generation_info)
+        if isinstance(response, dict):
+            provider = response.get("provider")
+        else:
+            provider = getattr(response, "provider", None)
+        if provider:
+            for gen in result.generations:
+                gen.message.response_metadata["openrouter_provider"] = provider
+        return result
+
+
+def _openrouter_request_fields(thinking_budget) -> tuple[dict, dict]:
+    """Translate settings + caller intent into OpenRouter-native request fields.
+
+    thinking_budget=0 is the caller asking for no thinking — sent as
+    ``reasoning.enabled=false``. Any other value defers to
+    OPENROUTER_REASONING_EFFORT: DeepSeek on OpenRouter takes effort levels,
+    not a token budget, so the number itself cannot be forwarded.
+    """
+    extra_body: dict = {}
+    if thinking_budget == 0:
+        extra_body["reasoning"] = {"enabled": False}
+    elif settings.OPENROUTER_REASONING_EFFORT:
+        extra_body["reasoning"] = {"effort": settings.OPENROUTER_REASONING_EFFORT}
+    if settings.OPENROUTER_PROVIDER_SORT:
+        extra_body["provider"] = {"sort": settings.OPENROUTER_PROVIDER_SORT}
+
+    client_kwargs: dict = {}
+    if extra_body:
+        client_kwargs["extra_body"] = extra_body
+    if settings.OPENROUTER_MAX_TOKENS:
+        client_kwargs["max_tokens"] = settings.OPENROUTER_MAX_TOKENS
+    return client_kwargs, extra_body
+
+
 def _create_openrouter_llm(**kwargs):
+    thinking_budget = kwargs.pop("thinking_budget", None)
     dropped = {k: kwargs.pop(k) for k in list(kwargs) if k in _GEMINI_ONLY_KWARGS}
     if dropped:
         _log.warning("llm_factory.kwarg_drop", provider="openrouter", dropped=dropped)
@@ -114,13 +158,22 @@ def _create_openrouter_llm(**kwargs):
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         raise ValueError("OPENROUTER_API_KEY not set")
-    return ChatOpenAI(
+    client_kwargs, extra_body = _openrouter_request_fields(thinking_budget)
+    _log.info(
+        "llm_factory.openrouter_request",
+        model=model,
+        thinking_budget=thinking_budget,
+        max_tokens=client_kwargs.get("max_tokens"),
+        **extra_body,
+    )
+    return _OpenRouterChat(
         model=model,
         api_key=api_key,
         base_url="https://openrouter.ai/api/v1",
         temperature=temperature,
         timeout=settings.REQUEST_TIMEOUT,
         max_retries=3,
+        **client_kwargs,
         **kwargs,
     )
 
