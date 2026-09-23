@@ -23,8 +23,13 @@
 faithfulness **0.926** · answer relevance **0.887** · **~$0.0066/запрос**, p50 **24.0 с**.
 
 Одна цифра всё ещё не дотягивает до цели и приводится всё равно: false-sufficiency 10.0% при
-цели <10% (мимо на 0.1 п.п.). Витринный дефолт работает примерно в 5 раз медленнее прежнего
-бейзлайна на GPT-4o-mini (p50 4.5 с → 24 с), причина пока не выяснена. Размеры выборок и что
+цели <10% (мимо на 0.1 п.п.). Тот же прогон был примерно в 5 раз медленнее прежнего бейзлайна
+на GPT-4o-mini (p50 4.5 с → 24 с). Причину с тех пор нашли: OpenRouter молча терял бюджет
+размышлений, и DeepSeek работал с reasoning провайдера по умолчанию (effort=high, без лимита
+вывода). Исправлено в [#63](https://github.com/spqr-86/regulatory-rag/pull/63) — дефолт теперь
+`effort=low`; A/B на 20 вопросах (low + провайдер с сортировкой по latency) снизил p50
+15.5 → 9.3 с и p95 62 → 35 с при correctness 9.1 → 8.9. Полный набор из 56 вопросов ещё не
+перепрогнан, поэтому цифры в шапке — до исправления. Размеры выборок и что
 именно стоит в знаменателе каждой метрики — в разделе [Метрики](#метрики); разбор починки цены —
 в [мемо](./docs/evaluation/experiments/showcase-default-golden-set.md).
 
@@ -106,7 +111,7 @@ flowchart TD
 | Отказ на OOS-запросах | 1.00 | только OOS-подмножество — 7 вопросов, выборка мала |
 | False-sufficiency rate | 10.0% | доля ответов simple-пути, которым судья поставил < 5/10 (цель <10%, мимо на 0.1 п.п.) |
 | Доля complex-пути | 24.5% | 56-вопросный golden set |
-| Латентность p50 / p95 / mean | 24.0 / 71.3 / 30.95 с | на запрос, end-to-end |
+| Латентность p50 / p95 / mean | 24.0 / 71.3 / 30.95 с | на запрос, end-to-end; замер до исправления reasoning effort (#63) |
 | Стоимость запроса | $0.00657 ($0.348 / прогон) | по фактическим токенам провайдера, rate card `src/pricing.py` |
 
 **Как это читать.** Golden set — 56 вопросов: 43 in-scope, 7 out-of-scope, 6 с ложной
@@ -207,7 +212,7 @@ git clone https://github.com/spqr-86/regulatory-rag.git
 cd regulatory-rag
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # заполнить OPENAI_API_KEY (embeddings, complex-путь, судья) + OPENROUTER_API_KEY (simple-путь)
+cp .env.example .env  # заполнить OPENROUTER_API_KEY (оба LLM-пути) + OPENAI_API_KEY (embeddings, судья eval)
 ```
 
 Положите PDF/DOCX нормативных документов в `source_docs/`, затем:
@@ -218,8 +223,8 @@ streamlit run app.py --server.port 8502      # UI на http://localhost:8502
 uvicorn api:app --port 8503                   # REST API на http://localhost:8503/docs
 ```
 
-По умолчанию: ChromaDB, embeddings OpenAI и LLM в двух провайдерах (OpenRouter на simple-пути,
-OpenAI на complex). Любой слой — LLM, embeddings, реранкер, vector store — меняется через
+По умолчанию: ChromaDB, embeddings OpenAI и `deepseek/deepseek-v4.1-flash` через OpenRouter на
+обоих путях, simple и complex (`gpt-4o` — только судья eval). Любой слой — LLM, embeddings, реранкер, vector store — меняется через
 `.env`, а глоссарий, промпты и корпус — это то, что правят при переносе системы в другой
 домен: [справочник по конфигурации](./docs/reference/configuration.md).
 

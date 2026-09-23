@@ -23,8 +23,13 @@ tuning): HR@5 **0.63** · HR@12 **0.81** · MRR **0.50**.
 faithfulness **0.926** · answer relevance **0.887** · **~$0.0066/query**, p50 **24.0 s**.
 
 One number still misses its target and is reported anyway: false-sufficiency 10.0% against a
-<10% target (0.1 pp outside). The showcase default also runs ~5× slower than the prior
-GPT-4o-mini baseline (p50 4.5 s → 24 s), unexplained so far. Sample sizes and what each metric
+<10% target (0.1 pp outside). That run was also ~5× slower than the prior GPT-4o-mini
+baseline (p50 4.5 s → 24 s). Cause found since: OpenRouter silently dropped the thinking budget,
+so DeepSeek ran with the provider's default reasoning (effort=high, no output cap). Fixed in
+[#63](https://github.com/spqr-86/regulatory-rag/pull/63) — the default is now `effort=low`; a
+20-question A/B (low effort + latency-sorted provider) cut p50 15.5 → 9.3 s and p95 62 → 35 s
+at correctness 9.1 → 8.9. The full 56-question set has not been re-run yet, so the headline
+numbers above are pre-fix. Sample sizes and what each metric
 actually denominates are in [Metrics](#metrics); the pricing fix behind the cost number is in
 [the memo](./docs/evaluation/experiments/showcase-default-golden-set.md).
 
@@ -106,7 +111,7 @@ your own. Exact counts: [FACTS § corpus](./docs/reference/FACTS.md#corpus).
 | OOS abstain rate | 1.00 | out-of-scope subset only — 7 questions, a small sample |
 | False-sufficiency rate | 10.0% | share of simple-path answers the judge scored < 5/10 (target <10%, 0.1 pp outside) |
 | Complex-path rate | 24.5% | 56-question golden set |
-| Latency p50 / p95 / mean | 24.0 / 71.3 / 30.95 s | per query, end to end |
+| Latency p50 / p95 / mean | 24.0 / 71.3 / 30.95 s | per query, end to end; measured before the reasoning-effort fix (#63) |
 | Cost / query | $0.00657 ($0.348 / run) | provider token usage, `src/pricing.py` rate card |
 
 **How to read these.** The golden set is 56 questions — 43 in-scope, 7 out-of-scope, 6 with a
@@ -220,7 +225,7 @@ git clone https://github.com/spqr-86/regulatory-rag.git
 cd regulatory-rag
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # fill OPENAI_API_KEY (embeddings, complex path, judge) + OPENROUTER_API_KEY (simple path)
+cp .env.example .env  # fill OPENROUTER_API_KEY (both LLM paths) + OPENAI_API_KEY (embeddings, eval judge)
 ```
 
 For the generic regulatory corpus, drop PDF/DOCX files into `source_docs/`, then:
@@ -236,8 +241,8 @@ directory, and dedicated Chroma collection. The complete Department launch comma
 contract are in [Quick Start](./docs/getting-started.md#run-the-ui). The same screen also
 offers `Общая нормативная база`, backed by the separate Generic index.
 
-Defaults: ChromaDB, OpenAI embeddings, and a two-provider LLM split (OpenRouter on the simple
-path, OpenAI on the complex path). Every layer — LLM, embeddings, reranker, vector store — is
+Defaults: ChromaDB, OpenAI embeddings, and `deepseek/deepseek-v4.1-flash` via OpenRouter on
+both the simple and the complex path (`gpt-4o` only as the eval judge). Every layer — LLM, embeddings, reranker, vector store — is
 swappable via `.env`, and the glossary, prompts and corpus are what you change to move the
 system to another domain: [configuration reference](./docs/reference/configuration.md).
 

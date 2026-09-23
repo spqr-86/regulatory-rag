@@ -164,7 +164,11 @@ entry at run time, so every simple-path query originally priced at $0. Details:
 
 In-scope correctness clears the >7.5 target for the first time; false-sufficiency sits at
 10.0%, still formally 0.1 pp outside the <10% target. The gains came with a ~5× latency
-regression (p50 4.5 s → 24 s, unexplained) and a real cost about 70% above the previous
+regression (p50 4.5 s → 24 s) — cause found 2026-09-23: OpenRouter dropped the thinking
+budget, so DeepSeek ran with the provider default reasoning (effort=high); fixed in #63
+(default `OPENROUTER_REASONING_EFFORT=low`), 20-question A/B with low effort + latency-sorted
+provider: p50 15.5 → 9.3 s, p95 62 → 35 s, correctness 9.1 → 8.9; the 56-question set is not
+re-run yet — and a real cost about 70% above the previous
 baseline, not below it — see the memo for why the run's own reported cost ($0.00430) was
 wrong. The 2026-09-11 vs 2026-09-08 comparison below is unchanged: the terminal contract
 improved faithfulness and false sufficiency without losing correctness or relevance beyond
