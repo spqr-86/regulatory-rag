@@ -4,6 +4,7 @@ How the system is measured, what the numbers are, what was rejected, and where t
 evidence is weak. Current production values live in
 [FACTS](../reference/FACTS.md); this report is the interpretation layer on top of them.
 
+- **Generation golden set audit (28.09.2026):** [golden-set-audit-2026-09-28.md](./golden-set-audit-2026-09-28.md)
 - **Datasets and their provenance:** [datasets.md](./datasets.md)
 - **Per-experiment decision memos:** [experiments/](./experiments/)
 - **How to reproduce a run:** [how-to/run-evaluation.md](../how-to/run-evaluation.md)
