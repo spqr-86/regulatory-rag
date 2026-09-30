@@ -18,19 +18,34 @@ retriever that never fed the pool is under-scored. See
 **Provenance.** Grew from an early 50-question set. One question was removed 2026-09-04
 (its norm, 524н, is not indexed), leaving 56.
 
-**Size and shape.** 56 rows, columns `question`, `ground_truth`, `must_not_contain`,
-`oos_type`. Composition: **43 in-scope**, **7 out-of-scope**, **6 false-premise**.
+**Size and shape.** 56 stable `case_id` rows: **43 in-scope**, **7 out-of-scope**,
+**6 false-premise**. The 28.09 audit classified the original references as 20 usable,
+15 incorrect, and 21 needing clarification. The 15 incorrect answers and 19 ambiguous
+answers were rewritten on 30.09; two OOS cases were clarified. The former audit finding
+remains in `review_note` with its source links. This revision has not yet been independently
+verified against a complete current corpus.
 
-**Labels.** `ground_truth` is a reference answer written by hand; `must_not_contain` lists
-forbidden phrases for false-premise questions; `oos_type` marks out-of-scope and
-false-premise rows.
+**Labels.** `ground_truth` is a hand-written reference answer. `reference_status` is
+`verified` or `needs_clarification`; only verified in-scope rows may enter normative
+correctness. `reviewed_at` is the date of the prior audit, not a claim that the revised
+answer was reverified. `legal_as_of` fixes the intended legal edition at 30.09.2026;
+it does not prove that edition was fully checked. `forbidden_claims` describes assertions to check in context;
+the old `must_not_contain` substring field is empty because it misclassified negations
+and permissible alternatives. `corpus_support` is `known_missing` or `unverified` until
+retrieval proves the relevant clauses are in the current index. `oos_type` marks
+out-of-scope and false-premise cases. Entertainment requests, even if they mention
+occupational safety, are outside this normative assistant's evaluation scope.
 
-**Intended use.** Scored by `eval/run_v7_eval.py` with the `gpt-4o` judge. The in-scope
-subset drives the headline correctness number; the OOS subset drives the abstain rate.
+**Intended use.** `eval/run_v7_eval.py` runs all rows but scores normative correctness
+only on verified in-scope references. It reports the eligible denominator and dataset
+SHA-256. The OOS abstain rate uses only verified OOS rows. A new full 56-question
+correctness headline is blocked until the revised key and source coverage are checked.
 
-**Limitations.** Small (43 in-scope). Reference answers are judge-dependent in practice:
+**Limitations.** Small (43 in-scope, currently only 12 verified). Reference answers are judge-dependent in practice:
 absolute scores are only comparable under one judge, and judge variance is ~±0.25 on the
-correctness scale. Not a held-out set — it has been used to guide prompt iterations.
+correctness scale. This is not a held-out set — it has been used to guide prompt iterations.
+The 23.09 score of 8.09/10 belongs only to the historical, defective key; see the
+[line-by-line audit](./golden-set-audit-2026-09-28.md).
 
 ---
 

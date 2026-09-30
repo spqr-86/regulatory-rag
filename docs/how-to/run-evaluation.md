@@ -3,6 +3,13 @@
 Runs the golden dataset through the V7 graph and scores it. Metric definitions and the
 report format are in [reference/evaluation](../reference/evaluation.md).
 
+The [legal reference audit](../evaluation/golden-set-audit-2026-09-28.md) found defects in
+the original key. The current dataset retains all 56 cases but only `reference_status=verified`
+in-scope answers contribute to normative correctness (currently 12 of 43). The output
+records the eligible denominator and dataset SHA-256. `needs_clarification` cases still
+run through the graph for inspection but are not correctness-scored. A full-set baseline
+requires source verification and a refreshed index.
+
 ```bash
 source .venv/bin/activate
 
@@ -15,9 +22,10 @@ python eval/run_v7_eval.py --output benchmarks/eval_v7_custom.jsonl
 **Flags:** `--limit N` (cap questions), `--skip-judge` (no LLM scoring),
 `--output PATH` (default `benchmarks/eval_v7_{date}.jsonl`).
 
-**Cost:** the judge issues separate LLM calls per metric per question. A full run over the
-56-question dataset with the default `gpt-4o` judge costs ≈ $0.25 (pipeline + judge
-combined; measured 2026-09-08). Use `--skip-judge` for a free pipeline-only smoke run.
+**Cost:** the judge issues separate LLM calls for faithfulness and relevance, plus
+correctness only for eligible in-scope questions. The historical full run cost ≈ $0.25
+(pipeline + judge combined; measured 2026-09-08). `--skip-judge` disables judge calls,
+but the RAG pipeline still calls its generation model and incurs its cost.
 
 **Output:** a JSONL report under `benchmarks/`. The judge model is set by
 `JUDGE_MODEL_NAME` (see [FACTS](../reference/FACTS.md#models)).
@@ -25,6 +33,12 @@ combined; measured 2026-09-08). Use `--skip-judge` for a free pipeline-only smok
 **Re-judging without re-running the pipeline:** `scripts/rejudge.py` re-scores saved
 answers with a judge — cheap A/B of judge prompts or models without paying for retrieval
 and generation again.
+
+For the revised legal key, use `scripts/rejudge_golden.py INPUT --dry-run` to inspect
+eligible saved cases, then `scripts/rejudge_golden.py INPUT --output OUTPUT` after
+source review and authorization for sending saved questions, references and answers
+to the configured judge provider. It checkpoints each score. Its partial reused-answer
+mean is not an end-to-end baseline.
 
 For a single-question trace instead of a full run:
 

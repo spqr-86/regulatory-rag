@@ -59,6 +59,10 @@ below. `v2` is kept unchanged so the 2026-09-15 paired run can be re-rendered.
 ## corpus
 - documents: 12 НТД
 - chunks: 7792  (reindex 2026-09-02; chunk_id 100%, per-source int)
+- local generic index inspected 2026-09-30: 7842 chunks, including 50 from
+  `test.pdf` absent from the present `source_docs/`. This is an inconsistent local
+  snapshot, not an accepted new corpus baseline; see
+  [corpus refresh gate](../evaluation/corpus-refresh-2026-09-30.md).
 - chunks after GT junk filter: 7276  (`eval/generate_retrieval_gt.py`, `MIN_CHUNK_CHARS=200`)
 - full `index.py` run: ≈54 min, peak ≈3 GB RSS + 4.3 GB swap (docling/torch dominates;
   embeddings go over the API). The run wipes `chroma_db/` and the docling cache first,
@@ -142,6 +146,12 @@ intent_gate ─(noise)→ END
 - **`evaluate_triage` is a single hard-gate path** (`check_full_triage`: `top_score` / `passage_count` / `keyword_overlap`). On a sufficient verdict it emits a structured `triage_gap` (`TriageGap`/`GapRef`, issue #13) describing which referenced п./ст. are missing from the top-5; the gap is closed in place by appending cross-referenced passages to the tail (no reorder), and escalation to `rag_complex` happens only if the gap stays open. The V8 `_evidence_assess` variant and its `V7_V8_ENABLE_EVIDENCE_ASSESS` flag were removed 2026-09-08 (variant B).
 
 ## metrics
+The generation figures below belong to the 23.09 historical run on the superseded
+reference key. The [28.09 legal audit](../evaluation/golden-set-audit-2026-09-28.md)
+found 15 incorrect and 21 ambiguous references; 8.09/10 is not verified legal accuracy.
+The revised dataset currently has 12 verified in-scope references out of 43. No replacement
+full-set baseline has been established.
+
 Source: `benchmarks/eval_v7_deepseek_low_2026-09-23.jsonl` (dataset 56, valid 53 — the three
 empty answers are domain-gate refusals). Pipeline: the final terminal triage contract,
 `deepseek/deepseek-v4.1-flash` on both paths via OpenRouter, `OPENROUTER_REASONING_EFFORT=low`,
@@ -162,8 +172,9 @@ counter (`c9b907f`; the run itself printed 0.75). Details:
 | latency p50 / p95 / mean | 9.5 / 25.9 / 12.0 s | 24.0 / 71.3 / 31.0 s | 4.51 / 15.70 / 6.83 s | 4.8 / 14.7 / 5.9 s |
 | cost / query | $0.0021 ($0.111 run total) | $0.00657 ($0.348) | $0.00387 ($0.205) | $0.0033 |
 
-All targets are met: in-scope correctness >7.5, faithfulness, relevance >0.85 (0.853, just),
-OOS abstention, false-sufficiency <10%. Against the 17.09 run the reasoning-effort fix (#63)
+The old-key numerical targets were met: in-scope correctness >7.5, faithfulness, relevance
+>0.85 (0.853, just), OOS abstention, false-sufficiency <10%. The normative correctness target
+needs a new run after source verification. Against the 17.09 run the reasoning-effort fix (#63)
 cut p50 2.5× and cost to a third without losing correctness or faithfulness (the correctness
 gain is inside judge variance). Answer relevance fell 0.887 → 0.853, on in-scope questions
 alone 0.953 → 0.912 — likely the price of low effort, not separated from the complex-path model

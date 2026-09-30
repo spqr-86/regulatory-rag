@@ -17,6 +17,11 @@ In-scope correctness **8.09 / 10** · faithfulness **0.974** · false-sufficienc
 p50 **9.5 s** · **$0.0021 / query** (56-question golden set, `gpt-4o` judge) ·
 retrieval HR@5 **0.63** on 90 practitioner questions never used for tuning.
 
+**Generation score is historical:** the [28 September legal audit](./docs/evaluation/golden-set-audit-2026-09-28.md)
+found 15 incorrect and 21 ambiguous references in that golden set. The 8.09 score measures
+agreement with the old key; it does not establish legal accuracy. A new baseline is pending
+source verification, corpus refresh and re-evaluation.
+
 📖 [Evaluation report](./docs/evaluation/README.md) · [FACTS](./docs/reference/FACTS.md) ·
 [design decisions](./docs/explanation/design-decisions.md) · [all docs](./docs/README.md) ·
 [Russian README →](./README_RU.md)
@@ -79,6 +84,8 @@ flowchart TD
 ---
 
 ## Metrics
+
+The generation figures below are from the 23 September run on the superseded reference key.
 
 | Metric | Value | Measured on |
 |---|---|---|

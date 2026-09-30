@@ -5,6 +5,7 @@ evidence is weak. Current production values live in
 [FACTS](../reference/FACTS.md); this report is the interpretation layer on top of them.
 
 - **Generation golden set audit (28.09.2026):** [golden-set-audit-2026-09-28.md](./golden-set-audit-2026-09-28.md)
+- **Corpus refresh and baseline gate (30.09.2026):** [corpus-refresh-2026-09-30.md](./corpus-refresh-2026-09-30.md)
 - **Datasets and their provenance:** [datasets.md](./datasets.md)
 - **Per-experiment decision memos:** [experiments/](./experiments/)
 - **How to reproduce a run:** [how-to/run-evaluation.md](../how-to/run-evaluation.md)
@@ -30,6 +31,11 @@ Pipeline cost is measured per query from provider token usage (`src/v7/usage.py`
 
 ### Generation — 56-question golden set, judge `gpt-4o`
 
+**Historical comparison only.** The [line-by-line legal audit](./golden-set-audit-2026-09-28.md)
+found 15 incorrect and 21 ambiguous references. The 23.09 scores below are not a measure
+of legal accuracy under the revised key. The current runner excludes unverified references
+from normative correctness and reports the eligible denominator.
+
 Current default (23.09.2026: `deepseek/deepseek-v4.1-flash` on both paths, reasoning effort
 `low`) against the 17.09 showcase run (effort high, `gpt-4o` complex path), the terminal
 triage contract (2026-09-11) and the pre-contract baseline (2026-09-08), same judge, 53/56
@@ -47,8 +53,9 @@ valid:
 | Latency p50 / p95 (s) | 9.5 / 25.9 | 24.0 / 71.3 | 4.51 / 15.70 | 4.8 / 14.7 |
 | Cost per query | $0.0021 | $0.00657 | $0.00387 | $0.0033 |
 
-Every target in [reference/evaluation.md](../reference/evaluation.md) is met, relevance only
-just (0.853 vs >0.85). The reasoning-effort fix
+The old-key numerical targets in [reference/evaluation.md](../reference/evaluation.md) were met,
+with relevance only just over its threshold (0.853 vs >0.85). This does not establish the
+normative correctness target. The reasoning-effort fix
 ([#63](https://github.com/spqr-86/regulatory-rag/pull/63)) removed most of the 17.09 latency
 regression and cut cost to a third without losing correctness or faithfulness; relevance fell
 (in-scope 0.953 → 0.912), and latency is still ~2× the GPT-4o-mini baseline. Details:

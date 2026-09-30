@@ -1,12 +1,13 @@
 # Benchmarks
 
-Current baseline metrics and local eval artifacts.
+Historical metrics and local eval artifacts. The generation baseline is suspended pending
+the [legal reference audit follow-up](../docs/evaluation/golden-set-audit-2026-09-28.md).
 
 **In git:** this README only.
 **Local only:** `eval_v7_*.jsonl`, `retrieval_*_*.json`, `triage_gap_*.json`, `cps_*.json` —
 eval run artifacts, listed in `.gitignore`.
 
-## Current baseline — 2026-09-23
+## Historical run — 2026-09-23 (old reference key)
 
 Generation eval (`eval/run_v7_eval.py`, judge `gpt-4o`, `tests/dataset.csv` 56 questions,
 53 valid) — current default (`deepseek/deepseek-v4.1-flash` on both paths, reasoning effort `low`):

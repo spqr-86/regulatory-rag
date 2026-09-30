@@ -8,17 +8,24 @@ Runs the golden dataset through the V7 graph and measures:
 
 Usage:
     cd /home/petr/projects/ai/regulatory-rag
-    source venv/bin/activate
+    source .venv/bin/activate
     python eval/run_v7_eval.py
     python eval/run_v7_eval.py --limit 5          # quick smoke test
     python eval/run_v7_eval.py --skip-judge       # pipeline only, no LLM judge (~$0)
     python eval/run_v7_eval.py --output benchmarks/eval_v7_custom.jsonl
 """
 
+# ANCHOR: Run the golden cases, keep reference-review status with each result,
+# and aggregate normative correctness only from verified in-scope references.
+# Input: versioned CSV, current RAG graph and judge. Output: JSON report with
+# dataset hash, score denominator, per-case telemetry and judge findings.
+
 from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import importlib.resources
 import json
 import re
 import sys
@@ -27,6 +34,8 @@ import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from pydantic import BaseModel
 
 # Make project root importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -42,6 +51,7 @@ from src.infra.llm_factory import (  # noqa: E402
 
 apply_ipv6_patch_for_googleapis()
 
+from config.settings import settings  # noqa: E402
 from eval.advanced_generation_metrics import (  # noqa: E402
     evaluate_answer_relevance,
     evaluate_faithfulness,
@@ -74,23 +84,73 @@ FALSE_SUFFICIENCY_THRESHOLD = 5.0  # out of 10
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
 
+class CorrectnessPromptVariables(BaseModel):
+    question: str
+    legal_as_of: str
+    ground_truth: str
+    forbidden_claims: str
+    answer: str
+
+
+def correctness_prompt_text() -> str:
+    return importlib.resources.files("eval").joinpath("prompts/golden_correctness.md").read_text(encoding="utf-8")
+
+
+def correctness_prompt_sha256() -> str:
+    return hashlib.sha256(correctness_prompt_text().encode("utf-8")).hexdigest()
+
+
 def load_dataset(path: Path) -> list[dict[str, str]]:
     rows = []
     with open(path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
+        required = {"case_id", "question", "ground_truth", "reference_status", "legal_as_of"}
+        missing = required - set(reader.fieldnames or [])
+        if missing:
+            raise ValueError(f"Golden dataset missing columns: {', '.join(sorted(missing))}")
+        seen_ids: set[str] = set()
         for row in reader:
             q = row.get("question", "").strip()
             gt = row.get("ground_truth", "").strip()
             if q and gt:
+                case_id = (row.get("case_id") or "").strip()
+                status = (row.get("reference_status") or "").strip()
+                if not case_id or case_id in seen_ids:
+                    raise ValueError(f"Missing or duplicate golden case_id: {case_id!r}")
+                if status not in {"verified", "incorrect", "needs_clarification"}:
+                    raise ValueError(f"Invalid reference_status for {case_id}: {status!r}")
+                legal_as_of = (row.get("legal_as_of") or "").strip()
+                if not legal_as_of:
+                    raise ValueError(f"Missing legal_as_of for {case_id}")
+                seen_ids.add(case_id)
                 rows.append(
                     {
+                        "case_id": case_id,
                         "question": q,
                         "ground_truth": gt,
+                        "reference_status": status,
+                        "reviewed_at": (row.get("reviewed_at") or "").strip(),
+                        "legal_as_of": legal_as_of,
+                        "corpus_support": (row.get("corpus_support") or "unverified").strip(),
+                        "forbidden_claims": (row.get("forbidden_claims") or "").strip(),
                         "oos_type": (row.get("oos_type") or "").strip(),
                         "must_not_contain": (row.get("must_not_contain") or "").strip(),
                     }
                 )
     return rows
+
+
+def scorable_in_scope(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Only reviewed legal references may contribute to normative correctness."""
+    return [
+        row
+        for row in results
+        if row.get("reference_status") == "verified"
+        and not row.get("oos_type")
+        and row.get("answer")
+        and row.get("correctness_score") is not None
+        and "error" not in row
+    ]
 
 
 # ── Graph runner ──────────────────────────────────────────────────────────────
@@ -241,60 +301,36 @@ def oos_rejection_rate(results: list[dict[str, Any]]) -> float:
 
 
 def evaluate_correctness(
-    question: str, ground_truth: str, answer: str, llm
+    question: str, ground_truth: str, answer: str, llm,
+    forbidden_claims: str = "",
+    legal_as_of: str = "",
 ) -> dict[str, Any]:
-    """LLM-as-judge: how close is answer to ground_truth? Returns score 0-10."""
+    """Judge answer against a reviewed key and conditional forbidden assertions."""
     from langchain_core.output_parsers import StrOutputParser
     from langchain_core.prompts import ChatPromptTemplate
 
-    prompt = ChatPromptTemplate.from_template(
-        """Ты — строгий судья качества ответов. Оцени Ответ по ДВУМ осям:
-(а) покрытие — присутствуют ли ключевые факты Эталонного ответа;
-(б) фактическая верность — нет ли утверждений, противоречащих нормам.
-
-ВАЖНЫЕ ПРАВИЛА ОЦЕНКИ:
-- НЕ снижай балл за дополнительные ВЕРНЫЕ и относящиеся к теме факты, которых
-  нет в эталоне. Полнота и ссылки на источник (статья/пункт/приказ) — это ПЛЮС.
-- Снижай балл ТОЛЬКО за: пропуск ключевых фактов эталона ИЛИ фактические ошибки
-  (неверные числа, сроки, нормы, противоречия закону).
-- Краткость эталона не эталон стиля: более развёрнутый, но верный ответ — не хуже.
-
-Шкала:
-- 9-10: все ключевые факты эталона покрыты, фактических ошибок нет.
-- 7-8: покрыты основные факты, пропущена незначительная деталь; ошибок нет.
-- 5-6: часть ключевых фактов отсутствует ИЛИ есть мелкая неточность.
-- 3-4: ключевые факты упущены ИЛИ есть значимая фактическая ошибка.
-- 0-2: ответ неверный, противоречит норме или не по теме.
-
-Верни JSON: {{"score": <число 0-10>, "reasoning": "<краткое объяснение>"}}
-
-Вопрос: {question}
-Эталонный ответ: {ground_truth}
-Ответ для оценки: {answer}
-
-JSON:"""
+    prompt = ChatPromptTemplate.from_template(correctness_prompt_text())
+    variables = CorrectnessPromptVariables(
+        question=question, legal_as_of=legal_as_of, ground_truth=ground_truth,
+        forbidden_claims=forbidden_claims, answer=answer,
     )
 
     chain = prompt | llm | StrOutputParser()
-    response = chain.invoke(
-        {"question": question, "ground_truth": ground_truth, "answer": answer}
-    )
-
-    try:
-        import re
-
-        match = re.search(r"\{.*\}", response, re.DOTALL)
-        if match:
-            data = json.loads(match.group())
-            return {
-                "correctness_score": float(data.get("score", 0.0)),
-                "correctness_reasoning": data.get("reasoning", ""),
-            }
-    except (json.JSONDecodeError, ValueError, KeyError):
-        pass
+    response = chain.invoke(variables.model_dump())
+    raw = response.strip()
+    if raw.startswith("```json") and raw.endswith("```"):
+        raw = raw.removeprefix("```json").removesuffix("```").strip()
+    data = json.loads(raw)
+    score = float(data["score"])
+    if not 0 <= score <= 10:
+        raise ValueError(f"Judge score out of range: {score}")
+    asserted = data.get("forbidden_claims_asserted", [])
+    if not isinstance(asserted, list) or any(not isinstance(x, str) for x in asserted):
+        raise ValueError("Judge returned invalid forbidden_claims_asserted")
     return {
-        "correctness_score": 0.0,
-        "correctness_reasoning": f"parse error: {response[:100]}",
+        "correctness_score": score,
+        "correctness_reasoning": str(data.get("reasoning", "")),
+        "forbidden_claims_asserted": asserted,
     }
 
 
@@ -323,7 +359,7 @@ def run(
 
     judge_llm = None
     if skip_judge:
-        print("  [--skip-judge] LLM judge disabled — pipeline only, $0 cost.\n")
+        print("  [--skip-judge] LLM judge disabled; generation and embeddings may still incur cost.\n")
     else:
         print("Loading judge LLM...")
         # seed makes OpenAI judging best-effort reproducible (cuts run-to-run noise).
@@ -333,9 +369,11 @@ def run(
     results = []
     for i, item in enumerate(dataset, 1):
         question = item["question"]
+        case_id = item["case_id"]
         ground_truth = item["ground_truth"]
         oos_type = item.get("oos_type", "")
-        print(f"[{i}/{len(dataset)}] {question[:70]}...")
+        reference_status = item["reference_status"]
+        print(f"[{i}/{len(dataset)}] {case_id}: {question[:70]}...")
 
         # Run graph
         try:
@@ -344,7 +382,7 @@ def run(
             )
         except Exception as e:
             print(f"  ERROR running graph: {e}")
-            results.append({"question": question, "error": str(e)})
+            results.append({"case_id": case_id, "question": question, "error": str(e)})
             continue
 
         answer = run_result["answer"]
@@ -355,11 +393,15 @@ def run(
             print(f"  WARNING: empty answer (path={path})")
             results.append(
                 {
+                    "case_id": case_id,
                     "question": question,
                     "ground_truth": ground_truth,
                     "answer": "",
                     "path": path,
                     "oos_type": oos_type,
+                    "reference_status": reference_status,
+                    "legal_as_of": item["legal_as_of"],
+                    "corpus_support": item["corpus_support"],
                     "error": "empty answer",
                 }
             )
@@ -367,10 +409,15 @@ def run(
 
         if skip_judge:
             record = {
+                "case_id": case_id,
                 "question": question,
                 "ground_truth": ground_truth,
                 "answer": answer,
                 "path": path,
+                "oos_type": oos_type,
+                "reference_status": reference_status,
+                "legal_as_of": item["legal_as_of"],
+                "corpus_support": item["corpus_support"],
                 **record_fields(run_result),
             }
             results.append(record)
@@ -392,20 +439,30 @@ def run(
             print(f"  WARNING: relevance eval failed: {e}")
             relevance = {"answer_relevance_score": 0.0}
 
-        try:
-            correctness = evaluate_correctness(
-                question, ground_truth, answer, judge_llm
-            )
-        except Exception as e:
-            correctness = {"correctness_score": 0.0, "correctness_reasoning": str(e)}
+        if reference_status == "verified" and not oos_type:
+            try:
+                correctness = evaluate_correctness(
+                    question, ground_truth, answer, judge_llm,
+                    item["forbidden_claims"],
+                    item["legal_as_of"],
+                )
+            except Exception as e:
+                correctness = {"correctness_score": None, "correctness_reasoning": str(e)}
+        else:
+            correctness = {"correctness_score": None, "correctness_reasoning": "reference not eligible for normative scoring"}
 
         record = {
+            "case_id": case_id,
             "question": question,
             "ground_truth": ground_truth,
             "answer": answer,
             "path": path,
             **record_fields(run_result),
             "oos_type": oos_type,
+            "reference_status": reference_status,
+            "legal_as_of": item["legal_as_of"],
+            "corpus_support": item["corpus_support"],
+            "forbidden_claims": item["forbidden_claims"],
             **faithfulness,
             **relevance,
             **correctness,
@@ -416,7 +473,7 @@ def run(
             f"  path={path} | "
             f"faith={faithfulness.get('faithfulness_score', 0):.2f} | "
             f"rel={relevance.get('answer_relevance_score', 0):.2f} | "
-            f"correct={correctness.get('correctness_score', 0):.1f}/10"
+            f"correct={correctness['correctness_score'] if correctness['correctness_score'] is not None else 'unscored'}"
         )
 
     # Aggregate
@@ -447,22 +504,23 @@ def run(
 
     if not skip_judge:
         # Split: in-scope vs OOS
-        in_scope = [r for r in valid if not r.get("oos_type")]
-        n_in_scope = len(in_scope) or 1
+        in_scope = scorable_in_scope(valid)
+        n_in_scope = len(in_scope)
+        scored = [r for r in valid if r.get("correctness_score") is not None]
 
         avg_faith = sum(r.get("faithfulness_score", 0) for r in valid) / n
         avg_rel = sum(r.get("answer_relevance_score", 0) for r in valid) / n
-        avg_correct = sum(r.get("correctness_score", 0) for r in valid) / n
+        avg_correct = sum(r["correctness_score"] for r in scored) / len(scored) if scored else None
         # In-scope only correctness (excludes OOS noise)
         avg_correct_inscope = (
-            sum(r.get("correctness_score", 0) for r in in_scope) / n_in_scope
+            sum(r["correctness_score"] for r in in_scope) / n_in_scope if in_scope else None
         )
 
-        simple_path = [r for r in valid if r.get("path") == "simple"]
+        simple_path = [r for r in in_scope if r.get("path") == "simple"]
         false_sufficiency_cases = [
             r
             for r in simple_path
-            if r.get("correctness_score", 10) < FALSE_SUFFICIENCY_THRESHOLD
+            if r["correctness_score"] < FALSE_SUFFICIENCY_THRESHOLD
         ]
         false_sufficiency_rate = (
             len(false_sufficiency_cases) / len(simple_path) if simple_path else 0.0
@@ -471,9 +529,11 @@ def run(
             {
                 "faithfulness": round(avg_faith, 3),
                 "answer_relevance": round(avg_rel, 3),
-                "correctness_mean": round(avg_correct, 2),
-                "correctness_inscope": round(avg_correct_inscope, 2),
-                "oos_rejection_rate": round(oos_rejection_rate(results), 3),
+                "correctness_mean": round(avg_correct, 2) if avg_correct is not None else None,
+                "correctness_inscope": round(avg_correct_inscope, 2) if avg_correct_inscope is not None else None,
+                "correctness_scored": n_in_scope,
+                "correctness_in_scope_total": sum(1 for r in valid if not r.get("oos_type")),
+                "oos_rejection_rate": round(oos_rejection_rate([r for r in results if r.get("reference_status") == "verified"]), 3),
                 "false_sufficiency_rate": round(false_sufficiency_rate, 3),
             }
         )
@@ -483,6 +543,12 @@ def run(
         "run_id": run_id,
         "skip_judge": skip_judge,
         "dataset": str(DATASET_PATH),
+        "dataset_sha256": hashlib.sha256(DATASET_PATH.read_bytes()).hexdigest(),
+        "correctness_prompt_sha256": correctness_prompt_sha256(),
+        "judge_provider": settings.JUDGE_LLM_PROVIDER,
+        "judge_model": settings.JUDGE_MODEL_NAME,
+        "judge_temperature": 0.0,
+        "judge_seed": 12345,
         "dataset_size": len(dataset),
         "valid_results": n,
         "aggregate": aggregate,
@@ -503,10 +569,11 @@ def run(
         print(
             f"  Answer Relevance:      {aggregate['answer_relevance']:.3f}  (target >0.85)"
         )
-        print(f"  Correctness (all):     {aggregate['correctness_mean']:.1f}/10")
-        print(
-            f"  Correctness (in-scope):{aggregate['correctness_inscope']:.1f}/10  (target >7.5)"
-        )
+        if aggregate["correctness_inscope"] is not None:
+            print(f"  Correctness (reviewed): {aggregate['correctness_inscope']:.1f}/10  (n={n_in_scope})")
+        else:
+            print("  Correctness (reviewed): n/a (no eligible answers)")
+        print(f"  Reference coverage:    {n_in_scope}/{aggregate['correctness_in_scope_total']} in-scope answers")
         print(
             f"  OOS rejection rate:    {aggregate['oos_rejection_rate']:.1%}  (target >90%)"
         )
