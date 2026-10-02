@@ -1,10 +1,39 @@
 # Indexing review — 2 October 2026
 
-Status: analysis completed; implementation and reindexing have not been authorized.
+Status: analysis completed; findings 1–3 implemented after Petr's scope approval.
 Petr requested this review before indexing the replacement legal corpus. No production
 code, active index, reference key or paid model calls were changed by this review.
 
-## Current pipeline
+## Follow-up implementation
+
+Petr authorized findings 1–3 after this review. `index.py` now constructs a separate
+candidate, requires all indexed sources and verifies stored content/provenance before
+writing its readiness report. It never removes or switches the active store. With a
+department manifest, ObjectProfile sheets remain outside the index and unlisted inputs
+are not parsed. Source basenames must be unique; source hashes are checked before/after
+parsing. Cached structural chunks exclude source/chunk_id; each input rebinds provenance.
+Cache identity includes input format, package versions and chunker/cleaning settings.
+
+The findings below describe the pre-fix pipeline. Legal/table boundaries, tokenizer
+choice, normalization of collected HTML exports and verification of NPA editions are
+still open. Readiness establishes storage/completeness, not legal accuracy or retrieval
+quality. Activation remains an explicit application configuration/restart step.
+
+Validation: 51 targeted tests passed, Black/Ruff and `check_docs --ci` passed. An
+isolated real-Chroma smoke used local synthetic embeddings: 130 records survived
+reopening in a second process; failure in embedding batch 2 preserved the old store
+and produced no readiness report. No active-corpus build or paid calls were made.
+The broader run excluding `tests/test_api.py` yielded 1,357 passed, 3 xfailed and
+one known telemetry-writer failure (`TestWiring.test_jsonl_stays_the_default_writer`).
+The full CI gate stalled at the API health TestClient; it is not reported as passed.
+
+The second approved follow-up also rejects degraded conversion, narrows cleanup,
+preserves distinct chunk occurrences, persists parser IR and validates managed
+snapshots at load time. Its bounded list/table experiment and final validation are
+recorded in [Ingest quality](experiments/ingest-quality-2026-10-02.md). Production
+chunking/tokenizer and the active corpus remain unchanged.
+
+## Pipeline at the initial audit
 
 `index.py` discovers allowed files recursively, clears the parser cache, runs Docling
 and HybridChunker, optionally attaches department manifest metadata, deletes the target

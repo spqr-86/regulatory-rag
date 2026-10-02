@@ -12,6 +12,7 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
 from config.settings import settings
+from src.indexing.snapshot import read_snapshot_report, validate_stored_snapshot
 from src.infra.llm_factory import get_embedding_model
 from utils.logging import logger
 
@@ -72,18 +73,19 @@ def _batches_by_tokens(
         yield batch
 
 
-def _create_chroma_instance(embeddings) -> Chroma:
+def _create_chroma_instance(embeddings, *, path: str | None = None) -> Chroma:
     """Create a Chroma instance with standard settings."""
     return Chroma(
         collection_name=settings.CHROMA_COLLECTION_NAME,
         embedding_function=embeddings,
-        persist_directory=settings.CHROMA_DB_PATH,
+        persist_directory=path if path is not None else settings.CHROMA_DB_PATH,
     )
 
 
-def create_vector_store(chunks: List[Document]) -> Chroma:
+def create_vector_store(chunks: List[Document], *, path: str | None = None) -> Chroma:
     logger.info("Creating new vector database...")
-    os.makedirs(settings.CHROMA_DB_PATH, exist_ok=True)
+    target = path if path is not None else settings.CHROMA_DB_PATH
+    os.makedirs(target, exist_ok=True)
 
     embeddings = get_embedding_model()
     is_openai = embeddings.__class__.__name__ in {
@@ -91,7 +93,7 @@ def create_vector_store(chunks: List[Document]) -> Chroma:
         "AzureOpenAIEmbeddings",
     }
 
-    vector_store = _create_chroma_instance(embeddings)
+    vector_store = _create_chroma_instance(embeddings, path=target)
 
     total, done = len(chunks), 0
     for batch in _batches_by_tokens(
@@ -106,7 +108,7 @@ def create_vector_store(chunks: List[Document]) -> Chroma:
         done += len(batch)
         logger.info(f"Chroma add: progress {done}/{total}")
 
-    logger.info(f"Vector DB saved: {settings.CHROMA_DB_PATH}")
+    logger.info(f"Vector DB saved: {target}")
     return vector_store
 
 
@@ -126,6 +128,7 @@ def load_bound_vector_store(*, path: str, collection: str, embeddings) -> Chroma
         raise ValueError("path, collection and embeddings are required")
     if not os.path.isdir(path):
         raise FileNotFoundError(f"Chroma DB not found: {path}")
+    report = read_snapshot_report(path, collection, embeddings)
     vs = Chroma(
         collection_name=collection,
         embedding_function=embeddings,
@@ -134,6 +137,8 @@ def load_bound_vector_store(*, path: str, collection: str, embeddings) -> Chroma
     )
 
     count = vs._collection.count()
+    if report is not None:
+        validate_stored_snapshot(vs, report)
     if count == 0:
         raise ValueError(
             f"Chroma DB is empty (0 documents): {path}. "

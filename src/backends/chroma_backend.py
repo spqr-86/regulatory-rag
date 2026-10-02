@@ -48,11 +48,17 @@ class ChromaBackend:
         else:
             self._vs = None  # populated by create()
 
-    def create(self, chunks: list[Document]) -> "ChromaBackend":
+    def create(
+        self, chunks: list[Document], *, path: str | None = None
+    ) -> "ChromaBackend":
         """Build a new Chroma index from chunks. Used by index.py."""
         from src.indexing.vector_store import create_vector_store
 
-        self._vs = create_vector_store(chunks)
+        self._vs = (
+            create_vector_store(chunks, path=path)
+            if path is not None
+            else create_vector_store(chunks)
+        )
         return self
 
     def similarity_search_with_score(

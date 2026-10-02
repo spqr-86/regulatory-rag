@@ -6,7 +6,9 @@ import json
 import os
 import re
 import unicodedata
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Iterable, List, Optional, Tuple, Union
 
@@ -18,10 +20,26 @@ from utils.logging import logger
 
 FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
 
-# ⚙️ Bump version: storage format has changed significantly.
-# v2.2-grouped: bbox filter no longer drops text (only nulls bbox);
-# MAX_CHUNK_SIZE from settings; page change flushes the chunk.
-PIPELINE_VERSION = "v3.0-hybrid"
+# Chunk-cache version changes when normalization or occurrence identity changes.
+PIPELINE_VERSION = "v3.2-quality-ir"
+PARSER_VERSION = "v1-complete-docling"
+CHUNKER_MAX_TOKENS = 400
+CHUNKER_MERGE_PEERS = True
+
+
+# ANCHOR: parse/cache structural chunks; bind provenance per input before dedup.
+# Input: files/streams. Output: documents and a per-file processing_report.
+# Strict mode rejects any failed/empty input; cache keys fingerprint the pipeline.
+@dataclass(frozen=True)
+class ProcessingResult:
+    source: str
+    chunk_count: int
+    error: str | None = None
+
+
+class ProcessingError(ValueError):
+    """One or more required inputs failed to produce chunks."""
+
 
 # --- Constants for filtering and grouping ---
 # bbox height threshold: below this the bbox is considered noise (visual artifacts, footer).
@@ -29,33 +47,49 @@ PIPELINE_VERSION = "v3.0-hybrid"
 # but retrieval stays complete). Previously the item was dropped entirely — this
 # caused short single-line regulatory clauses to be lost (see PPRF 2464).
 MIN_BBOX_HEIGHT = 7
-BLACKLIST_PHRASES = ["Премиальная версия", "Скачано с", "Страница"]
 MAX_CHUNK_SIZE = settings.CHUNK_SIZE
 
-# Noise patterns — removed from chunk text before indexing.
-# URL watermarks (e.g. https://1otruda.ru/#/document/99/727688582),
-# page markers (14/34), timestamps (25.01.2026, 20:10).
+# Whole-line boilerplate only: never remove arbitrary inline URLs or legal IDs.
 _NOISE_PATTERNS = re.compile(
-    r"https?://\S+"  # URL
-    r"|(?<!\d)\d{1,2}/\d{2,3}(?!\d)"  # n/nn page marker (14/34) — not fractions in text
-    r"|\d{2}\.\d{2}\.\d{4},?\s+\d{2}:\d{2}",  # date+time 25.01.2026, 20:10
-    re.UNICODE,
+    r"^(?:Скачано с[^\n]*|Премиальная версия[^\n]*|"
+    r"Страница\s+\d+(?:\s+(?:из|/)\s*\d+)?|"
+    r"https?://(?:www\.)?1otruda\.ru/\S*|"
+    r"\d{2}\.\d{2}\.\d{4},?\s+\d{2}:\d{2})$",
+    re.IGNORECASE,
 )
 
 
 def _clean_noise(text: str) -> str:
-    """Remove noise: normalise Cyrillic, strip URLs/page markers/timestamps."""
-    text = unicodedata.normalize("NFC", text)
-    # Normalise dashes: en-dash → em-dash (avoid mismatch on search).
-    # Glue hyphenated line-breaks ("рабо-\nтодатель" → "работодатель").
-    text = text.replace("–", "—").replace("-\n", "")
-    cleaned = _NOISE_PATTERNS.sub("", text)
-    cleaned = re.sub(r" {2,}", " ", cleaned)
-    return cleaned.strip()
+    """Remove recognized boilerplate lines; preserve identifiers and inline URLs."""
+    text = unicodedata.normalize("NFC", text).replace("–", "—")
+    lines = [
+        line
+        for line in text.splitlines()
+        if not _NOISE_PATTERNS.fullmatch(line.strip())
+    ]
+    return re.sub(r" {2,}", " ", "\n".join(lines)).strip()
 
 
-def _document_to_dict(doc: Document) -> dict:
-    return {"page_content": doc.page_content, "metadata": dict(doc.metadata or {})}
+def pipeline_fingerprint() -> dict:
+    """Configuration/version identity for reusable parser output."""
+    return {
+        "pipeline": PIPELINE_VERSION,
+        "parser": PARSER_VERSION,
+        "packages": {
+            p: version(p)
+            for p in ("docling", "docling-core", "transformers", "tokenizers")
+        },
+        "chunker": {
+            "max_tokens": CHUNKER_MAX_TOKENS,
+            "merge_peers": CHUNKER_MERGE_PEERS,
+            "tokenizer": "docling-core default (version pinned in fingerprint)",
+        },
+        "cleaning": {
+            "noise": _NOISE_PATTERNS.pattern,
+            "policy": "whole-line-boilerplate-only",
+            "bbox": MIN_BBOX_HEIGHT,
+        },
+    }
 
 
 def _dict_to_document(d: dict) -> Document:
@@ -82,7 +116,9 @@ class DocumentProcessor:
         self._docling = DocumentConverter()
         from docling_core.transforms.chunker import HybridChunker
 
-        self._chunker = HybridChunker(max_tokens=400, merge_peers=True)
+        self._chunker = HybridChunker(
+            max_tokens=CHUNKER_MAX_TOKENS, merge_peers=CHUNKER_MERGE_PEERS
+        )
 
     # ---------- public methods ----------
 
@@ -101,14 +137,17 @@ class DocumentProcessor:
                 f"({total // 1024 // 1024}MB provided)."
             )
 
-    def process(self, files: Iterable[FileLike]) -> List[Document]:
+    def process(
+        self, files: Iterable[FileLike], *, strict: bool = False
+    ) -> List[Document]:
         """Process files with caching."""
+        files = list(files)
         self.validate_files(files)
+        self.processing_report: list[ProcessingResult] = []
 
         all_chunks: List[Document] = []
-        # Dedup key is (source, content hash): identical text in two documents or
-        # two editions keeps provenance in each (issue #33).
-        seen_chunk_keys: set[tuple[str, str]] = set()
+        # Dedup identity includes source, content and structural/page location.
+        seen_chunk_keys: set[tuple[str, str, str]] = set()
         # Per-source 0-based sequential counter. Assigned AFTER dedup so ids are
         # contiguous and stable per source (no gaps from dropped duplicates).
         # Powers RRF fusion / dedup (passage_identity) and range queries
@@ -116,17 +155,30 @@ class DocumentProcessor:
         source_chunk_counter: dict[str, int] = {}
 
         for file_obj in files:
+            display_name = getattr(file_obj, "name", str(file_obj))
             try:
                 stream, display_name = self._get_stream_and_name(file_obj)
 
                 # File hash for cache key
                 file_hash = self._hash_bytes_stream(stream)
-                cache_path = self._cache_path_for(file_hash)
+                cache_path = self._cache_path_for(
+                    f"{file_hash}:{self._suffix_from_name(display_name)}"
+                )
 
                 if self._is_cache_valid(cache_path):
                     logger.info(f"[cache] {display_name}")
-                    chunks = self._load_from_cache(cache_path)
+                    try:
+                        chunks = self._load_from_cache(cache_path)
+                    except (ValueError, KeyError, TypeError, OSError):
+                        chunks = []
                 else:
+                    chunks = []
+                if strict and any(
+                    ch.metadata.get("type") == "fallback_lxml" for ch in chunks
+                ):
+                    # Older/non-strict caches must not prevent parser recovery.
+                    chunks = []
+                if not chunks:
                     logger.info(f"[process] {display_name}")
                     stream.seek(0)
                     chunks = self._convert_and_extract(stream, display_name, file_hash)
@@ -135,21 +187,40 @@ class DocumentProcessor:
                     # on exception). Caching [] for CACHE_EXPIRE_DAYS would make
                     # a reindex silently skip the document until the cache
                     # expires. A genuinely empty document is harmless to re-parse.
-                    if chunks:
+                    if chunks and not any(
+                        ch.metadata.get("type") == "fallback_lxml" for ch in chunks
+                    ):
                         self._save_to_cache(chunks, cache_path)
                     else:
                         logger.warning(
-                            f"[no-cache] empty result for {display_name} "
-                            "(conversion error or empty document) — not cached"
+                            f"[no-cache] empty or degraded result for {display_name}"
                         )
 
-                # Deduplication within a source
+                if not chunks:
+                    raise ProcessingError(f"{display_name}: no chunks produced")
+                if strict and any(
+                    ch.metadata.get("type") == "fallback_lxml" for ch in chunks
+                ):
+                    raise ProcessingError(
+                        f"{display_name}: degraded DOCX fallback is not permitted in strict indexing"
+                    )
+                retained = 0
+
+                # Bind source for fresh AND cached chunks before deduplication.
                 for ch in chunks:
-                    # Uniqueness by text only, though different bboxes may share text
+                    ch.metadata["source"] = display_name
                     source = ch.metadata.get("source", display_name)
                     key = (
                         source,
                         hashlib.sha256(ch.page_content.encode("utf-8")).hexdigest(),
+                        json.dumps(
+                            {
+                                k: ch.metadata[k]
+                                for k in ("page_no", "bbox", "doc_item_refs")
+                                if k in ch.metadata
+                            },
+                            sort_keys=True,
+                        ),
                     )
                     if key not in seen_chunk_keys:
                         cid = source_chunk_counter.get(source, 0)
@@ -157,14 +228,26 @@ class DocumentProcessor:
                         source_chunk_counter[source] = cid + 1
                         all_chunks.append(ch)
                         seen_chunk_keys.add(key)
+                        retained += 1
+                self.processing_report.append(ProcessingResult(display_name, retained))
 
             except Exception as e:
+                self.processing_report.append(
+                    ProcessingResult(str(display_name), 0, str(e))
+                )
                 logger.error(
                     f"Failed to process '{getattr(file_obj, 'name', str(file_obj))}': {e}",
                     exc_info=True,
                 )
                 continue
 
+        if strict:
+            failures = [r for r in self.processing_report if r.error]
+            if failures:
+                raise ProcessingError(
+                    "Required documents failed: "
+                    + "; ".join(f"{r.source}: {r.error}" for r in failures)
+                )
         logger.info(f"Total unique chunks: {len(all_chunks)}")
         return all_chunks
 
@@ -176,8 +259,38 @@ class DocumentProcessor:
         """Convert via Docling and extract structural chunks."""
         import tempfile
 
-        # Docling requires a file on disk
+        # Parser IR has a separate identity from chunker/cleaning configuration.
+        from docling_core.types.doc import DoclingDocument
+
         suffix = self._suffix_from_name(source_name)
+        ir_key = hashlib.sha256(
+            json.dumps(
+                {
+                    "input": file_hash,
+                    "format": suffix,
+                    "parser_schema": PARSER_VERSION,
+                    "docling": version("docling"),
+                    "docling_core": version("docling-core"),
+                },
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()
+        ir_dir = self.cache_dir / "ir"
+        ir_dir.mkdir(parents=True, exist_ok=True)
+        ir_path = ir_dir / f"{ir_key}.json"
+        if ir_path.exists():
+            try:
+                parsed = DoclingDocument.model_validate_json(
+                    ir_path.read_text(encoding="utf-8")
+                )
+            except (ValueError, OSError):
+                logger.warning(
+                    f"Invalid structured cache for {source_name}; parsing again"
+                )
+            else:
+                return self._process_docling_document(parsed, source_name)
+
+        # Docling requires a file on disk
         with tempfile.NamedTemporaryFile(delete=True, suffix=suffix) as tmp:
             stream.seek(0)
             tmp.write(stream.read())
@@ -192,6 +305,21 @@ class DocumentProcessor:
                     return self._fallback_docx(stream, source_name)
                 return []
 
+            status = getattr(res.status, "value", res.status)
+            if status != "success" or res.errors:
+                raise ProcessingError(
+                    f"{source_name}: conversion status={status}, errors={len(res.errors)}"
+                )
+            # Only complete conversion enters the reusable structural cache.
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=ir_dir, delete=False
+            ) as cached:
+                pending = Path(cached.name)
+                cached.write(res.document.model_dump_json())
+            try:
+                pending.replace(ir_path)
+            finally:
+                pending.unlink(missing_ok=True)
             return self._process_docling_document(res.document, source_name)
 
     def _fallback_docx(
@@ -245,8 +373,6 @@ class DocumentProcessor:
             text = _clean_noise(chunk.text.strip())
             if not text:
                 continue
-            if any(p in text for p in BLACKLIST_PHRASES):
-                continue
 
             headings = chunk.meta.headings or []
             parent_section = headings[-1] if headings else "Document start"
@@ -259,6 +385,9 @@ class DocumentProcessor:
                 "heading_path": heading_path,
             }
             if chunk.meta.doc_items:
+                refs = [getattr(di, "self_ref", None) for di in chunk.meta.doc_items]
+                if all(isinstance(ref, str) for ref in refs):
+                    meta["doc_item_refs"] = json.dumps(refs)
                 # element_type: propagate Docling structural label (table/text/...)
                 # so visual_enrichment can route table chunks (e.g. 29н periodicity,
                 # 817н classifier) through the VLM. "table" wins if any item is a table.
@@ -302,25 +431,37 @@ class DocumentProcessor:
             chunks.append(Document(page_content=embed_text, metadata=meta))
         return chunks
 
-    # ---------- cache and utilities (logic unchanged) ----------
+    # ---------- cache and utilities ----------
 
     def _cache_path_for(self, file_hash: str) -> Path:
         key = hashlib.sha256(
-            f"{file_hash}:{PIPELINE_VERSION}".encode("utf-8")
+            (
+                file_hash + ":" + json.dumps(pipeline_fingerprint(), sort_keys=True)
+            ).encode("utf-8")
         ).hexdigest()
         return self.cache_dir / f"{key}.json"
 
     def _save_to_cache(self, chunks: List[Document], cache_path: Path) -> None:
         payload = {
-            "schema_version": 1,
+            "schema_version": 2,
             "timestamp": datetime.now().timestamp(),
-            "chunks": [_document_to_dict(c) for c in chunks],
+            "chunks": [
+                {
+                    "page_content": c.page_content,
+                    "metadata": {
+                        k: v
+                        for k, v in c.metadata.items()
+                        if k not in {"source", "chunk_id"}
+                    },
+                }
+                for c in chunks
+            ],
         }
         cache_path.write_text(json.dumps(payload, ensure_ascii=False))
 
     def _load_from_cache(self, cache_path: Path) -> List[Document]:
         raw = json.loads(cache_path.read_text())
-        if raw.get("schema_version") != 1:
+        if raw.get("schema_version") != 2:
             raise ValueError(f"unsupported cache schema: {raw.get('schema_version')}")
         return [_dict_to_document(d) for d in raw["chunks"]]
 

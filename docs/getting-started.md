@@ -56,9 +56,38 @@ Place PDF/DOCX files in `source_docs/` and run:
 python index.py
 ```
 
-> WARNING: `index.py` replaces the entire ChromaDB collection. It first checks that
-> `source_docs/` has supported files and that they produce chunks; if not, it exits with
-> code 1 and leaves the existing index untouched.
+`index.py` builds a new candidate under `<CHROMA_DB_PATH>.snapshots/build-*` and leaves
+the active database untouched. Every supported input must produce chunks; with
+`CORPUS_MANIFEST_PATH`, every listed document must be present and produce chunks,
+except ObjectProfile sheets (not indexed). Unlisted files are excluded. Duplicate
+basenames are rejected because chunk provenance uses the basename.
+
+Before writing `snapshot-report.json`, the indexer compares all stored texts and
+metadata with the parsed corpus. The report records source hashes and chunk counts,
+pipeline versions/settings, collection and embedding configuration. A failed build
+may leave a partial directory; a directory without this report is not a ready snapshot.
+Parser caches are preserved and keyed by content, format and pipeline fingerprint.
+Strict indexing rejects partial/error Docling conversion and flattened DOCX fallback.
+Complete structured Docling JSON is cached under `CACHE_DIR/ir` independently of
+chunker/cleaning settings, allowing rechunking without repeating layout/OCR.
+Noise removal targets recognized boilerplate lines; legal identifiers and inline
+URLs remain intact. Deduplication preserves distinct structural/page locations.
+
+Activation is separate: after reviewing the candidate, set the path and collection
+used by the target consumer and restart it. Legacy/API callers use `CHROMA_DB_PATH`
+and `CHROMA_COLLECTION_NAME`; Generic search in the combined UI uses
+`GENERIC_CHROMA_DB_PATH` and `GENERIC_CHROMA_COLLECTION`; Department mode uses the
+selected `DEPARTMENT_V1_*` / `DEPARTMENT_V2_*` bundle. Keep the previous paths for
+rollback. Indexing does not switch an already running process;
+BM25 is rebuilt from the snapshot loaded at startup. Initial setup also requires
+selecting the newly built candidate before launching the app.
+
+New candidates have `snapshot-build.json` and a schema-2 readiness report. The loader
+rejects managed candidates without a valid report and verifies path, collection,
+embedding model, stored record count and content checksum before returning a store.
+The `openai/` model prefix is treated as the OpenRouter alias of the same OpenAI
+model. Legacy directories without snapshot markers/reports remain loadable for
+compatibility; they have not passed these new readiness checks.
 
 The UI reindex button is hidden unless `ENABLE_UI_REINDEX=true` is set in `.env` — keep it
 off for public deployments.
