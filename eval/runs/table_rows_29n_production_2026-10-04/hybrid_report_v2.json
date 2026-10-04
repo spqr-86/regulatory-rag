@@ -1,0 +1,238 @@
+{
+  "questions": 22,
+  "variants": {
+    "rows": {
+      "chunks": 555,
+      "final_hit_at": {
+        "1": 16,
+        "3": 17,
+        "5": 19,
+        "12": 20
+      },
+      "final_any": 21,
+      "pool_any": 22,
+      "rows": [
+        {
+          "question": "Как часто водители категории B проходят периодический медосмотр?",
+          "row": "18.1",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 6,
+          "pool_rank": 6,
+          "final_size": 12,
+          "pool_size": 12
+        },
+        {
+          "question": "Какие врачи осматривают водителей трамвая, троллейбуса и категории D1?",
+          "row": "18.2",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 61
+        },
+        {
+          "question": "Периодичность медосмотра при работах на высоте с высоким риском падения работника",
+          "row": "6.1",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 60
+        },
+        {
+          "question": "Какой медосмотр нужен для прочих работ на высоте?",
+          "row": "6.2",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 65
+        },
+        {
+          "question": "Как часто проходят медосмотр водолазы при погружении на глубину до 60 м?",
+          "row": "19.1",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 2,
+          "pool_rank": 2,
+          "final_size": 12,
+          "pool_size": 62
+        },
+        {
+          "question": "Какие врачи нужны на медосмотре водолазов, работающих глубже 60 метров кратковременными погружениями?",
+          "row": "19.2",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 61
+        },
+        {
+          "question": "Медосмотр работников, которые работают в средствах индивидуальной защиты органов дыхания: периодичность",
+          "row": "17",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 12
+        },
+        {
+          "question": "Как часто должен проходить медосмотр крановщик (машинист крана)?",
+          "row": "8",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 30,
+          "pool_size": 63
+        },
+        {
+          "question": "Периодичность медосмотра при обслуживании электроустановок напряжением 50 В и выше",
+          "row": "9",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 66
+        },
+        {
+          "question": "Нужен ли медосмотр при работе вахтовым методом в отдалённых необжитых районах?",
+          "row": "11.4",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 60
+        },
+        {
+          "question": "Какие исследования проводят на периодическом медосмотре при воздействии шума?",
+          "row": "4.4",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 12
+        },
+        {
+          "question": "Какие врачи участвуют в медосмотре при локальной вибрации?",
+          "row": "4.3.1",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 65
+        },
+        {
+          "question": "Как часто медосмотр у работников производства антибиотиков?",
+          "row": "1.52.1",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 64
+        },
+        {
+          "question": "Какие обследования при медосмотре сварщиков, контактирующих со сварочными аэрозолями?",
+          "row": "3.1.7",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 4,
+          "pool_rank": 4,
+          "final_size": 12,
+          "pool_size": 64
+        },
+        {
+          "question": "Периодичность медосмотра при работе с хлором и его неорганическими соединениями",
+          "row": "1.8.1.1",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 60
+        },
+        {
+          "question": "Какие обследования при работе с оптическими приборами более 50% времени смены?",
+          "row": "5.2.1",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 63
+        },
+        {
+          "question": "Какие врачи осматривают работников, контактирующих с пищевыми продуктами при производстве?",
+          "row": "23",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 12
+        },
+        {
+          "question": "Как часто проходят медосмотр работники медицинских организаций?",
+          "row": "27",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": null,
+          "pool_rank": 13,
+          "final_size": 12,
+          "pool_size": 60
+        },
+        {
+          "question": "Является ли катаракта противопоказанием к водолазным работам?",
+          "row": "25",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 28,
+          "pool_rank": 6,
+          "final_size": 30,
+          "pool_size": 65
+        },
+        {
+          "question": "Ожирение II степени — противопоказание для каких работ?",
+          "row": "10",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 12,
+          "pool_size": 63
+        },
+        {
+          "question": "Какая острота зрения без коррекции противопоказана для работ на высоте с риском падения?",
+          "row": "28",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 5,
+          "pool_rank": 5,
+          "final_size": 12,
+          "pool_size": 60
+        },
+        {
+          "question": "Для каких работ гонорея в заразном периоде является медицинским противопоказанием?",
+          "row": "4",
+          "outcome": "ready",
+          "route": "generate",
+          "final_rank": 1,
+          "pool_rank": 1,
+          "final_size": 30,
+          "pool_size": 64
+        }
+      ]
+    }
+  }
+}

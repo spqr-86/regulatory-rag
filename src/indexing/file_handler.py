@@ -16,12 +16,13 @@ from docling.document_converter import DocumentConverter
 from langchain_core.documents import Document
 
 from config.settings import settings
+from src.indexing.table_rows import explicit_table_chunks
 from utils.logging import logger
 
 FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
 
 # Chunk-cache version changes when normalization or occurrence identity changes.
-PIPELINE_VERSION = "v3.2-quality-ir"
+PIPELINE_VERSION = "v3.3-table-rows"
 PARSER_VERSION = "v1-complete-docling"
 CHUNKER_MAX_TOKENS = 400
 CHUNKER_MERGE_PEERS = True
@@ -429,7 +430,8 @@ class DocumentProcessor:
             else:
                 embed_text = text
             chunks.append(Document(page_content=embed_text, metadata=meta))
-        return chunks
+        # Numbered tables (29н-style) -> one chunk per row with its parent row.
+        return explicit_table_chunks(getattr(doc, "tables", None), chunks)
 
     # ---------- cache and utilities ----------
 
