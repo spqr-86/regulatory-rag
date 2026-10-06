@@ -93,7 +93,11 @@ class CorrectnessPromptVariables(BaseModel):
 
 
 def correctness_prompt_text() -> str:
-    return importlib.resources.files("eval").joinpath("prompts/golden_correctness.md").read_text(encoding="utf-8")
+    return (
+        importlib.resources.files("eval")
+        .joinpath("prompts/golden_correctness.md")
+        .read_text(encoding="utf-8")
+    )
 
 
 def correctness_prompt_sha256() -> str:
@@ -104,10 +108,18 @@ def load_dataset(path: Path) -> list[dict[str, str]]:
     rows = []
     with open(path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        required = {"case_id", "question", "ground_truth", "reference_status", "legal_as_of"}
+        required = {
+            "case_id",
+            "question",
+            "ground_truth",
+            "reference_status",
+            "legal_as_of",
+        }
         missing = required - set(reader.fieldnames or [])
         if missing:
-            raise ValueError(f"Golden dataset missing columns: {', '.join(sorted(missing))}")
+            raise ValueError(
+                f"Golden dataset missing columns: {', '.join(sorted(missing))}"
+            )
         seen_ids: set[str] = set()
         for row in reader:
             q = row.get("question", "").strip()
@@ -116,9 +128,13 @@ def load_dataset(path: Path) -> list[dict[str, str]]:
                 case_id = (row.get("case_id") or "").strip()
                 status = (row.get("reference_status") or "").strip()
                 if not case_id or case_id in seen_ids:
-                    raise ValueError(f"Missing or duplicate golden case_id: {case_id!r}")
+                    raise ValueError(
+                        f"Missing or duplicate golden case_id: {case_id!r}"
+                    )
                 if status not in {"verified", "incorrect", "needs_clarification"}:
-                    raise ValueError(f"Invalid reference_status for {case_id}: {status!r}")
+                    raise ValueError(
+                        f"Invalid reference_status for {case_id}: {status!r}"
+                    )
                 legal_as_of = (row.get("legal_as_of") or "").strip()
                 if not legal_as_of:
                     raise ValueError(f"Missing legal_as_of for {case_id}")
@@ -131,7 +147,9 @@ def load_dataset(path: Path) -> list[dict[str, str]]:
                         "reference_status": status,
                         "reviewed_at": (row.get("reviewed_at") or "").strip(),
                         "legal_as_of": legal_as_of,
-                        "corpus_support": (row.get("corpus_support") or "unverified").strip(),
+                        "corpus_support": (
+                            row.get("corpus_support") or "unverified"
+                        ).strip(),
                         "forbidden_claims": (row.get("forbidden_claims") or "").strip(),
                         "oos_type": (row.get("oos_type") or "").strip(),
                         "must_not_contain": (row.get("must_not_contain") or "").strip(),
@@ -301,7 +319,10 @@ def oos_rejection_rate(results: list[dict[str, Any]]) -> float:
 
 
 def evaluate_correctness(
-    question: str, ground_truth: str, answer: str, llm,
+    question: str,
+    ground_truth: str,
+    answer: str,
+    llm,
     forbidden_claims: str = "",
     legal_as_of: str = "",
 ) -> dict[str, Any]:
@@ -311,8 +332,11 @@ def evaluate_correctness(
 
     prompt = ChatPromptTemplate.from_template(correctness_prompt_text())
     variables = CorrectnessPromptVariables(
-        question=question, legal_as_of=legal_as_of, ground_truth=ground_truth,
-        forbidden_claims=forbidden_claims, answer=answer,
+        question=question,
+        legal_as_of=legal_as_of,
+        ground_truth=ground_truth,
+        forbidden_claims=forbidden_claims,
+        answer=answer,
     )
 
     chain = prompt | llm | StrOutputParser()
@@ -359,7 +383,9 @@ def run(
 
     judge_llm = None
     if skip_judge:
-        print("  [--skip-judge] LLM judge disabled; generation and embeddings may still incur cost.\n")
+        print(
+            "  [--skip-judge] LLM judge disabled; generation and embeddings may still incur cost.\n"
+        )
     else:
         print("Loading judge LLM...")
         # seed makes OpenAI judging best-effort reproducible (cuts run-to-run noise).
@@ -442,14 +468,23 @@ def run(
         if reference_status == "verified" and not oos_type:
             try:
                 correctness = evaluate_correctness(
-                    question, ground_truth, answer, judge_llm,
+                    question,
+                    ground_truth,
+                    answer,
+                    judge_llm,
                     item["forbidden_claims"],
                     item["legal_as_of"],
                 )
             except Exception as e:
-                correctness = {"correctness_score": None, "correctness_reasoning": str(e)}
+                correctness = {
+                    "correctness_score": None,
+                    "correctness_reasoning": str(e),
+                }
         else:
-            correctness = {"correctness_score": None, "correctness_reasoning": "reference not eligible for normative scoring"}
+            correctness = {
+                "correctness_score": None,
+                "correctness_reasoning": "reference not eligible for normative scoring",
+            }
 
         record = {
             "case_id": case_id,
@@ -510,10 +545,16 @@ def run(
 
         avg_faith = sum(r.get("faithfulness_score", 0) for r in valid) / n
         avg_rel = sum(r.get("answer_relevance_score", 0) for r in valid) / n
-        avg_correct = sum(r["correctness_score"] for r in scored) / len(scored) if scored else None
+        avg_correct = (
+            sum(r["correctness_score"] for r in scored) / len(scored)
+            if scored
+            else None
+        )
         # In-scope only correctness (excludes OOS noise)
         avg_correct_inscope = (
-            sum(r["correctness_score"] for r in in_scope) / n_in_scope if in_scope else None
+            sum(r["correctness_score"] for r in in_scope) / n_in_scope
+            if in_scope
+            else None
         )
 
         simple_path = [r for r in in_scope if r.get("path") == "simple"]
@@ -529,11 +570,22 @@ def run(
             {
                 "faithfulness": round(avg_faith, 3),
                 "answer_relevance": round(avg_rel, 3),
-                "correctness_mean": round(avg_correct, 2) if avg_correct is not None else None,
-                "correctness_inscope": round(avg_correct_inscope, 2) if avg_correct_inscope is not None else None,
+                "correctness_mean": round(avg_correct, 2)
+                if avg_correct is not None
+                else None,
+                "correctness_inscope": round(avg_correct_inscope, 2)
+                if avg_correct_inscope is not None
+                else None,
                 "correctness_scored": n_in_scope,
-                "correctness_in_scope_total": sum(1 for r in valid if not r.get("oos_type")),
-                "oos_rejection_rate": round(oos_rejection_rate([r for r in results if r.get("reference_status") == "verified"]), 3),
+                "correctness_in_scope_total": sum(
+                    1 for r in valid if not r.get("oos_type")
+                ),
+                "oos_rejection_rate": round(
+                    oos_rejection_rate(
+                        [r for r in results if r.get("reference_status") == "verified"]
+                    ),
+                    3,
+                ),
                 "false_sufficiency_rate": round(false_sufficiency_rate, 3),
             }
         )
@@ -570,10 +622,14 @@ def run(
             f"  Answer Relevance:      {aggregate['answer_relevance']:.3f}  (target >0.85)"
         )
         if aggregate["correctness_inscope"] is not None:
-            print(f"  Correctness (reviewed): {aggregate['correctness_inscope']:.1f}/10  (n={n_in_scope})")
+            print(
+                f"  Correctness (reviewed): {aggregate['correctness_inscope']:.1f}/10  (n={n_in_scope})"
+            )
         else:
             print("  Correctness (reviewed): n/a (no eligible answers)")
-        print(f"  Reference coverage:    {n_in_scope}/{aggregate['correctness_in_scope_total']} in-scope answers")
+        print(
+            f"  Reference coverage:    {n_in_scope}/{aggregate['correctness_in_scope_total']} in-scope answers"
+        )
         print(
             f"  OOS rejection rate:    {aggregate['oos_rejection_rate']:.1%}  (target >90%)"
         )
