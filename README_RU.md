@@ -13,14 +13,14 @@
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-In-scope correctness **8.09 / 10** · faithfulness **0.974** · false-sufficiency **7.1%** ·
-p50 **9.5 с** · **$0.0021 / запрос** (56-вопросный golden set, судья `gpt-4o`) ·
-retrieval HR@5 **0.63** на 90 вопросах практиков, не использованных для тюнинга.
+Retrieval HR@12 **0.81** / MRR **0.50** на 90 вопросах практиков, не использованных для тюнинга ·
+отказ вне домена **7 / 7** · faithfulness **0.974** (LLM-судья: ответ против найденных источников) ·
+p50 **9.5 с** · **$0.0021 / запрос**.
 
-**Оценка генерации историческая:** [аудит от 28 сентября](./docs/evaluation/golden-set-audit-2026-09-28.md)
-обнаружил 15 неверных и 21 неоднозначный эталон. Оценка 8,09 измеряет совпадение со старым
-ключом и не подтверждает правовую точность. Новый baseline ждёт сверки источников, обновления
-корпуса и повторной оценки.
+**Актуальной сквозной оценки правильности нет:** [аудит от 28 сентября](./docs/evaluation/golden-set-audit-2026-09-28.md)
+обнаружил 15 неверных и 21 неоднозначный эталон в golden set генерации, поэтому прежняя оценка
+правильности отозвана как показатель качества. Новый baseline ждёт сверки источников,
+обновления корпуса и повторной оценки.
 
 📖 [Отчёт по eval](./docs/evaluation/README.md) · [FACTS](./docs/reference/FACTS.md) ·
 [проектные решения](./docs/explanation/design-decisions.md) · [вся документация](./docs/README.md) ·
@@ -90,7 +90,7 @@ flowchart TD
 | Метрика | Значение | На чём мерили |
 |---|---|---|
 | Retrieval HR@5 / HR@12 / MRR (hybrid) | 0.63 / 0.81 / 0.50 | 90 вопросов практиков |
-| In-scope correctness | 8.09 / 10 | 43 in-scope вопроса (цель >7.5) |
+| In-scope correctness | 8.09 / 10 — отозвана, старый ключ | 43 in-scope вопроса; совпадение с ключом до аудита, не правовая точность |
 | Faithfulness | 0.974 | 56-вопросный golden set |
 | Answer relevance | 0.853 | 56-вопросный golden set (цель >0.85) |
 | Доля отказов на вопросах не по теме | 1.00 | 7 вопросов не по теме |
