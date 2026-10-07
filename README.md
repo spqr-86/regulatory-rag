@@ -13,14 +13,14 @@ problems come from daily compliance work.
 [![CI](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/spqr-86/regulatory-rag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-In-scope correctness **8.09 / 10** · faithfulness **0.974** · false-sufficiency **7.1%** ·
-p50 **9.5 s** · **$0.0021 / query** (56-question golden set, `gpt-4o` judge) ·
-retrieval HR@5 **0.63** on 90 practitioner questions never used for tuning.
+Retrieval HR@12 **0.81** / MRR **0.50** on 90 practitioner questions never used for tuning ·
+out-of-scope abstain **7 / 7** · faithfulness **0.974** (LLM judge, answer vs retrieved sources) ·
+p50 **9.5 s** · **$0.0021 / query**.
 
-**Generation score is historical:** the [28 September legal audit](./docs/evaluation/golden-set-audit-2026-09-28.md)
-found 15 incorrect and 21 ambiguous references in that golden set. The 8.09 score measures
-agreement with the old key; it does not establish legal accuracy. A new baseline is pending
-source verification, corpus refresh and re-evaluation.
+**No current end-to-end correctness score:** the [28 September legal audit](./docs/evaluation/golden-set-audit-2026-09-28.md)
+found 15 incorrect and 21 ambiguous references in the generation golden set, so the earlier
+correctness score is withdrawn as a quality claim. A new baseline is pending source
+verification, corpus refresh and re-evaluation.
 
 📖 [Evaluation report](./docs/evaluation/README.md) · [FACTS](./docs/reference/FACTS.md) ·
 [design decisions](./docs/explanation/design-decisions.md) · [all docs](./docs/README.md) ·
@@ -90,7 +90,7 @@ The generation figures below are from the 23 September run on the superseded ref
 | Metric | Value | Measured on |
 |---|---|---|
 | Retrieval HR@5 / HR@12 / MRR (hybrid) | 0.63 / 0.81 / 0.50 | 90 practitioner questions |
-| In-scope correctness | 8.09 / 10 | 43 in-scope questions (target >7.5) |
+| In-scope correctness | 8.09 / 10 — withdrawn, old key | 43 in-scope questions; agreement with the audited key, not legal accuracy |
 | Faithfulness | 0.974 | 56-question golden set |
 | Answer relevance | 0.853 | 56-question golden set (target >0.85) |
 | OOS abstain rate | 1.00 | 7 out-of-scope questions |
