@@ -33,7 +33,9 @@ from eval.run_v7_eval import (
 )
 
 
-def selected_cases(saved: list[dict[str, Any]], key: list[dict[str, str]]) -> list[tuple[dict[str, str], dict[str, Any]]]:
+def selected_cases(
+    saved: list[dict[str, Any]], key: list[dict[str, str]]
+) -> list[tuple[dict[str, str], dict[str, Any]]]:
     if len(saved) != len(key):
         raise ValueError(f"Saved run has {len(saved)} rows, current key has {len(key)}")
     selected = []
@@ -43,7 +45,9 @@ def selected_cases(saved: list[dict[str, Any]], key: list[dict[str, str]]) -> li
         if case["reference_status"] != "verified" or case["oos_type"]:
             continue
         if old.get("question") != case["question"]:
-            raise ValueError(f"Question changed for {case['case_id']}; cannot align saved answer")
+            raise ValueError(
+                f"Question changed for {case['case_id']}; cannot align saved answer"
+            )
         if old.get("answer") and "error" not in old:
             selected.append((case, old))
     return selected
@@ -52,7 +56,9 @@ def selected_cases(saved: list[dict[str, Any]], key: list[dict[str, str]]) -> li
 def save_report(path: Path, report: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     os.replace(temporary, path)
 
 
@@ -67,7 +73,9 @@ def main() -> None:
     key = load_dataset(DATASET_PATH)
     selected = selected_cases(source["results"], key)
     dataset_sha256 = hashlib.sha256(DATASET_PATH.read_bytes()).hexdigest()
-    print(f"Eligible saved answers: {len(selected)}/{sum(not row['oos_type'] for row in key)} in-scope")
+    print(
+        f"Eligible saved answers: {len(selected)}/{sum(not row['oos_type'] for row in key)} in-scope"
+    )
     print(f"Dataset SHA-256: {dataset_sha256}")
     if args.dry_run:
         print("Cases:", ", ".join(case["case_id"] for case, _ in selected))
@@ -108,22 +116,30 @@ def main() -> None:
             if case["case_id"] in done:
                 continue
             score = evaluate_correctness(
-                case["question"], case["ground_truth"], old["answer"],
-                judge, case["forbidden_claims"], case["legal_as_of"],
+                case["question"],
+                case["ground_truth"],
+                old["answer"],
+                judge,
+                case["forbidden_claims"],
+                case["legal_as_of"],
             )
-            report["results"].append({
-                "case_id": case["case_id"],
-                "question": case["question"],
-                "old_score": old.get("correctness_score"),
-                **score,
-            })
+            report["results"].append(
+                {
+                    "case_id": case["case_id"],
+                    "question": case["question"],
+                    "old_score": old.get("correctness_score"),
+                    **score,
+                }
+            )
             save_report(args.output, report)
             done.add(case["case_id"])
             print(f"{case['case_id']}: {score['correctness_score']:.1f}/10")
 
     scores = [r["correctness_score"] for r in report["results"]]
     print(f"Reviewed-key mean: {sum(scores) / len(scores):.2f}/10 (n={len(scores)})")
-    print("This is a partial, reused-answer score; it is not a new end-to-end baseline.")
+    print(
+        "This is a partial, reused-answer score; it is not a new end-to-end baseline."
+    )
 
 
 if __name__ == "__main__":
