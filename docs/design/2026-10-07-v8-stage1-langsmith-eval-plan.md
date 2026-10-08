@@ -95,6 +95,26 @@ docs/evaluation/experiments/langsmith-v8-stage1.md
 
 ---
 
+### Задача 0.5: модуль 1 курса — пощупать LangSmith (добавлено 08.10)
+
+Курс «Building Reliable Agents» (LangChain Academy). Модуль 1 = observability: трейсинг и разбор
+агента по трейсам. Материалы: `explainer-videos/videos/courses/building-reliable-agents/source/`
+(`lessons/m1-*.md`, `code/module-1/lesson-2/`). Код курса не копируется в regrag.
+
+- [ ] **Шаг 1.** Проверить остаток квоты трейсов: LangSmith → Settings → Usage (с 05.09 трейсинг
+  выключен из-за 429). Без остатка шаги 3–5 не запускать.
+- [ ] **Шаг 2.** Решить модель для курсовых скриптов: ключ OpenAI (`gpt-5-nano` в коде курса) или
+  OpenRouter. Платных вызовов мало, но каждый запуск — по «да» Петра.
+- [ ] **Шаг 3 (урок 1.2).** `thread_agent.py` с `LANGSMITH_TRACING=true` только в команде запуска.
+  В UI найти трейс и тред (`thread_id`), увидеть, что второй вызов помнит имя.
+- [ ] **Шаг 4 (урок 1.2).** `third_party_agent.py` (инструмент «погода»): вложенные вызовы,
+  `run_type="tool"`, вход и выход каждого шага.
+- [ ] **Шаг 5 (урок 1.3).** Открыть один трейс regrag и разобрать: что видно по retrieval и ответу.
+  Прочитать `lessons/m1-3-analyzing-your-agent.md`: Playground, Polly, CLI.
+- [ ] **Шаг 6.** Заметки Петра в 5–7 строк: что нашёл в UI и чего не хватило. Нужны для задач 3 и 7.
+
+---
+
 ### Задача 1: датасет
 
 **Файлы:** создать `eval/ls/__init__.py`, `eval/ls/dataset.py`, `tests/eval_ls/__init__.py`,
