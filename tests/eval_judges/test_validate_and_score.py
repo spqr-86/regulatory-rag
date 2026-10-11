@@ -90,3 +90,34 @@ def test_match_and_mismatch_require_both_quotes(
 def test_missing_in_answer_requires_evidence_of_omission(answer_quote, context_quote):
     with pytest.raises(ValueError, match="requires a null answer_quote"):
         score([make_check("missing_in_answer", answer_quote, context_quote)])
+
+
+def _check(answer_quote, context_quote):
+    return {
+        "checks": [
+            {
+                "field": "provision",
+                "answer_quote": answer_quote,
+                "context_quote": context_quote,
+                "comparison": "match",
+                "reason": "r",
+            }
+        ]
+    }
+
+
+def test_quote_matches_across_line_break_in_context():
+    verdict = _check("осмотров определяется", "осмотров определяется")
+    context = "периодических осмотров\nопределяется типами"
+    assert validate_and_score(verdict, "q", "осмотров определяется", context) == "pass"
+
+
+def test_quote_matches_ignoring_case():
+    verdict = _check("пункт 9", "пункт 9")
+    assert validate_and_score(verdict, "q", "Пункт 9 гласит", "Пункт 9") == "pass"
+
+
+def test_invented_quote_still_rejected_after_normalization():
+    verdict = _check("пункт 10", "пункт 9")
+    with pytest.raises(ValueError, match="answer_quote must appear in response"):
+        validate_and_score(verdict, "q", "Пункт 9 гласит", "Пункт 9")

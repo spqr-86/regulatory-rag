@@ -6,6 +6,10 @@ FIELDS = ("document", "section", "provision")
 COMPARISONS = ("match", "mismatch", "missing_in_answer", "unverifiable")
 
 
+def _normalize(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
 def parse_verdict(raw: str) -> dict:
     """Parse and validate a citation judge's JSON response."""
     try:
@@ -168,13 +172,13 @@ def validate_and_score(
             if answer_quote is not None:
                 if not isinstance(answer_quote, str) or not answer_quote.strip():
                     raise ValueError("answer_quote must be a non-empty string or null")
-                if answer_quote not in response:
+                if _normalize(answer_quote) not in _normalize(response):
                     raise ValueError("answer_quote must appear in response")
 
             if context_quote is not None:
                 if not isinstance(context_quote, str) or not context_quote.strip():
                     raise ValueError("conrext_quote must be a non-empty string or null")
-                if context_quote not in context:
+                if _normalize(context_quote) not in _normalize(context):
                     raise ValueError("context_quote must appear in context")
 
             if comparison in ("match", "mismatch"):
