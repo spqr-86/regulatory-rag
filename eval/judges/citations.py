@@ -2,6 +2,9 @@ import json
 
 from langchain.messages import HumanMessage
 
+FIELDS = ("document", "section", "provision")
+COMPARISONS = ("match", "mismatch", "missing_in_answer", "unverifiable")
+
 
 def parse_verdict(raw: str) -> dict:
     """Parse and validate a citation judge's JSON response."""
@@ -14,6 +17,19 @@ def parse_verdict(raw: str) -> dict:
         raise ValueError("Missing 'checks' key")
     if not isinstance(verdict["checks"], list):
         raise ValueError("'checks' must be a list")
+
+    for check in verdict["checks"]:
+        if not isinstance(check, dict):
+            raise ValueError("Each check must be an object")
+        keys = ("field", "answer_quote", "context_quote", "comparison", "reason")
+        if not all(key in check for key in keys):
+            raise ValueError("Check is missing a required field")
+        if check["field"] not in FIELDS:
+            raise ValueError("Unknown field value")
+        if check["comparison"] not in COMPARISONS:
+            raise ValueError("Unknown comparison value")
+        if not isinstance(check["reason"], str) or not check["reason"].strip():
+            raise ValueError("'reason' must be a non-empty string")
     return verdict
 
 
