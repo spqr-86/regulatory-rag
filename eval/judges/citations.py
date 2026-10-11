@@ -8,7 +8,10 @@ COMPARISONS = ("match", "mismatch", "missing_in_answer", "unverifiable")
 
 def parse_verdict(raw: str) -> dict:
     """Parse and validate a citation judge's JSON response."""
-    verdict = json.loads(raw)
+    try:
+        verdict = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError("Judge returned invalid JSON") from exc
 
     if not isinstance(verdict, dict):
         raise ValueError("Expected a JSON object")
