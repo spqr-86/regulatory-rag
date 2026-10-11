@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-09",
+  "execution": "server",
+  "model": "openai/gpt-4o",
+  "provider": "OpenRouter",
+  "temperature": 0.0,
+  "max_retries": 0,
+  "response_format": {
+    "type": "json_object"
+  },
+  "source_sha256": "070761043b07bd0d7a685cac4514c748455023fad27263deb47f02f8cb9198c2",
+  "results": [
+    {
+      "case": "wrong_point",
+      "expected": "fail",
+      "actual": {
+        "status": "fail",
+        "reason": "Фрагмент 1 устанавливает пункт 31, но в ответе указан пункт 30, что является конкретным противоречием."
+      },
+      "matches_expected": true
+    },
+    {
+      "case": "correct_point",
+      "expected": "pass",
+      "actual": {
+        "status": "pass",
+        "reason": "Документ, раздел и пункт подтверждены: фрагмент 1 устанавливает документ 'Правила №2464', раздел III и пункт 31, которые совпадают с ответом."
+      },
+      "matches_expected": true
+    },
+    {
+      "case": "missing_point_in_context",
+      "expected": "needs_review",
+      "actual": {
+        "status": "needs_review",
+        "reason": "Фрагмент 1 подтверждает документ и раздел, но не содержит номера пункта. Номер пункта 31 нельзя ни подтвердить, ни опровергнуть."
+      },
+      "matches_expected": true
+    }
+  ],
+  "limitation": "One call per case; initial calibration, not reliability measurement"
+}
