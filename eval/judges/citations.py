@@ -10,14 +10,10 @@ def parse_verdict(raw: str) -> dict:
     if not isinstance(verdict, dict):
         raise ValueError("Expected a JSON object")
 
-    status = verdict.get("status")
-    if status not in ("pass", "fail", "needs_review"):
-        raise ValueError("status must be pass, fail, or needs_review")
-
-    reason = verdict.get("reason")
-    if not isinstance(reason, str) or not reason.strip():
-        raise ValueError("reason must be a non-empty string")
-
+    if "checks" not in verdict:
+        raise ValueError("Missing 'checks' key")
+    if not isinstance(verdict["checks"], list):
+        raise ValueError("'checks' must be a list")
     return verdict
 
 
