@@ -24,6 +24,7 @@ def test_valid_empty_checks():
         FENCE + 'json\n{"checks": []}\n' + FENCE,
         FENCE + '\n{"checks": []}\n' + FENCE,
         "  \n" + FENCE + 'json\n{"checks": []}\n' + FENCE + "\n  ",
+        FENCE + 'JSON\n{"checks": []}\n' + FENCE,
     ],
 )
 def test_fenced_json_is_parsed(raw):

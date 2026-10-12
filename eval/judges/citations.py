@@ -13,7 +13,10 @@ def _normalize(text: str) -> str:
 def parse_verdict(raw: str) -> dict:
     """Parse and validate a citation judge's JSON response."""
     try:
-        raw = raw.strip().strip("```").strip("\n").strip("json")
+        raw = raw.strip()
+        if raw.startswith("```"):
+            # Drop the opening fence line with any language tag, then the closing fence.
+            raw = raw.partition("\n")[2].removesuffix("```")
         verdict = json.loads(raw)
     except (json.JSONDecodeError, TypeError, AttributeError) as exc:
         raise ValueError("Judge returned invalid JSON") from exc

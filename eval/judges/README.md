@@ -30,7 +30,7 @@
 `comparison`, `match`/`mismatch` без обеих цитат и `missing_in_answer`
 без `context_quote`. Семантическое сравнение остаётся задачей модели.
 
-`parse_verdict` принимает JSON и в ограде ```json, требует массив
+`parse_verdict` принимает JSON и в ограде ``` с любой меткой языка, требует массив
 `checks` из объектов с полями `field`, `answer_quote`, `context_quote`,
 `comparison`, `reason`, допустимые значения `field`/`comparison` и
 непустой `reason`. Общие `status`/`reason` судья не возвращает.
@@ -49,9 +49,7 @@ G001 ошибка → `pass`, G006 `fail` → `pass`. Судья вызывае�
 - проверка цитаты — подстрока после нормализации; `answer_quote` без
   номера документа (например, без «2464») проходит `match`, код это не ловит;
 - промпт с указаниями и few-shot против случая G001 судья проигнорировал —
-  противоречие ловит код, а не промпт;
-- `parse_verdict` снимает ограду через `strip`, который удаляет набор
-  символов, а не префикс.
+  противоречие ловит код, а не промпт.
 
 `run_citation_example.py` делает три реальных вызова модели через фабрику
 проекта. Платные прогоны — только с отдельного разрешения. Не менять
@@ -64,7 +62,7 @@ production, индекс, RAG graph или общие настройки мод�
 .venv/bin/python -m pytest tests/eval_judges -q
 ```
 
-51 проверка (`test_parse_verdict.py`, `test_validate_and_score.py`,
+52 проверки (`test_parse_verdict.py`, `test_validate_and_score.py`,
 `test_judge_citations.py`) охватывает парсер, статусы и их приоритет,
 наличие/тип цитат, правила для `section` и `contract_violation`, полный
 вызов с подставной моделью. Это синтетические проверки кода, без сети;
