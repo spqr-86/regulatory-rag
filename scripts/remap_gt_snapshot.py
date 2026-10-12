@@ -82,7 +82,14 @@ def main():
     p.add_argument(
         "--overrides", type=Path, help="JSON {old id: [new ids]} after manual review"
     )
+    p.add_argument(
+        "--rename",
+        action="append",
+        default=[],
+        help="OLD=NEW source rename when a corpus file was replaced (e.g. 2464.pdf=2464.md)",
+    )
     a = p.parse_args()
+    rename = dict(r.split("=", 1) for r in a.rename)
 
     gt = [
         json.loads(line)
@@ -97,17 +104,18 @@ def main():
     mapping, kinds, review = {}, defaultdict(int), []
     for cid in labels:
         src, num = cid.rsplit("#", 1)
+        dst = rename.get(src, src)
         text = old[src].get(int(num))
         if cid in overrides:
             ids, kind = [int(x.rsplit("#", 1)[1]) for x in overrides[cid]], "override"
         elif text is None:
             ids, kind = [], "missing-old"
         else:
-            ids, kind = map_one(int(num), text, new[src])
-        mapping[cid] = [f"{src}#{n}" for n in ids]
+            ids, kind = map_one(int(num), text, new[dst])
+        mapping[cid] = [f"{dst}#{n}" for n in ids]
         kinds[kind] += 1
         if kind != "exact":
-            review.append((cid, kind, text or "", [(n, new[src][n]) for n in ids]))
+            review.append((cid, kind, text or "", [(n, new[dst][n]) for n in ids]))
 
     out = []
     for r in gt:
