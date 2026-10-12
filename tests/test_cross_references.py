@@ -32,8 +32,45 @@ def test_extract_refs_finds_podpunkt_letter():
 def test_extract_refs_finds_statya_number():
     from src.v7.cross_ref import _extract_refs
 
-    refs = _extract_refs("согласно статье 229 Трудового кодекса")
+    refs = _extract_refs("согласно статье 229 настоящего Кодекса")
     assert ("article", "229") in refs
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Об утверждении Порядка проведения обязательных предварительных и "
+        "периодических медицинских осмотров работников, предусмотренных частью "
+        "четвертой статьи 213 Трудового кодекса Российской Федерации",
+        "в соответствии со статьёй 213 Трудового кодекса",
+        "в соответствии с пунктом 3 Федерального закона от 28.12.2013 № 426-ФЗ",
+        "по пункту 5 статьи 12 Федерального закона",
+        "согласно пункту 4 постановления Правительства",
+        "в силу пункта 7 приказа Минтруда",
+    ],
+)
+def test_extract_refs_skips_refs_to_other_acts(text):
+    from src.v7.cross_ref import _extract_refs
+
+    assert [r for r in _extract_refs(text) if r[0] in ("clause", "article")] == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("text", "ref"),
+    [
+        ("в соответствии с пунктом 46 настоящих Правил", ("clause", "46")),
+        ("согласно пункту 12 настоящего Порядка", ("clause", "12")),
+        ("согласно статье 229 настоящего Кодекса", ("article", "229")),
+        ("см. статья 5", ("article", "5")),
+        ("указанных в пункте 46. Работодатель обязан", ("clause", "46")),
+    ],
+)
+def test_extract_refs_keeps_internal_refs(text, ref):
+    from src.v7.cross_ref import _extract_refs
+
+    assert ref in _extract_refs(text)
 
 
 @pytest.mark.unit
@@ -276,7 +313,7 @@ def test_article_ref_phrase_match():
     from src.v7.cross_ref import expand_cross_references
 
     passage = _passage(
-        "в соответствии со статьёй 5 Федерального закона",
+        "в соответствии со статьёй 5 настоящего Закона",
         source="fz.pdf",
     )
     bare_number = Document(

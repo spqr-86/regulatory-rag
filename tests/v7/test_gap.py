@@ -28,3 +28,14 @@ def test_gap_module_does_not_import_nodes():
 
     src = open(g.__file__, encoding="utf-8").read()
     assert "src.v7.nodes" not in src
+
+
+def test_title_naming_other_act_opens_no_gap():
+    title = (
+        "Об утверждении Порядка проведения обязательных предварительных и "
+        "периодических медицинских осмотров работников, предусмотренных частью "
+        "четвертой статьи 213 Трудового кодекса Российской Федерации"
+    )
+    gap = build_gap([_p(title, source="29н.pdf")])
+    assert gap["refs"] == []
+    assert gap["open"] == []
