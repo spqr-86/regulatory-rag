@@ -345,7 +345,7 @@ def mmr_select(
 
         for i, p in enumerate(remaining):
             relevance = (
-                p.get("vector_score") or p.get("rerank_score") or p.get("score", 0.0)
+                p.get("rerank_score") or p.get("vector_score") or p.get("score", 0.0)
             )
             doc_id = p.get("doc_id", "unknown")
             doc_count = selected_doc_ids.get(doc_id, 0)

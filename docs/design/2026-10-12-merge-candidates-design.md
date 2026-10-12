@@ -47,8 +47,11 @@ merged  = anchors + mmr_select(pool, FINAL_MERGE_TOP_K - len(anchors), plan.mmr_
 - Simple-попытка в общий пул больше не идёт: её лучшая часть уже стоит якорями, а её
   `vector_score`/RRF-оценки несопоставимы с `rerank_score`.
 - Нет snapshot или он пуст → `anchors = []`, все 24 места из complex-пула по MMR.
-- Реранкер упал → complex-попытка пуста (`rag_complex` обнуляет `passages`), `merged` = якоря.
-  Дальше, как и сейчас, проверяются `last_attempt` и `fallback_snapshot`.
+- Реранкер упал → complex-попытка пуста (`rag_complex` обнуляет `passages`). Пул без новых
+  чанков → `merged` пуст: одни якоря повторно паковали бы уже упакованный snapshot и выдавали
+  его как `complex_sufficient` (уточнено при реализации 12.10, инвариант
+  `test_packed_snapshot_is_not_expanded_again`). Дальше, как и сейчас, проверяются
+  `last_attempt` и `fallback_snapshot`.
 - Реранкер не подключён (`rerank is None`) → у кандидатов нет `rerank_score`, MMR работает по
   `vector_score`, как сейчас.
 - Кандидаты `last_attempt` и `fallback_snapshot` не меняются.

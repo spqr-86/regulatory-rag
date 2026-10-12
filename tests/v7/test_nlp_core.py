@@ -440,14 +440,30 @@ class TestPhase1BM25Normalization:
         assert results[0]["doc_id"] == "2464.pdf"
 
 
-class TestPhase1MMRPrefersVectorScore:
+class TestPhase1MMRRelevance:
     @pytest.mark.unit
-    def test_mmr_prefers_vector_score(self):
-        """Chunk with vector_score=0.9 must rank above chunk with only bm25_score=12.
+    def test_mmr_prefers_rerank_score_over_vector_score(self):
+        """The cross-encoder score is the best available relevance signal."""
+        passages = [
+            {
+                "chunk_id": "v",
+                "vector_score": 0.9,
+                "rerank_score": 0.2,
+                "doc_id": "a.pdf",
+            },
+            {
+                "chunk_id": "r",
+                "vector_score": 0.3,
+                "rerank_score": 0.95,
+                "doc_id": "b.pdf",
+            },
+        ]
+        result = mmr_select(passages, top_k=1, lambda_param=1.0)
+        assert [p["chunk_id"] for p in result] == ["r"]
 
-        mmr_select reads vector_score first; BM25-only chunks fall back to
-        normalised score (~0.7 for bm25=12), so the vector chunk should win.
-        """
+    @pytest.mark.unit
+    def test_vector_score_beats_bm25_only_without_rerank(self):
+        """Without rerank_score a vector chunk still beats a BM25-only chunk."""
         passages = [
             {
                 "text": "чанк из векторного поиска",
@@ -465,8 +481,7 @@ class TestPhase1MMRPrefersVectorScore:
             },
         ]
         result = mmr_select(passages, top_k=1, lambda_param=1.0)
-        assert len(result) == 1
-        assert result[0]["chunk_id"] == "v1"
+        assert [p["chunk_id"] for p in result] == ["v1"]
 
 
 class TestPhase1DocDiversityTwoSources:
