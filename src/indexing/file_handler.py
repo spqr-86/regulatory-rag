@@ -22,7 +22,7 @@ from utils.logging import logger
 FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
 
 # Chunk-cache version changes when normalization or occurrence identity changes.
-PIPELINE_VERSION = "v3.3-table-rows"
+PIPELINE_VERSION = "v3.4-article-address"
 PARSER_VERSION = "v1-complete-docling"
 CHUNKER_MAX_TOKENS = 400
 CHUNKER_MERGE_PEERS = True
@@ -69,6 +69,82 @@ def _clean_noise(text: str) -> str:
         if not _NOISE_PATTERNS.fullmatch(line.strip())
     ]
     return re.sub(r" {2,}", " ", "\n".join(lines)).strip()
+
+
+# ANCHOR: law address. Docling sometimes labels «Статья N. …» as plain text
+# (426-ФЗ ст. 13, 21), so the chunker glues the article onto the previous one.
+# promote_lost_article_headings() relabels such items as section headers before
+# chunking; annotate_article_parts() then writes article/part/part_inherited
+# into chunk metadata (part = last «N. Заглавная» marker within the article).
+_ARTICLE_HEADING_RE = re.compile(r"Статья\s+\d+(?:\.\d+)*\.\s+\S")
+_ARTICLE_NUM_RE = re.compile(r"Статья\s+(\d+(?:\.\d+)*)\.")
+# «2. Работник обязан…»; «9. а)» / «4. международного» are Docling list numbers.
+_PART_RE = re.compile(r"^(\d+(?:\.\d+)*)\.[ \t]*\n?[ \t]*(?=[А-ЯЁ])", re.MULTILINE)
+_BARE_PART_RE = re.compile(r"(?:^|\n)(\d+(?:\.\d+)*)\.\s*$")
+
+
+def is_article_heading(text: str) -> bool:
+    """True when a line opens a law article: «Статья N. Название»."""
+    return _ARTICLE_HEADING_RE.match(" ".join(text.split())) is not None
+
+
+def promote_lost_article_headings(doc: Any) -> int:
+    """Relabel plain-text «Статья N.» items as section headers; return count."""
+    from docling_core.types.doc import DocItemLabel, SectionHeaderItem, TextItem
+
+    article_levels = [
+        t.level
+        for t in doc.texts
+        if isinstance(t, SectionHeaderItem) and is_article_heading(t.text)
+    ]
+    level = article_levels[0] if article_levels else 1
+    promoted = 0
+    for i, item in enumerate(doc.texts):
+        if (
+            type(item) is TextItem
+            and item.label == DocItemLabel.TEXT
+            and is_article_heading(item.text)
+        ):
+            fields = item.model_dump(exclude={"label"})
+            doc.texts[i] = SectionHeaderItem(**fields, level=level)
+            promoted += 1
+    return promoted
+
+
+def annotate_article_parts(chunks: List[Document]) -> None:
+    """Write article / part / part_inherited for chunks under «Статья N.»."""
+    article_has_parts: dict[str, bool] = {}
+    bodies: list[tuple[Document, str, str]] = []
+    for ch in chunks:
+        m = _ARTICLE_NUM_RE.search(ch.metadata.get("heading_path", ""))
+        if not m:
+            continue
+        article = m.group(1)
+        lines = ch.page_content.split("\n")
+        if lines and is_article_heading(lines[0]):
+            lines = lines[1:]
+        body = "\n".join(lines)
+        bodies.append((ch, article, body))
+        article_has_parts[article] = article_has_parts.get(article, False) or bool(
+            _PART_RE.search(body) or _BARE_PART_RE.search(body)
+        )
+
+    current: dict[str, str] = {}
+    for ch, article, body in bodies:
+        ch.metadata["article"] = article
+        if not article_has_parts[article]:
+            continue
+        markers = _PART_RE.findall(body)
+        # Chunker may cut right after «1.»; the part text opens the next chunk.
+        if bare := _BARE_PART_RE.search(body):
+            markers.append(bare.group(1))
+        starts = _PART_RE.match(body)
+        part = starts.group(1) if starts else current.get(article)
+        if part is not None:
+            ch.metadata["part"] = part
+            ch.metadata["part_inherited"] = starts is None
+        if markers:
+            current[article] = markers[-1]
 
 
 def pipeline_fingerprint() -> dict:
@@ -370,6 +446,7 @@ class DocumentProcessor:
 
     def _process_docling_document(self, doc: Any, source: str) -> List[Document]:
         chunks = []
+        promote_lost_article_headings(doc)
         for chunk in self._chunker.chunk(doc):
             text = _clean_noise(chunk.text.strip())
             if not text:
@@ -431,7 +508,9 @@ class DocumentProcessor:
                 embed_text = text
             chunks.append(Document(page_content=embed_text, metadata=meta))
         # Numbered tables (29н-style) -> one chunk per row with its parent row.
-        return explicit_table_chunks(getattr(doc, "tables", None), chunks)
+        chunks = explicit_table_chunks(getattr(doc, "tables", None), chunks)
+        annotate_article_parts(chunks)
+        return chunks
 
     # ---------- cache and utilities ----------
 
