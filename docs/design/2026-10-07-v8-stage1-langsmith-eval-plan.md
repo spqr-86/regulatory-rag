@@ -97,6 +97,10 @@ docs/evaluation/experiments/langsmith-v8-stage1.md
 
 ### Задача 0.5: модуль 1 курса — пощупать LangSmith (добавлено 08.10)
 
+**Сделано 09.10** (отмечено 12.10): трейсинг через OpenRouter, разобраны трейсы G001, G006, G019,
+G020, G035, G043 на regrag вместо курсовых скриптов — `docs/evaluation/experiments/langsmith-learning-2026-10-09/`.
+Чекбоксы ниже не проставлялись по шагам.
+
 Курс «Building Reliable Agents» (LangChain Academy). Модуль 1 = observability: трейсинг и разбор
 агента по трейсам. Материалы: `explainer-videos/videos/courses/building-reliable-agents/source/`
 (`lessons/m1-*.md`, `code/module-1/lesson-2/`). Код курса не копируется в regrag.
