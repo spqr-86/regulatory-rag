@@ -328,6 +328,27 @@ def get_judge_llm(**kwargs):
     return factory(**kwargs)
 
 
+# A read-timeout only; the token cap is what bounds a reasoning loop.
+CITATION_JUDGE_TIMEOUT = 300
+
+
+def get_citation_judge_llm(**kwargs):
+    """Citation judge LLM: JUDGE_LLM_PROVIDER (OpenAI-compatible) with its own model and cap.
+
+    No retries: a reasoning call that timed out is billed, and a retry bills it again.
+    """
+    kwargs.setdefault("model_name", settings.CITATION_JUDGE_MODEL_NAME)
+    max_tokens = kwargs.pop("max_tokens", settings.CITATION_JUDGE_MAX_TOKENS)
+    llm = get_judge_llm(max_tokens=max_tokens, **kwargs)
+    # langchain sends the cap as max_completion_tokens; OpenRouter also gets its native field.
+    llm.extra_body = {**(llm.extra_body or {}), "max_tokens": max_tokens}
+    llm.root_client = llm.root_client.with_options(
+        max_retries=0, timeout=CITATION_JUDGE_TIMEOUT
+    )
+    llm.client = llm.root_client.chat.completions
+    return llm
+
+
 def get_vision_llm():
     """
     Возвращает LLM с поддержкой Vision (зрения).

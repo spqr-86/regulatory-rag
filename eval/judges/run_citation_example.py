@@ -1,7 +1,7 @@
 import json
 
 from eval.judges.citations import judge_citations
-from src.infra.llm_factory import get_judge_llm
+from src.infra.llm_factory import get_citation_judge_llm
 
 
 def main():
@@ -40,9 +40,7 @@ def main():
         },
     ]
 
-    llm = get_judge_llm(temperature=0.0)
-    llm.root_client = llm.root_client.with_options(max_retries=0)
-    llm.client = llm.root_client.chat.completions
+    llm = get_citation_judge_llm(temperature=0.0)
     llm = llm.bind(response_format={"type": "json_object"})
     matched = 0
     for case in cases:

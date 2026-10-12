@@ -185,7 +185,7 @@ def validate_and_score(
 
             if context_quote is not None:
                 if not isinstance(context_quote, str) or not context_quote.strip():
-                    raise ValueError("conrext_quote must be a non-empty string or null")
+                    raise ValueError("context_quote must be a non-empty string or null")
                 if _normalize(context_quote) not in _normalize(context):
                     raise ValueError("context_quote must appear in context")
 
