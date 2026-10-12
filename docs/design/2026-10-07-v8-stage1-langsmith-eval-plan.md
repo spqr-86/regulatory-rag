@@ -129,6 +129,20 @@ G020, G035, G043 на regrag вместо курсовых скриптов — 
 
 ---
 
+### Задача 0.6: эталоны G001 и G020 (добавлено 12.10, Пётр)
+
+Курс 2.2: в датасет — «всё, что уже ломалось». G001 (программа А) и G020 (медосмотр водителей) —
+провалы из трейсов 09.10 (нужный чанк потерян при склейке), но в `tests/dataset.csv` они
+`needs_clarification` и в сплит `verified` не попадут.
+
+- [ ] **Шаг 1 (Пётр).** Проверить и при необходимости переписать `ground_truth` G001 и G020,
+  `reference_status=verified`, `reviewed_at`, `review_note`.
+- [ ] **Шаг 2.** Убедиться, что у обоих есть разметка чанков в `golden_retrieval_labeled.jsonl`
+  на активном снимке (иначе `build_examples` упадёт с ValueError — так и задумано).
+  Итог датасета: 24 примера, 14 in-scope, 10 OOS/false_premise.
+
+---
+
 ### Задача 1: датасет
 
 **Файлы:** создать `eval/ls/__init__.py`, `eval/ls/dataset.py`, `tests/eval_ls/__init__.py`,
@@ -327,10 +341,10 @@ def test_upsert_updates_changed(files):
     `eval/data/golden_retrieval_labeled.jsonl`. `--dry-run` печатает количество in-scope и OOS,
     сеть не трогает.
 - [ ] **Шаг 4.** Тесты → PASS. `.venv/bin/python -m eval.ls.dataset --dry-run` →
-  `22 examples: 12 in-scope, 10 OOS`.
+  `24 examples: 14 in-scope, 10 OOS` (после задачи 0.6; без неё 22/12/10).
 - [ ] **Шаг 5.** Боевой upsert (бесплатно, без LLM): `.venv/bin/python -m eval.ls.dataset`.
-  В UI: датасет `regrag-golden`, сплит `verified`, 22 примера. Повторный запуск →
-  `created 0, updated 0, unchanged 22`.
+  В UI: датасет `regrag-golden`, сплит `verified`, 24 примера. Повторный запуск →
+  `created 0, updated 0, unchanged 24`.
 - [ ] **Шаг 6.** Коммит `feat(eval): LangSmith dataset regrag-golden/verified`.
 
 ---
@@ -592,6 +606,10 @@ def test_domain_gate_state_without_route():
 **Файлы:** создать `eval/ls/judge.py`, `eval/prompts/judge_correctness.md`,
 `tests/eval_ls/test_judge.py`; изменить `eval/ls/run.py` (без `--skip-judge` добавить судью).
 
+**С 12.10:** как в курсе (2.5), судья сначала создаётся в UI LangSmith (Evaluators → LLM-as-judge,
+привязан к датасету `regrag-golden`) с тем же промптом. Код-вариант ниже — для воспроизводимости и
+`--rejudge`; если UI-судьи хватает, `judge.py` можно не писать (решение Петра по ходу).
+
 **Интерфейсы.** Produces:
 
 ```python
@@ -782,12 +800,14 @@ def test_empty_raises():
   пропускать и печатать их число. **Шаг 4:** PASS, коммит
   `feat(eval): judge alignment report`.
 - [ ] **Шаг 5. Разметка (Пётр, UI).** Annotation queue `regrag-correctness`, рубрика:
-  фидбэк-ключ `human_correct` (bool) + комментарий. В очередь — 12 in-scope строк эксперимента
+  фидбэк-ключ `human_correct` (bool) + комментарий. В очередь — 14 in-scope + 3 false_premise (G043, G044, G046) = 17 строк эксперимента
   `v7-low` с судьёй. Пётр размечает **до** того, как смотрит оценки судьи.
   **С 12.10 — общая разметка для обоих судей:** вторым ключом `human_citations` (bool: документ
   и пункт/статья названы и верны). `align.py` запускается дважды: `--human-key human_correct
   --judge-key correctness` и `--human-key human_citations --judge-key citations`; порог тот же.
-- [ ] **Шаг 6. Итерации.** `python -m eval.ls.align <exp>` → если согласие < 85 % (≥ 11/12),
+  Как в курсе — сначала через UI (Align Evaluator → Annotate for alignment на эксперименте);
+  `align.py` нужен, только если UI не даёт fp/fn или выгрузку.
+- [ ] **Шаг 6. Итерации.** `python -m eval.ls.align <exp>` → если согласие < 85 % (≥ 15/17),
   разобрать fp/fn, поправить `judge_correctness.md`, `--rejudge` (каждый — по «да», ≈ $0.2).
   Каждую итерацию — отдельный коммит промпта с цифрой согласия в сообщении и строкой в
   `docs/evaluation/experiments/langsmith-v8-stage1.md` (итерация, sha промпта, agreement,
@@ -853,6 +873,10 @@ def test_rejects(raw):
 
 ### Задача 7: online eval и automation (UI, без кода)
 
+**Трафик (12.10):** живых пользователей у 8502 нет (localhost). Модуль 3 проходим учебной
+имитацией: сами задаём 10–20 вопросов в UI (in-scope, OOS, с 👎) с `metadata.source="manual"`.
+Выводы онлайн-оценки на такой выборке — проверка механики, не метрика качества.
+
 - [ ] **Шаг 1.** Проект `regulatory-rag` → Rules → online evaluator `oos_handled` (код-evaluator
   UI, логика как в задаче 2; на вход `outputs.answer` и `route_decision` из корневого run) на
   100 % трафика с `metadata.source != "eval"`.
@@ -878,7 +902,7 @@ def test_rejects(raw):
 ## Порядок и стоимость
 
 **Пересмотр 12.10.** Срок «до 11.10» прошёл; сделаны 0, 0.5 и шаги 1–2 задачи 4a (вне порядка).
-Дальше строго: 1 → 2 → 3 → 4a.3 → 4 → 5 (общая разметка) → 6 → 7 → 8. Срок задач 1–5 — 22.10 (решение Петра 12.10; с 23.10 хакатон Островка).
+Дальше строго: 0.6 → 1 → 2 → 3 → 4a.3 → 4 → 5 (общая разметка) → 6 → 7 → 8. Срок задач 1–5 — 22.10 (решение Петра 12.10; с 23.10 хакатон Островка).
 
 0 → 1 → 2 → 3 (смоук, базовый прогон) → 4 → 5 → 6 → 7 → 8. Задачи 1–2 бесплатны и не требуют
 сети, кроме upsert. Платные шаги: 3.6, 3.7, 4.5, 5.6, 6.5 — суммарно ≈ $2–3, каждый по «да».
