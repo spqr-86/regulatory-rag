@@ -129,6 +129,40 @@ def test_missing_section_with_answer_quote_is_flagged_but_passes():
     assert section["contract_violation"] == "missing_in_answer with answer_quote"
 
 
+# Laws: the article finds the norm, a part is optional like a section;
+# a wrong part still fails.
+LAW_RESPONSE = "по ст. 13 426-ФЗ, часть 4"
+LAW_CONTEXT = "426-ФЗ. Статья 13\n3. Работодатель обязан"
+
+
+def law_score(checks):
+    return validate_and_score({"checks": checks}, "Вопрос", LAW_RESPONSE, LAW_CONTEXT)
+
+
+def test_missing_part_does_not_fail():
+    article = make_check("match", "ст. 13", "Статья 13")
+    part = make_check("missing_in_answer", None, "3. Работодатель", field="part")
+    assert law_score([article, part]) == "pass"
+
+
+def test_missing_part_with_answer_quote_is_flagged_but_passes():
+    article = make_check("match", "ст. 13", "Статья 13")
+    part = make_check("missing_in_answer", "ст. 13", "3. Работодатель", field="part")
+    assert law_score([article, part]) == "pass"
+    assert part["contract_violation"] == "missing_in_answer with answer_quote"
+
+
+def test_wrong_part_fails():
+    article = make_check("match", "ст. 13", "Статья 13")
+    part = make_check("mismatch", "часть 4", "3. Работодатель", field="part")
+    assert law_score([article, part]) == "fail"
+
+
+def test_missing_article_still_fails():
+    article = make_check("missing_in_answer", None, "Статья 13")
+    assert law_score([article]) == "fail"
+
+
 def test_contract_violation_does_not_hide_fail():
     violation = make_check("missing_in_answer", "пункт 30", "раздел I")
     assert score([make_check("mismatch"), violation]) == "fail"

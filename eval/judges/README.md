@@ -18,8 +18,9 @@
 - `mismatch` и `missing_in_answer` по документу или пункту дают `fail`;
 - иначе `unverifiable` даёт `needs_review`; только `match` дают `pass`;
 - пустой массив даёт `needs_review`;
-- `missing_in_answer` по `field=section` статус не меняет: документа и
-  пункта достаточно, чтобы найти норму. Запись остаётся в `checks`;
+- `missing_in_answer` по `field=section` или `field=part` (часть статьи
+  закона) статус не меняет: документа и пункта/статьи достаточно, чтобы
+  найти норму. Запись остаётся в `checks`; неверная часть (`mismatch`) — `fail`;
 - `missing_in_answer` с непустым `answer_quote` — противоречие судьи
   («нет в ответе», но с цитатой из ответа). Запись получает
   `contract_violation`, статус — `needs_review` (уже вычисленный `fail`

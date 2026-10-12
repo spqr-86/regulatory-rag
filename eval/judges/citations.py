@@ -2,7 +2,10 @@ import json
 
 from langchain.messages import HumanMessage
 
-FIELDS = ("document", "section", "provision")
+FIELDS = ("document", "section", "provision", "part")
+# Document and provision find the norm; a missing section or law part
+# stays in checks but does not change the status.
+OPTIONAL_FIELDS = ("section", "part")
 COMPARISONS = ("match", "mismatch", "missing_in_answer", "unverifiable")
 
 
@@ -83,12 +86,16 @@ CITATION_PROMPT = """Проверь нормативные ссылки в от�
 сам по себе не является номером пункта нормы.
 Сравнивай полный реквизит: пункт 7.1 отличается от пункта 7.2;
 пункт, подпункт и статья не взаимозаменяемы.
+Часть статьи закона (ч. 3 ст. 13; во фрагменте — абзац «3.» внутри
+статьи) — отдельный реквизит part, а не provision. Для provision
+сравнивай только номер статьи.
 
 Отдельно извлеки реквизиты ИЗ ОТВЕТА и ИЗ ФРАГМЕНТОВ.
 Не дополняй ссылку ответа реквизитами из фрагментов.
 Для каждого проверяемого реквизита добавь запись в checks
 со всеми пятью полями:
-— field: document, section или provision (пункт/подпункт/статья);
+— field: document, section, provision (пункт/подпункт/статья)
+  или part (часть статьи закона);
 — answer_quote: дословная непрерывная непустая цитата из блока
   «Ответ системы», содержащая этот реквизит; если его нет — null;
 — context_quote: дословная непрерывная непустая цитата из блока
@@ -121,6 +128,10 @@ CITATION_PROMPT = """Проверь нормативные ссылки в от�
   номер 71 нельзя ни подтвердить, ни опровергнуть.
 — Раздел I установлен во фрагменте, но не указан в ответе.
   Для section answer_quote=null, context_quote — цитата с разделом I,
+  comparison=missing_in_answer.
+— Ответ: ст. 13. Фрагмент: «Статья 13 … 3. Работодатель обязан».
+  Для provision comparison=match: статья 13 совпадает.
+  Для part answer_quote=null, context_quote — цитата с «3.»,
   comparison=missing_in_answer.
 
 Не используй память и внешние источники. Не оценивай полноту
@@ -202,12 +213,10 @@ def validate_and_score(
                     # The judge contradicts itself: "absent from the answer"
                     # with a quote from the answer. Keep the case, flag it.
                     check["contract_violation"] = "missing_in_answer with answer_quote"
-                    if result != "fail" and check.get("field") != "section":
+                    if result != "fail" and check.get("field") not in OPTIONAL_FIELDS:
                         result = "needs_review"
                     continue
-                if check.get("field") == "section":
-                    # Document and provision are enough to find the norm;
-                    # a missing section stays in checks, status unchanged.
+                if check.get("field") in OPTIONAL_FIELDS:
                     continue
 
             if comparison in ("missing_in_answer", "mismatch"):

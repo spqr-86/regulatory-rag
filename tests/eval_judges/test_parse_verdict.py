@@ -29,3 +29,12 @@ def test_valid_empty_checks():
 )
 def test_fenced_json_is_parsed(raw):
     assert parse_verdict(raw) == {"checks": []}
+
+
+def test_part_field_is_accepted():
+    raw = (
+        '{"checks": [{"field": "part", "answer_quote": null, '
+        '"context_quote": "3. Работодатель", "comparison": "missing_in_answer", '
+        '"reason": "r"}]}'
+    )
+    assert parse_verdict(raw)["checks"][0]["field"] == "part"
