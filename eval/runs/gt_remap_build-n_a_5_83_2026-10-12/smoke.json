@@ -1,0 +1,88 @@
+{
+ "n": 5,
+ "measured": 5,
+ "n_escalated": 2,
+ "all": {
+  "simple@12": 1.0,
+  "simple@16": 1.0,
+  "simple@24": 1.0,
+  "complex@12": 1.0,
+  "complex@16": 1.0,
+  "complex@24": 1.0,
+  "merged@12": 1.0,
+  "merged@16": 1.0,
+  "merged@24": 1.0
+ },
+ "escalated": {
+  "simple@12": 1.0,
+  "simple@16": 1.0,
+  "simple@24": 1.0,
+  "complex@12": 1.0,
+  "complex@16": 1.0,
+  "complex@24": 1.0,
+  "merged@12": 1.0,
+  "merged@16": 1.0,
+  "merged@24": 1.0
+ },
+ "ks": [
+  12,
+  16,
+  24
+ ],
+ "records": [
+  {
+   "question": "Кто проходит обучение по программе А обучения требований охраны труда?",
+   "source": "2464.pdf",
+   "escalated": true,
+   "n_anchors": 30,
+   "n_merged": 24,
+   "simple": 4,
+   "complex": 6,
+   "merged": 4
+  },
+  {
+   "question": "Какие существуют виды инструктажей по охране труда?",
+   "source": "2464.pdf",
+   "escalated": false,
+   "n_anchors": 30,
+   "n_merged": 24,
+   "simple": 1,
+   "complex": 1,
+   "merged": 1
+  },
+  {
+   "question": "С какой периодичностью проводится повторный инструктаж по охране труда?",
+   "source": "2464.pdf",
+   "escalated": false,
+   "n_anchors": 30,
+   "n_merged": 24,
+   "simple": 1,
+   "complex": 1,
+   "merged": 1
+  },
+  {
+   "question": "Кто может быть освобожден от первичного инструктажа на рабочем месте?",
+   "source": "2464.pdf",
+   "escalated": false,
+   "n_anchors": 30,
+   "n_merged": 24,
+   "simple": 1,
+   "complex": 2,
+   "merged": 1
+  },
+  {
+   "question": "В каких случаях проводится внеплановый инструктаж?",
+   "source": "2464.pdf",
+   "escalated": true,
+   "n_anchors": 30,
+   "n_merged": 24,
+   "simple": 1,
+   "complex": 1,
+   "merged": 1
+  }
+ ],
+ "elapsed_s": 40.6,
+ "date": "2026-10-12",
+ "gt_path": "eval/runs/gt_remap_build-n_a_5_83_2026-10-12/golden_retrieval_labeled.jsonl",
+ "db": "./chroma_db.snapshots/build-n_a_5_83"
+}
