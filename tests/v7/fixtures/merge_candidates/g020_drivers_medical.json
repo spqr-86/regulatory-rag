@@ -1,0 +1,1430 @@
+{
+ "query": "С какой периодичностью водители автотранспорта проходят обязательный периодический медицинский осмотр?",
+ "active_query": "С какой периодичностью водители автотранспорта проходят обязательный периодический медицинский осмотр?",
+ "plan": {
+  "borderline_threshold": 0.3,
+  "max_single_doc_ratio": 0.7,
+  "min_keyword_overlap": 0.2,
+  "min_keyword_overlap_original": 0.1,
+  "min_passages": 8,
+  "min_verifier_confidence": 0.7,
+  "mmr_lambda": 0.7,
+  "require_multi_doc": false,
+  "rerank": true,
+  "threshold": 0.35,
+  "timeout_ms": 1200,
+  "top_k": 60
+ },
+ "filters": null,
+ "retrieval_attempts": [
+  {
+   "stage": "simple",
+   "attempt_plan": {
+    "borderline_threshold": 0.38,
+    "max_single_doc_ratio": 0.8,
+    "min_keyword_overlap": 0.15,
+    "min_keyword_overlap_original": 0.1,
+    "min_passages": 5,
+    "min_verifier_confidence": 0.7,
+    "mmr_lambda": 0.7,
+    "require_multi_doc": false,
+    "rerank": false,
+    "threshold": 0.5,
+    "timeout_ms": 250,
+    "top_k": 12
+   },
+   "retrieval_error": false,
+   "passages": [
+    {
+     "chunk_id": 94,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5732,
+     "rrf_score": 0.06557,
+     "score": 0.5732,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 94,
+      "page_no": 9
+     }
+    },
+    {
+     "chunk_id": 93,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5415,
+     "rrf_score": 0.04764,
+     "score": 0.5415,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 93,
+      "page_no": 9
+     }
+    },
+    {
+     "chunk_id": 8,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.526,
+     "rrf_score": 0.04739,
+     "score": 0.526,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 8,
+      "page_no": 2
+     }
+    },
+    {
+     "chunk_id": 372,
+     "doc_id": "223н.pdf",
+     "vector_score": 0.5289,
+     "rrf_score": 0.04712,
+     "score": 0.5289,
+     "metadata": {
+      "source": "223н.pdf",
+      "chunk_id": 372,
+      "page_no": 53
+     }
+    },
+    {
+     "chunk_id": 152,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5232,
+     "rrf_score": 0.04391,
+     "score": 0.5232,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 152,
+      "page_no": 15
+     }
+    },
+    {
+     "chunk_id": 10,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.4847,
+     "rrf_score": 0.04293,
+     "score": 0.4847,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 10,
+      "page_no": 2
+     }
+    },
+    {
+     "chunk_id": 222,
+     "doc_id": "29н.pdf",
+     "bm25_score": 22.3753,
+     "rrf_score": 0.03279,
+     "score": 0.8174,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 222,
+      "page_no": 27
+     }
+    },
+    {
+     "chunk_id": 314,
+     "doc_id": "29н.pdf",
+     "bm25_score": 22.3753,
+     "rrf_score": 0.03226,
+     "score": 0.8174,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 314,
+      "page_no": 47
+     }
+    },
+    {
+     "chunk_id": 120,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5102,
+     "rrf_score": 0.032,
+     "score": 0.5102,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 120,
+      "page_no": 12
+     }
+    },
+    {
+     "chunk_id": 196,
+     "doc_id": "29н.pdf",
+     "bm25_score": 21.6613,
+     "rrf_score": 0.03175,
+     "score": 0.8125,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 196,
+      "page_no": 22
+     }
+    },
+    {
+     "chunk_id": 255,
+     "doc_id": "29н.pdf",
+     "bm25_score": 21.6613,
+     "rrf_score": 0.03125,
+     "score": 0.8125,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 255,
+      "page_no": 35
+     }
+    },
+    {
+     "chunk_id": 227,
+     "doc_id": "29н.pdf",
+     "bm25_score": 20.9915,
+     "rrf_score": 0.03031,
+     "score": 0.8076,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 227,
+      "page_no": 28
+     }
+    },
+    {
+     "chunk_id": 1346,
+     "doc_id": "тк рф.pdf",
+     "bm25_score": 17.3813,
+     "score": 0.7766,
+     "metadata": {
+      "source": "тк рф.pdf",
+      "chunk_id": 1346,
+      "page_no": 142
+     }
+    },
+    {
+     "chunk_id": 1442,
+     "doc_id": "тк рф.pdf",
+     "bm25_score": 15.917,
+     "score": 0.761,
+     "metadata": {
+      "source": "тк рф.pdf",
+      "chunk_id": 1442,
+      "page_no": 152
+     }
+    },
+    {
+     "chunk_id": 1349,
+     "doc_id": "тк рф.pdf",
+     "bm25_score": 15.2058,
+     "score": 0.7525,
+     "metadata": {
+      "source": "тк рф.pdf",
+      "chunk_id": 1349,
+      "page_no": 142
+     }
+    },
+    {
+     "chunk_id": 1755,
+     "doc_id": "тк рф.pdf",
+     "bm25_score": 11.2858,
+     "score": 0.693,
+     "metadata": {
+      "source": "тк рф.pdf",
+      "chunk_id": 1755,
+      "page_no": 183
+     }
+    },
+    {
+     "chunk_id": 40,
+     "doc_id": "29н.pdf",
+     "bm25_score": 10.5504,
+     "score": 0.6785,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 40,
+      "page_no": 5
+     }
+    }
+   ]
+  },
+  {
+   "stage": "complex",
+   "attempt_plan": {
+    "borderline_threshold": 0.3,
+    "max_single_doc_ratio": 0.7,
+    "min_keyword_overlap": 0.2,
+    "min_keyword_overlap_original": 0.1,
+    "min_passages": 8,
+    "min_verifier_confidence": 0.7,
+    "mmr_lambda": 0.7,
+    "require_multi_doc": false,
+    "rerank": true,
+    "threshold": 0.35,
+    "timeout_ms": 1200,
+    "top_k": 60
+   },
+   "retrieval_error": false,
+   "passages": [
+    {
+     "chunk_id": 343,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7762,
+     "rerank_score": 0.9561,
+     "bm25_score": 17.3444,
+     "rrf_score": 0.01042,
+     "score": 0.9561,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 343,
+      "page_no": 56
+     }
+    },
+    {
+     "chunk_id": 319,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.4916,
+     "rerank_score": 0.7867,
+     "rrf_score": 0.00917,
+     "score": 0.7867,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 319,
+      "page_no": 49
+     }
+    },
+    {
+     "chunk_id": 15,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5029,
+     "rerank_score": 0.6668,
+     "rrf_score": 0.02444,
+     "score": 0.6668,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 15,
+      "page_no": 3
+     }
+    },
+    {
+     "chunk_id": 277,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7866,
+     "rerank_score": 0.6246,
+     "bm25_score": 18.4273,
+     "rrf_score": 0.0122,
+     "score": 0.6246,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 277,
+      "page_no": 40
+     }
+    },
+    {
+     "chunk_id": 18,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.4947,
+     "rerank_score": 0.5692,
+     "rrf_score": 0.02496,
+     "score": 0.5692,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 18,
+      "page_no": 3
+     }
+    },
+    {
+     "chunk_id": 255,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.8125,
+     "rerank_score": 0.5685,
+     "bm25_score": 21.6613,
+     "rrf_score": 0.01562,
+     "score": 0.5685,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 255,
+      "page_no": 35
+     }
+    },
+    {
+     "chunk_id": 323,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5156,
+     "rerank_score": 0.5652,
+     "rrf_score": 0.0137,
+     "score": 0.5652,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 323,
+      "page_no": 50
+     }
+    },
+    {
+     "chunk_id": 324,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7778,
+     "rerank_score": 0.5501,
+     "bm25_score": 17.4985,
+     "rrf_score": 0.01087,
+     "score": 0.5501,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 324,
+      "page_no": 50
+     }
+    },
+    {
+     "chunk_id": 63,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.4904,
+     "rerank_score": 0.5179,
+     "rrf_score": 0.00893,
+     "score": 0.5179,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 63,
+      "page_no": 7
+     }
+    },
+    {
+     "chunk_id": 287,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7709,
+     "rerank_score": 0.5124,
+     "bm25_score": 16.8284,
+     "rrf_score": 0.01,
+     "score": 0.5124,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 287,
+      "page_no": 42
+     }
+    },
+    {
+     "chunk_id": 8,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5237,
+     "rerank_score": 0.4813,
+     "rrf_score": 0.01493,
+     "score": 0.4813,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 8,
+      "page_no": 2
+     }
+    },
+    {
+     "chunk_id": 94,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5711,
+     "rerank_score": 0.465,
+     "rrf_score": 0.02692,
+     "score": 0.465,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 94,
+      "page_no": 9
+     }
+    },
+    {
+     "chunk_id": 269,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7623,
+     "rerank_score": 0.4405,
+     "bm25_score": 16.0335,
+     "rrf_score": 0.00909,
+     "score": 0.4405,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 269,
+      "page_no": 38
+     }
+    },
+    {
+     "chunk_id": 51,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7819,
+     "rerank_score": 0.4365,
+     "bm25_score": 17.9289,
+     "rrf_score": 0.01136,
+     "score": 0.4365,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 51,
+      "page_no": 6
+     }
+    },
+    {
+     "chunk_id": 196,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.8125,
+     "rerank_score": 0.4224,
+     "bm25_score": 21.6613,
+     "rrf_score": 0.01587,
+     "score": 0.4224,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 196,
+      "page_no": 22
+     }
+    },
+    {
+     "chunk_id": 10,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5033,
+     "rerank_score": 0.3909,
+     "rrf_score": 0.02525,
+     "score": 0.3909,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 10,
+      "page_no": 2
+     }
+    },
+    {
+     "chunk_id": 273,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7776,
+     "rerank_score": 0.3832,
+     "bm25_score": 17.4784,
+     "rrf_score": 0.01075,
+     "score": 0.3832,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 273,
+      "page_no": 39
+     }
+    },
+    {
+     "chunk_id": 90,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5004,
+     "rerank_score": 0.3785,
+     "rrf_score": 0.01075,
+     "score": 0.3785,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 90,
+      "page_no": 9
+     }
+    },
+    {
+     "chunk_id": 321,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.491,
+     "rerank_score": 0.3617,
+     "rrf_score": 0.00909,
+     "score": 0.3617,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 321,
+      "page_no": 49
+     }
+    },
+    {
+     "chunk_id": 58,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7634,
+     "rerank_score": 0.3504,
+     "bm25_score": 16.1283,
+     "rrf_score": 0.00917,
+     "score": 0.3504,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 58,
+      "page_no": 6
+     }
+    },
+    {
+     "chunk_id": 12,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.515,
+     "rerank_score": 0.3482,
+     "rrf_score": 0.02322,
+     "score": 0.3482,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 12,
+      "page_no": 2
+     }
+    },
+    {
+     "chunk_id": 179,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7889,
+     "rerank_score": 0.3301,
+     "bm25_score": 18.6808,
+     "rrf_score": 0.0125,
+     "score": 0.3301,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 179,
+      "page_no": 19
+     }
+    },
+    {
+     "chunk_id": 311,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7616,
+     "rerank_score": 0.3249,
+     "bm25_score": 15.9727,
+     "rrf_score": 0.00893,
+     "score": 0.3249,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 311,
+      "page_no": 47
+     }
+    },
+    {
+     "chunk_id": 110,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7714,
+     "rerank_score": 0.3171,
+     "bm25_score": 16.8725,
+     "rrf_score": 0.0101,
+     "score": 0.3171,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 110,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 216,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7981,
+     "rerank_score": 0.3097,
+     "bm25_score": 19.7689,
+     "rrf_score": 0.0137,
+     "score": 0.3097,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 216,
+      "page_no": 26
+     }
+    },
+    {
+     "chunk_id": 14,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7725,
+     "rerank_score": 0.294,
+     "bm25_score": 16.9824,
+     "rrf_score": 0.01031,
+     "score": 0.294,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 14,
+      "page_no": 2
+     }
+    },
+    {
+     "chunk_id": 325,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.8108,
+     "rerank_score": 0.2879,
+     "bm25_score": 21.429,
+     "rrf_score": 0.01538,
+     "score": 0.2879,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 325,
+      "page_no": 50
+     }
+    },
+    {
+     "chunk_id": 57,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7794,
+     "rerank_score": 0.2814,
+     "bm25_score": 17.666,
+     "rrf_score": 0.01111,
+     "score": 0.2814,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 57,
+      "page_no": 6
+     }
+    },
+    {
+     "chunk_id": 1432,
+     "doc_id": "тк рф.pdf",
+     "vector_score": 0.515,
+     "rerank_score": 0.2755,
+     "rrf_score": 0.02397,
+     "score": 0.2755,
+     "metadata": {
+      "source": "тк рф.pdf",
+      "chunk_id": 1432,
+      "page_no": 151
+     }
+    },
+    {
+     "chunk_id": 237,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.8029,
+     "rerank_score": 0.2751,
+     "bm25_score": 20.3618,
+     "rrf_score": 0.01449,
+     "score": 0.2751,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 237,
+      "page_no": 30
+     }
+    },
+    {
+     "chunk_id": 244,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7912,
+     "rerank_score": 0.2626,
+     "bm25_score": 18.9415,
+     "rrf_score": 0.01282,
+     "score": 0.2626,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 244,
+      "page_no": 32
+     }
+    },
+    {
+     "chunk_id": 336,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.4916,
+     "rerank_score": 0.246,
+     "rrf_score": 0.00926,
+     "score": 0.246,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 336,
+      "page_no": 54
+     }
+    },
+    {
+     "chunk_id": 11,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5047,
+     "rerank_score": 0.2108,
+     "rrf_score": 0.01163,
+     "score": 0.2108,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 11,
+      "page_no": 2
+     }
+    },
+    {
+     "chunk_id": 333,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7634,
+     "rerank_score": 0.2091,
+     "bm25_score": 16.1367,
+     "rrf_score": 0.00926,
+     "score": 0.2091,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 333,
+      "page_no": 52
+     }
+    },
+    {
+     "chunk_id": 71,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.798,
+     "rerank_score": 0.1773,
+     "bm25_score": 19.7485,
+     "rrf_score": 0.01351,
+     "score": 0.1773,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 71,
+      "page_no": 7
+     }
+    },
+    {
+     "chunk_id": 138,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5064,
+     "rerank_score": 0.177,
+     "rrf_score": 0.01205,
+     "score": 0.177,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 138,
+      "page_no": 14
+     }
+    },
+    {
+     "chunk_id": 222,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.8174,
+     "rerank_score": 0.1731,
+     "bm25_score": 22.3753,
+     "rrf_score": 0.01639,
+     "score": 0.1731,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 222,
+      "page_no": 27
+     }
+    },
+    {
+     "chunk_id": 337,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.4941,
+     "rerank_score": 0.1551,
+     "rrf_score": 0.00962,
+     "score": 0.1551,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 337,
+      "page_no": 54
+     }
+    },
+    {
+     "chunk_id": 207,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7843,
+     "rerank_score": 0.1538,
+     "bm25_score": 18.1805,
+     "rrf_score": 0.01176,
+     "score": 0.1538,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 207,
+      "page_no": 24
+     }
+    },
+    {
+     "chunk_id": 102,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.4998,
+     "rerank_score": 0.1497,
+     "rrf_score": 0.0102,
+     "score": 0.1497,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 102,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 191,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7666,
+     "rerank_score": 0.1474,
+     "bm25_score": 16.4214,
+     "rrf_score": 0.00952,
+     "score": 0.1474,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 191,
+      "page_no": 21
+     }
+    },
+    {
+     "chunk_id": 227,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.8076,
+     "rerank_score": 0.1394,
+     "bm25_score": 20.9915,
+     "rrf_score": 0.01493,
+     "score": 0.1394,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 227,
+      "page_no": 28
+     }
+    },
+    {
+     "chunk_id": 304,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.782,
+     "rerank_score": 0.1388,
+     "bm25_score": 17.9403,
+     "rrf_score": 0.01163,
+     "score": 0.1388,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 304,
+      "page_no": 45
+     }
+    },
+    {
+     "chunk_id": 329,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7844,
+     "rerank_score": 0.1355,
+     "bm25_score": 18.1885,
+     "rrf_score": 0.01205,
+     "score": 0.1355,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 329,
+      "page_no": 51
+     }
+    },
+    {
+     "chunk_id": 281,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7623,
+     "rerank_score": 0.1339,
+     "bm25_score": 16.0335,
+     "rrf_score": 0.00901,
+     "score": 0.1339,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 281,
+      "page_no": 41
+     }
+    },
+    {
+     "chunk_id": 240,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7958,
+     "rerank_score": 0.1332,
+     "bm25_score": 19.4852,
+     "rrf_score": 0.01299,
+     "score": 0.1332,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 240,
+      "page_no": 31
+     }
+    },
+    {
+     "chunk_id": 168,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7644,
+     "rerank_score": 0.1328,
+     "bm25_score": 16.2251,
+     "rrf_score": 0.00935,
+     "score": 0.1328,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 168,
+      "page_no": 18
+     }
+    },
+    {
+     "chunk_id": 338,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.782,
+     "rerank_score": 0.1327,
+     "bm25_score": 17.9403,
+     "rrf_score": 0.01149,
+     "score": 0.1327,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 338,
+      "page_no": 54
+     }
+    },
+    {
+     "chunk_id": 314,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.8174,
+     "rerank_score": 0.1246,
+     "bm25_score": 22.3753,
+     "rrf_score": 0.01613,
+     "score": 0.1246,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 314,
+      "page_no": 47
+     }
+    },
+    {
+     "chunk_id": 139,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5002,
+     "rerank_score": 0.1239,
+     "rrf_score": 0.01064,
+     "score": 0.1239,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 139,
+      "page_no": 14
+     }
+    },
+    {
+     "chunk_id": 200,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7866,
+     "rerank_score": 0.1136,
+     "bm25_score": 18.4273,
+     "rrf_score": 0.01235,
+     "score": 0.1136,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 200,
+      "page_no": 23
+     }
+    },
+    {
+     "chunk_id": 330,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7596,
+     "rerank_score": 0.1127,
+     "bm25_score": 15.7961,
+     "rrf_score": 0.00877,
+     "score": 0.1127,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 330,
+      "page_no": 52
+     }
+    },
+    {
+     "chunk_id": 232,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7958,
+     "rerank_score": 0.1113,
+     "bm25_score": 19.4852,
+     "rrf_score": 0.01316,
+     "score": 0.1113,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 232,
+      "page_no": 29
+     }
+    },
+    {
+     "chunk_id": 93,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.5391,
+     "rerank_score": 0.1094,
+     "rrf_score": 0.0246,
+     "score": 0.1094,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 93,
+      "page_no": 9
+     }
+    },
+    {
+     "chunk_id": 7,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7682,
+     "rerank_score": 0.1074,
+     "bm25_score": 16.5734,
+     "rrf_score": 0.0098,
+     "score": 0.1074,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 7,
+      "page_no": 2
+     }
+    },
+    {
+     "chunk_id": 2377,
+     "doc_id": "тк рф.pdf",
+     "vector_score": 0.5065,
+     "rerank_score": 0.1065,
+     "rrf_score": 0.0122,
+     "score": 0.1065,
+     "metadata": {
+      "source": "тк рф.pdf",
+      "chunk_id": 2377,
+      "page_no": 241
+     }
+    },
+    {
+     "chunk_id": 45,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7609,
+     "rerank_score": 0.1025,
+     "bm25_score": 15.9156,
+     "rrf_score": 0.00885,
+     "score": 0.1025,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 45,
+      "page_no": 5
+     }
+    },
+    {
+     "chunk_id": 292,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.8076,
+     "rerank_score": 0.102,
+     "bm25_score": 20.9915,
+     "rrf_score": 0.01471,
+     "score": 0.102,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 292,
+      "page_no": 43
+     }
+    },
+    {
+     "chunk_id": 310,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.7709,
+     "rerank_score": 0.0921,
+     "bm25_score": 16.8284,
+     "rrf_score": 0.0099,
+     "score": 0.0921,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 310,
+      "page_no": 46
+     }
+    },
+    {
+     "chunk_id": 129,
+     "doc_id": "29н.pdf",
+     "vector_score": 0.4929,
+     "rerank_score": 0.0918,
+     "rrf_score": 0.00952,
+     "score": 0.0918,
+     "metadata": {
+      "source": "29н.pdf",
+      "chunk_id": 129,
+      "page_no": 13
+     }
+    }
+   ]
+  }
+ ],
+ "fallback_snapshot": {
+  "active_query": "С какой периодичностью водители автотранспорта проходят обязательный периодический медицинский осмотр?",
+  "origin": "fallback_snapshot",
+  "pack_status": "ok",
+  "packed": true,
+  "plan": {
+   "borderline_threshold": 0.38,
+   "max_single_doc_ratio": 0.8,
+   "min_keyword_overlap": 0.15,
+   "min_keyword_overlap_original": 0.1,
+   "min_passages": 5,
+   "min_verifier_confidence": 0.7,
+   "mmr_lambda": 0.7,
+   "require_multi_doc": false,
+   "rerank": false,
+   "threshold": 0.5,
+   "timeout_ms": 250,
+   "top_k": 12
+  },
+  "passages": [
+   {
+    "chunk_id": 94,
+    "doc_id": "29н.pdf",
+    "vector_score": 0.5732,
+    "rrf_score": 0.06557,
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 94,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 93,
+    "doc_id": "29н.pdf",
+    "vector_score": 0.5415,
+    "rrf_score": 0.04764,
+    "score": 0.5415,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 93,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 8,
+    "doc_id": "29н.pdf",
+    "vector_score": 0.526,
+    "rrf_score": 0.04739,
+    "score": 0.526,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 8,
+     "page_no": 2
+    }
+   },
+   {
+    "chunk_id": 372,
+    "doc_id": "223н.pdf",
+    "vector_score": 0.5289,
+    "rrf_score": 0.04712,
+    "score": 0.5289,
+    "metadata": {
+     "source": "223н.pdf",
+     "chunk_id": 372,
+     "page_no": 53
+    }
+   },
+   {
+    "chunk_id": 152,
+    "doc_id": "29н.pdf",
+    "vector_score": 0.5232,
+    "rrf_score": 0.04391,
+    "score": 0.5232,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 152,
+     "page_no": 15
+    }
+   },
+   {
+    "chunk_id": 10,
+    "doc_id": "29н.pdf",
+    "vector_score": 0.4847,
+    "rrf_score": 0.04293,
+    "score": 0.4847,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 10,
+     "page_no": 2
+    }
+   },
+   {
+    "chunk_id": 222,
+    "doc_id": "29н.pdf",
+    "bm25_score": 22.3753,
+    "rrf_score": 0.03279,
+    "score": 0.8174,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 222,
+     "page_no": 27
+    }
+   },
+   {
+    "chunk_id": 314,
+    "doc_id": "29н.pdf",
+    "bm25_score": 22.3753,
+    "rrf_score": 0.03226,
+    "score": 0.8174,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 314,
+     "page_no": 47
+    }
+   },
+   {
+    "chunk_id": 120,
+    "doc_id": "29н.pdf",
+    "vector_score": 0.5102,
+    "rrf_score": 0.032,
+    "score": 0.5102,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 120,
+     "page_no": 12
+    }
+   },
+   {
+    "chunk_id": 196,
+    "doc_id": "29н.pdf",
+    "bm25_score": 21.6613,
+    "rrf_score": 0.03175,
+    "score": 0.8125,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 196,
+     "page_no": 22
+    }
+   },
+   {
+    "chunk_id": 255,
+    "doc_id": "29н.pdf",
+    "bm25_score": 21.6613,
+    "rrf_score": 0.03125,
+    "score": 0.8125,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 255,
+     "page_no": 35
+    }
+   },
+   {
+    "chunk_id": 227,
+    "doc_id": "29н.pdf",
+    "bm25_score": 20.9915,
+    "rrf_score": 0.03031,
+    "score": 0.8076,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 227,
+     "page_no": 28
+    }
+   },
+   {
+    "chunk_id": 1346,
+    "doc_id": "тк рф.pdf",
+    "bm25_score": 17.3813,
+    "score": 0.7766,
+    "metadata": {
+     "source": "тк рф.pdf",
+     "chunk_id": 1346,
+     "page_no": 142
+    }
+   },
+   {
+    "chunk_id": 1442,
+    "doc_id": "тк рф.pdf",
+    "bm25_score": 15.917,
+    "score": 0.761,
+    "metadata": {
+     "source": "тк рф.pdf",
+     "chunk_id": 1442,
+     "page_no": 152
+    }
+   },
+   {
+    "chunk_id": 1349,
+    "doc_id": "тк рф.pdf",
+    "bm25_score": 15.2058,
+    "score": 0.7525,
+    "metadata": {
+     "source": "тк рф.pdf",
+     "chunk_id": 1349,
+     "page_no": 142
+    }
+   },
+   {
+    "chunk_id": 1755,
+    "doc_id": "тк рф.pdf",
+    "bm25_score": 11.2858,
+    "score": 0.693,
+    "metadata": {
+     "source": "тк рф.pdf",
+     "chunk_id": 1755,
+     "page_no": 183
+    }
+   },
+   {
+    "chunk_id": 40,
+    "doc_id": "29н.pdf",
+    "bm25_score": 10.5504,
+    "score": 0.6785,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 40,
+     "page_no": 5
+    }
+   },
+   {
+    "chunk_id": 90,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 90,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 91,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 91,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 92,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 92,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 95,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 95,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 96,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 96,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 97,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 97,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 90,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 90,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 91,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 91,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 92,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 92,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 95,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 95,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 96,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 96,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 97,
+    "doc_id": "29н.pdf",
+    "score": 0.5732,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 97,
+     "page_no": 9
+    }
+   },
+   {
+    "chunk_id": 144,
+    "doc_id": "29н.pdf",
+    "score": 0.5232,
+    "metadata": {
+     "source": "29н.pdf",
+     "chunk_id": 144,
+     "page_no": 15
+    }
+   }
+  ]
+ }
+}
