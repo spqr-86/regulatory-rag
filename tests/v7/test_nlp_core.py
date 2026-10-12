@@ -9,7 +9,6 @@ from src.v7.nlp_core import (
     compute_doc_diversity,
     compute_keyword_overlap,
     extract_keywords,
-    merge_all_passages,
     mmr_select,
     rrf_merge,
 )
@@ -297,72 +296,6 @@ class TestComputeDocDiversity:
         unique, ratio = compute_doc_diversity([])
         assert unique == 0
         assert ratio == 1.0
-
-
-# ─── merge_all_passages ───────────────────────────────────────────────────
-
-
-class TestMergeAllPassages:
-    @pytest.mark.unit
-    def test_dedup_by_chunk_id(self):
-        attempts = [
-            {"passages": [{"chunk_id": "c1", "score": 0.9, "doc_id": "d1"}]},
-            {"passages": [{"chunk_id": "c1", "score": 0.9, "doc_id": "d1"}]},
-        ]
-        result = merge_all_passages(attempts, top_k=5, mmr_lambda=0.7)
-        assert len(result) == 1
-
-    @pytest.mark.unit
-    def test_merges_across_attempts(self):
-        attempts = [
-            {"passages": [{"chunk_id": "c1", "score": 0.9, "doc_id": "d1"}]},
-            {"passages": [{"chunk_id": "c2", "score": 0.8, "doc_id": "d2"}]},
-        ]
-        result = merge_all_passages(attempts, top_k=5, mmr_lambda=0.7)
-        assert len(result) == 2
-
-    @pytest.mark.unit
-    def test_empty_attempts(self):
-        assert merge_all_passages([], top_k=5) == []
-
-    @pytest.mark.unit
-    def test_dedup_by_content_hash_when_chunk_id_absent(self):
-        """Without chunk_id, identical chunks must still dedup via content hash."""
-        p = {
-            "text": "одинаковый текст фрагмента",
-            "score": 0.9,
-            "doc_id": "d1",
-            "metadata": {"source": "a.pdf", "page_no": 1},
-        }
-        attempts = [{"passages": [dict(p)]}, {"passages": [dict(p)]}]
-        result = merge_all_passages(attempts, top_k=5, mmr_lambda=0.7)
-        assert len(result) == 1
-
-    @pytest.mark.unit
-    def test_distinct_chunks_without_chunk_id_not_collapsed(self):
-        """Different chunks without chunk_id must NOT collapse to one."""
-        attempts = [
-            {
-                "passages": [
-                    {
-                        "text": "первый фрагмент",
-                        "score": 0.9,
-                        "metadata": {"source": "a.pdf", "page_no": 1},
-                    }
-                ]
-            },
-            {
-                "passages": [
-                    {
-                        "text": "второй фрагмент",
-                        "score": 0.8,
-                        "metadata": {"source": "a.pdf", "page_no": 2},
-                    }
-                ]
-            },
-        ]
-        result = merge_all_passages(attempts, top_k=5, mmr_lambda=0.7)
-        assert len(result) == 2
 
 
 # ─── rrf_merge fallback identity ──────────────────────────────────────────
