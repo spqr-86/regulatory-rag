@@ -10,9 +10,11 @@ RESPONSE = "Документ 1479, пункт 30."
 CONTEXT = "Документ 1479, раздел I, пункт 31."
 
 
-def make_check(comparison, answer_quote="пункт 30", context_quote="пункт 31"):
+def make_check(
+    comparison, answer_quote="пункт 30", context_quote="пункт 31", field="provision"
+):
     return {
-        "field": "provision",
+        "field": field,
         "answer_quote": answer_quote,
         "context_quote": context_quote,
         "comparison": comparison,
@@ -85,11 +87,52 @@ def test_match_and_mismatch_require_both_quotes(
 
 @pytest.mark.parametrize(
     ("answer_quote", "context_quote"),
-    [(None, None), ("пункт 30", "пункт 31"), ("пункт 30", None)],
+    [(None, None), ("пункт 30", None)],
 )
 def test_missing_in_answer_requires_evidence_of_omission(answer_quote, context_quote):
     with pytest.raises(ValueError, match="requires a null answer_quote"):
         score([make_check("missing_in_answer", answer_quote, context_quote)])
+
+
+# Shape of the G001 judge reply (2026-10-12): missing_in_answer with a quote
+# copied from the answer. The judge contradicts itself, so a human decides.
+def test_missing_in_answer_with_answer_quote_needs_review():
+    check = make_check("missing_in_answer", "пункт 30", "раздел I")
+    assert score([make_check("match", "Документ 1479", "Документ 1479"), check]) == (
+        "needs_review"
+    )
+    assert check["contract_violation"] == "missing_in_answer with answer_quote"
+
+
+# Decision 2026-10-12: a reference is usable with document and provision;
+# a missing section stays in checks but does not change the status (G006).
+def test_missing_section_does_not_fail():
+    section = make_check("missing_in_answer", None, "раздел I", field="section")
+    assert score([make_check("match", "Документ 1479", "Документ 1479"), section]) == (
+        "pass"
+    )
+
+
+def test_missing_section_does_not_hide_other_statuses():
+    section = make_check("missing_in_answer", None, "раздел I", field="section")
+    assert score([section, make_check("mismatch")]) == "fail"
+    assert score([section, make_check("unverifiable", context_quote=None)]) == (
+        "needs_review"
+    )
+
+
+def test_missing_section_with_answer_quote_is_flagged_but_passes():
+    section = make_check("missing_in_answer", "пункт 30", "раздел I", field="section")
+    assert score([make_check("match", "Документ 1479", "Документ 1479"), section]) == (
+        "pass"
+    )
+    assert section["contract_violation"] == "missing_in_answer with answer_quote"
+
+
+def test_contract_violation_does_not_hide_fail():
+    violation = make_check("missing_in_answer", "пункт 30", "раздел I")
+    assert score([make_check("mismatch"), violation]) == "fail"
+    assert score([violation, make_check("mismatch")]) == "fail"
 
 
 def _check(answer_quote, context_quote):

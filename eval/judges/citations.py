@@ -13,8 +13,9 @@ def _normalize(text: str) -> str:
 def parse_verdict(raw: str) -> dict:
     """Parse and validate a citation judge's JSON response."""
     try:
+        raw = raw.strip().strip("```").strip("\n").strip("json")
         verdict = json.loads(raw)
-    except (json.JSONDecodeError, TypeError) as exc:
+    except (json.JSONDecodeError, TypeError, AttributeError) as exc:
         raise ValueError("Judge returned invalid JSON") from exc
 
     if not isinstance(verdict, dict):
@@ -95,6 +96,10 @@ CITATION_PROMPT = """Проверь нормативные ссылки в от�
   в ответе и во фрагментах.
 
 Цитаты нельзя перефразировать, исправлять или составлять из разных мест.
+Цитата — непрерывный кусок текста из одного места: не добавляй свои
+слова и пояснения в скобках, не склеивай заголовок с текстом, не
+сокращай многоточием. Копируй регистр и написание как в тексте.
+Если answer_quote не null, comparison не может быть missing_in_answer.
 Цитата документа не доказывает наличия раздела или пункта в ответе.
 Для match и mismatch нужны обе цитаты.
 Для missing_in_answer answer_quote должен быть null,
@@ -186,10 +191,21 @@ def validate_and_score(
                     raise ValueError("match and mismatch require both quotes")
 
             if comparison == "missing_in_answer":
-                if answer_quote is not None or context_quote is None:
+                if context_quote is None:
                     raise ValueError(
                         "missing_in_answer requires a null answer_quote and a context_quote"
                     )
+                if answer_quote is not None:
+                    # The judge contradicts itself: "absent from the answer"
+                    # with a quote from the answer. Keep the case, flag it.
+                    check["contract_violation"] = "missing_in_answer with answer_quote"
+                    if result != "fail" and check.get("field") != "section":
+                        result = "needs_review"
+                    continue
+                if check.get("field") == "section":
+                    # Document and provision are enough to find the norm;
+                    # a missing section stays in checks, status unchanged.
+                    continue
 
             if comparison in ("missing_in_answer", "mismatch"):
                 result = "fail"
