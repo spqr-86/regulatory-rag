@@ -342,9 +342,10 @@ def mmr_select(
         best_mmr = -1.0
 
         for i, p in enumerate(remaining):
-            relevance = (
-                p.get("rerank_score") or p.get("vector_score") or p.get("score", 0.0)
-            )
+            # A rerank score rounded to 0.0 is a score, not a missing value.
+            relevance = p.get("rerank_score")
+            if relevance is None:
+                relevance = p.get("vector_score") or p.get("score", 0.0)
             doc_id = p.get("doc_id", "unknown")
             doc_count = selected_doc_ids.get(doc_id, 0)
             diversity_penalty = doc_count / max(len(selected), 1)

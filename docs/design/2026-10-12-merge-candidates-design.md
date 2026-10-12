@@ -30,7 +30,9 @@
 ### 1. `mmr_select`: релевантность — сначала оценка реранкера
 
 ```python
-relevance = p.get("rerank_score") or p.get("vector_score") or p.get("score", 0.0)
+relevance = p.get("rerank_score")          # 0.0 — оценка, не «нет оценки»
+if relevance is None:
+    relevance = p.get("vector_score") or p.get("score", 0.0)
 ```
 
 У simple-кандидатов `rerank_score` нет — для них поведение не меняется. Формула MMR, штраф

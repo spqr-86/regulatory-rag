@@ -395,6 +395,26 @@ class TestPhase1MMRRelevance:
         assert [p["chunk_id"] for p in result] == ["r"]
 
     @pytest.mark.unit
+    def test_zero_rerank_score_is_a_score_not_missing(self):
+        """A rounded-to-zero rerank score must not fall back to vector_score."""
+        passages = [
+            {
+                "chunk_id": "zero",
+                "vector_score": 0.8,
+                "rerank_score": 0.0,
+                "doc_id": "a.pdf",
+            },
+            {
+                "chunk_id": "low",
+                "vector_score": 0.3,
+                "rerank_score": 0.2,
+                "doc_id": "b.pdf",
+            },
+        ]
+        result = mmr_select(passages, top_k=1, lambda_param=1.0)
+        assert [p["chunk_id"] for p in result] == ["low"]
+
+    @pytest.mark.unit
     def test_vector_score_beats_bm25_only_without_rerank(self):
         """Without rerank_score a vector chunk still beats a BM25-only chunk."""
         passages = [
