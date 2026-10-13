@@ -3,6 +3,7 @@
 CLI:
     python -m eval.ls.dataset --dry-run   # build and print counts, no network
     python -m eval.ls.dataset             # build and upsert to LangSmith
+    python -m eval.ls.dataset --prune     # same, and delete examples no longer in the CSV
 """
 
 from __future__ import annotations
@@ -90,9 +91,15 @@ def build_examples(csv_path: Path, labels_path: Path) -> list[dict]:
 
 
 def upsert_examples(
-    client, examples: list[dict], dataset_name: str = DATASET_NAME
+    client, examples: list[dict], dataset_name: str = DATASET_NAME, prune: bool = False
 ) -> dict[str, int]:
-    """Create the dataset if missing; create new ids, update changed ones, skip the rest."""
+    """Create the dataset if missing; create new ids, update changed ones, skip the rest.
+
+    "stale" counts examples built from the CSV earlier (they carry csv_sha256) that are no
+    longer in `examples`, e.g. a row lost its verified status. With prune=True they are
+    deleted (soft delete, earlier dataset versions keep them). Examples added by other means
+    (no csv_sha256, e.g. from traces) are never touched.
+    """
     if not client.has_dataset(dataset_name=dataset_name):
         client.create_dataset(dataset_name)
 
@@ -119,11 +126,24 @@ def upsert_examples(
         client.update_examples(
             dataset_name=dataset_name, updates=copy.deepcopy(to_update)
         )
-    return {
+    new_ids = {e["id"] for e in examples}
+    stale = [
+        ex_id
+        for ex_id, ex in existing.items()
+        if ex_id not in new_ids and "csv_sha256" in (ex.metadata or {})
+    ]
+
+    result = {
         "created": len(to_create),
         "updated": len(to_update),
         "unchanged": unchanged,
+        "stale": len(stale),
     }
+    if prune:
+        if stale:
+            client.delete_examples(example_ids=stale)
+        result["deleted"] = len(stale)
+    return result
 
 
 def _changed(old, new: dict) -> bool:
@@ -145,6 +165,11 @@ def main() -> None:
     parser.add_argument("--csv", type=Path, default=DEFAULT_CSV)
     parser.add_argument("--labels", type=Path, default=DEFAULT_LABELS)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="delete examples that are no longer verified rows of the CSV",
+    )
     args = parser.parse_args()
 
     examples = build_examples(args.csv, args.labels)
@@ -157,7 +182,7 @@ def main() -> None:
     from langsmith import Client
 
     load_dotenv()
-    print(upsert_examples(Client(), examples))
+    print(upsert_examples(Client(), examples, prune=args.prune))
 
 
 if __name__ == "__main__":

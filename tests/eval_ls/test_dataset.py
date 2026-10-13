@@ -152,12 +152,26 @@ class FakeClient:
             self.store[str(d["id"])] = d
         self.updated += len(updates)
 
+    def delete_examples(self, example_ids, **kw):
+        for i in example_ids:
+            del self.store[str(i)]
+
 
 def test_upsert_is_idempotent(files):
     client = FakeClient()
     ex = build_examples(*files)
-    assert upsert_examples(client, ex) == {"created": 3, "updated": 0, "unchanged": 0}
-    assert upsert_examples(client, ex) == {"created": 0, "updated": 0, "unchanged": 3}
+    assert upsert_examples(client, ex) == {
+        "created": 3,
+        "updated": 0,
+        "unchanged": 0,
+        "stale": 0,
+    }
+    assert upsert_examples(client, ex) == {
+        "created": 0,
+        "updated": 0,
+        "unchanged": 3,
+        "stale": 0,
+    }
     assert len(client.store) == 3
 
 
@@ -166,4 +180,56 @@ def test_upsert_updates_changed(files):
     ex = build_examples(*files)
     upsert_examples(client, ex)
     ex[0]["outputs"]["ground_truth"] = "новый эталон"
-    assert upsert_examples(client, ex) == {"created": 0, "updated": 1, "unchanged": 2}
+    assert upsert_examples(client, ex) == {
+        "created": 0,
+        "updated": 1,
+        "unchanged": 2,
+        "stale": 0,
+    }
+
+
+def test_stale_examples_reported_not_deleted_by_default(files):
+    client = FakeClient()
+    ex = build_examples(*files)
+    upsert_examples(client, ex)
+    result = upsert_examples(client, ex[1:])
+    assert result == {"created": 0, "updated": 0, "unchanged": 2, "stale": 1}
+    assert ex[0]["id"] in client.store
+
+
+def test_prune_deletes_stale_examples(files):
+    client = FakeClient()
+    ex = build_examples(*files)
+    upsert_examples(client, ex)
+    result = upsert_examples(client, ex[1:], prune=True)
+    assert result == {
+        "created": 0,
+        "updated": 0,
+        "unchanged": 2,
+        "stale": 1,
+        "deleted": 1,
+    }
+    assert ex[0]["id"] not in client.store
+
+
+def test_prune_keeps_foreign_examples(files):
+    """Examples not built from the CSV (e.g. added from traces) have no csv_sha256."""
+    client = FakeClient()
+    ex = build_examples(*files)
+    upsert_examples(client, ex)
+    foreign = {
+        "id": "foreign-1",
+        "inputs": {"question": "q"},
+        "outputs": {},
+        "metadata": {"source": "traces"},
+    }
+    client.store["foreign-1"] = foreign
+    result = upsert_examples(client, ex, prune=True)
+    assert result == {
+        "created": 0,
+        "updated": 0,
+        "unchanged": 3,
+        "stale": 0,
+        "deleted": 0,
+    }
+    assert "foreign-1" in client.store

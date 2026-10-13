@@ -174,7 +174,7 @@ def upsert_examples(client, examples: list[dict], dataset_name: str = DATASET_NA
     Возвращает {"created": int, "updated": int, "unchanged": int}."""
 ```
 
-- [ ] **Шаг 1. Тест.** `tests/eval_ls/test_dataset.py`:
+- [x] **Шаг 1. Тест.** `tests/eval_ls/test_dataset.py`:
 
 ```python
 """Unit tests for eval/ls/dataset.py — no network."""
@@ -328,9 +328,9 @@ def test_upsert_updates_changed(files):
     assert upsert_examples(client, ex) == {"created": 0, "updated": 1, "unchanged": 2}
 ```
 
-- [ ] **Шаг 2.** `.venv/bin/python -m pytest tests/eval_ls/test_dataset.py -v` → FAIL
+- [x] **Шаг 2.** `.venv/bin/python -m pytest tests/eval_ls/test_dataset.py -v` → FAIL
   (`ModuleNotFoundError: eval.ls`).
-- [ ] **Шаг 3. Реализация (Пётр).** Подсказки:
+- [x] **Шаг 3. Реализация (Пётр).** Подсказки:
   - id: `uuid.uuid5(uuid.NAMESPACE_URL, f"regrag-golden/{case_id}")`.
   - Разметка: `{rec["question"].strip(): rec.get("relevant_chunk_ids") or [rec["chunk_id"]]}`.
   - Хэш: `hashlib.sha256(csv_path.read_bytes()).hexdigest()`.
@@ -340,12 +340,18 @@ def test_upsert_updates_changed(files):
   - CLI `python -m eval.ls.dataset [--dry-run]`: по умолчанию `tests/dataset.csv` и
     `eval/data/golden_retrieval_labeled.jsonl`. `--dry-run` печатает количество in-scope и OOS,
     сеть не трогает.
-- [ ] **Шаг 4.** Тесты → PASS. `.venv/bin/python -m eval.ls.dataset --dry-run` →
+- [x] **Шаг 4.** Тесты → PASS. `.venv/bin/python -m eval.ls.dataset --dry-run` →
   `24 examples: 14 in-scope, 10 OOS` (после задачи 0.6; без неё 22/12/10).
 - [ ] **Шаг 5.** Боевой upsert (бесплатно, без LLM): `.venv/bin/python -m eval.ls.dataset`.
   В UI: датасет `regrag-golden`, сплит `verified`, 24 примера. Повторный запуск →
   `created 0, updated 0, unchanged 24`.
-- [ ] **Шаг 6.** Коммит `feat(eval): LangSmith dataset regrag-golden/verified`.
+- [x] **Шаг 6.** Коммит `feat(eval): LangSmith dataset regrag-golden/verified`.
+
+**Статус 13.10:** шаги 1–4 и 6 сделаны на Маке с Петром, коммит `44996b8` (запушен). Тесты 9/9,
+`--dry-run` → 24 examples: 14 in-scope, 10 OOS. **Шаг 5 (боевой upsert) не запускался — решает
+Пётр.** Отличия от плана: разметка по умолчанию —
+`eval/runs/gt_remap_build-tjid2k6g_2026-10-12/golden_retrieval_labeled.jsonl` (а не `eval/data/…`);
+`must_not_contain` в `outputs`; `load_dotenv` в `main`.
 
 ---
 
