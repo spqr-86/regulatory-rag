@@ -13,7 +13,8 @@
 `answer_quote`, `context_quote`, `comparison`, `reason`.
 
 Код проверяет, что указанные цитаты действительно присутствуют в своих
-текстах, и вычисляет статус (`validate_and_score`):
+текстах, и вычисляет статус (`validate_and_score` — только читает вердикт; отметку
+`contract_violation` ставит `judge_citations`):
 
 - `mismatch` и `missing_in_answer` по документу или пункту дают `fail`;
 - иначе `unverifiable` даёт `needs_review`; только `match` дают `pass`;
@@ -26,7 +27,7 @@
   `contract_violation`, статус — `needs_review` (уже вычисленный `fail`
   не маскируется; для `section` и `part` статус не меняется).
 
-Ошибкой формата ответа судьи (`ValueError`), а не ошибкой оцениваемого RAG,
+Ошибкой формата ответа судьи (`JudgeFormatError`, подкласс `ValueError`), а не ошибкой оцениваемого RAG,
 остаются: выдуманные цитаты, пустые строки вместо цитат, неизвестный
 `comparison`, `match`/`mismatch` без обеих цитат и `missing_in_answer`
 без `context_quote`, а также ответ, обрезанный лимитом токенов

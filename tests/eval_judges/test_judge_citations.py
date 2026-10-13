@@ -82,3 +82,21 @@ def test_truncated_reply_names_the_token_limit():
     llm = FakeLLM("", response_metadata={"finish_reason": "length"})
     with pytest.raises(ValueError, match="CITATION_JUDGE_MAX_TOKENS"):
         judge_citations(llm, QUESTION, RESPONSE, CONTEXT)
+
+
+def test_contract_violation_is_marked_in_the_returned_verdict():
+    """G001 shape: missing_in_answer with a quote from the answer."""
+    check = make_check(comparison="missing_in_answer", context_quote="Пункт 71")
+    verdict, _ = run({"checks": [check]})
+    assert verdict["status"] == "needs_review"
+    assert verdict["checks"][0]["contract_violation"] == (
+        "missing_in_answer with answer_quote"
+    )
+
+
+def test_judge_errors_have_their_own_type():
+    """A run catches JudgeFormatError; a bug in our code must not look like one."""
+    from eval.judges.citations import JudgeFormatError
+
+    with pytest.raises(JudgeFormatError):
+        run("не JSON")

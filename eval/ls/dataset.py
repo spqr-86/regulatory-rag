@@ -42,11 +42,14 @@ def build_examples(csv_path: Path, labels_path: Path) -> list[dict]:
          "split": "verified"}
     In-scope row without labels → ValueError naming the case_id. OOS → no chunk ids.
     """
+    # Hash the exact bytes: same hash ⇒ experiments ran on the same golden set.
     raw = Path(csv_path).read_bytes()
     csv_sha256 = hashlib.sha256(raw).hexdigest()
     rows = list(csv.DictReader(io.StringIO(raw.decode("utf-8"), newline="")))
     verified_rows = [row for row in rows if row["reference_status"] == "verified"]
 
+    # question → relevant chunk ids. Joined by question text: the labels file has no
+    # case_id. Older label rows carry a single "chunk_id" instead of the list.
     labels = {}
     for line in Path(labels_path).read_text(encoding="utf-8").splitlines():
         if not line.strip():
@@ -62,8 +65,10 @@ def build_examples(csv_path: Path, labels_path: Path) -> list[dict]:
         oos_type = row["oos_type"]
 
         if oos_type:
+            # Out of scope: the right answer is a refusal, nothing to retrieve.
             chunk_ids = []
         else:
+            # Fail loudly: [] would look like OOS and drop out of retrieval_hit.
             if question not in labels:
                 raise ValueError(
                     f"{row['case_id']}: no retrieval labels for question "
@@ -73,6 +78,7 @@ def build_examples(csv_path: Path, labels_path: Path) -> list[dict]:
 
         examples.append(
             {
+                # uuid5 of case_id: a rerun updates the same example, no duplicates.
                 "id": str(
                     uuid.uuid5(uuid.NAMESPACE_URL, f"{DATASET_NAME}/{row['case_id']}")
                 ),
@@ -136,6 +142,7 @@ def upsert_examples(
         client.update_examples(
             dataset_name=dataset_name, updates=copy.deepcopy(to_update)
         )
+    # Stale = ours (has csv_sha256) but no longer built; foreign examples are kept.
     new_ids = {e["id"] for e in examples}
     stale = [
         ex_id

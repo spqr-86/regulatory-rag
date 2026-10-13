@@ -1,8 +1,14 @@
 """Offline checks for the current citation scoring contract."""
 
+import copy
+
 import pytest
 
-from eval.judges.citations import validate_and_score
+from eval.judges.citations import (
+    JudgeFormatError,
+    contract_violation,
+    validate_and_score,
+)
 
 # ANCHOR: Tests quote evidence and status aggregation without model or network calls.
 # Inputs are synthetic parser/scoring examples; they do not measure judge quality.
@@ -23,7 +29,7 @@ def make_check(
 
 
 def score(checks):
-    return validate_and_score({"checks": checks}, "Вопрос", RESPONSE, CONTEXT)
+    return validate_and_score({"checks": checks}, RESPONSE, CONTEXT)
 
 
 @pytest.mark.parametrize(
@@ -60,7 +66,7 @@ def test_status_aggregation(checks, expected):
     ],
 )
 def test_invalid_evidence_or_comparison_raises(checks):
-    with pytest.raises(ValueError):
+    with pytest.raises(JudgeFormatError):
         score(checks)
 
 
@@ -101,7 +107,7 @@ def test_missing_in_answer_with_answer_quote_needs_review():
     assert score([make_check("match", "Документ 1479", "Документ 1479"), check]) == (
         "needs_review"
     )
-    assert check["contract_violation"] == "missing_in_answer with answer_quote"
+    assert contract_violation(check) == "missing_in_answer with answer_quote"
 
 
 # Decision 2026-10-12: a reference is usable with document and provision;
@@ -126,7 +132,7 @@ def test_missing_section_with_answer_quote_is_flagged_but_passes():
     assert score([make_check("match", "Документ 1479", "Документ 1479"), section]) == (
         "pass"
     )
-    assert section["contract_violation"] == "missing_in_answer with answer_quote"
+    assert contract_violation(section) == "missing_in_answer with answer_quote"
 
 
 # Laws: the article finds the norm, a part is optional like a section;
@@ -136,7 +142,7 @@ LAW_CONTEXT = "426-ФЗ. Статья 13\n3. Работодатель обяза
 
 
 def law_score(checks):
-    return validate_and_score({"checks": checks}, "Вопрос", LAW_RESPONSE, LAW_CONTEXT)
+    return validate_and_score({"checks": checks}, LAW_RESPONSE, LAW_CONTEXT)
 
 
 def test_missing_part_does_not_fail():
@@ -149,7 +155,7 @@ def test_missing_part_with_answer_quote_is_flagged_but_passes():
     article = make_check("match", "ст. 13", "Статья 13")
     part = make_check("missing_in_answer", "ст. 13", "3. Работодатель", field="part")
     assert law_score([article, part]) == "pass"
-    assert part["contract_violation"] == "missing_in_answer with answer_quote"
+    assert contract_violation(part) == "missing_in_answer with answer_quote"
 
 
 def test_wrong_part_fails():
@@ -186,15 +192,27 @@ def _check(answer_quote, context_quote):
 def test_quote_matches_across_line_break_in_context():
     verdict = _check("осмотров определяется", "осмотров определяется")
     context = "периодических осмотров\nопределяется типами"
-    assert validate_and_score(verdict, "q", "осмотров определяется", context) == "pass"
+    assert validate_and_score(verdict, "осмотров определяется", context) == "pass"
 
 
 def test_quote_matches_ignoring_case():
     verdict = _check("пункт 9", "пункт 9")
-    assert validate_and_score(verdict, "q", "Пункт 9 гласит", "Пункт 9") == "pass"
+    assert validate_and_score(verdict, "Пункт 9 гласит", "Пункт 9") == "pass"
 
 
 def test_invented_quote_still_rejected_after_normalization():
     verdict = _check("пункт 10", "пункт 9")
     with pytest.raises(ValueError, match="answer_quote must appear in response"):
-        validate_and_score(verdict, "q", "Пункт 9 гласит", "Пункт 9")
+        validate_and_score(verdict, "Пункт 9 гласит", "Пункт 9")
+
+
+def test_scoring_does_not_change_the_verdict():
+    """Scoring only reads; the contract_violation mark is added by judge_citations."""
+    verdict = {"checks": [make_check("missing_in_answer", "пункт 30", "раздел I")]}
+    before = copy.deepcopy(verdict)
+    validate_and_score(verdict, RESPONSE, CONTEXT)
+    assert verdict == before
+
+
+def test_no_contract_violation_for_a_consistent_check():
+    assert contract_violation(make_check("missing_in_answer", None, "раздел I")) is None

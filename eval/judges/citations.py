@@ -5,11 +5,15 @@ the status (pass / fail / needs_review). Contract and status rules — README.md
 """
 
 # ANCHOR: judge_citations(llm, question, response, context) → {"checks": [...], "status"}.
-# A malformed or truncated judge reply raises ValueError (judge error, not a RAG error).
+# A malformed or truncated judge reply raises JudgeFormatError: a judge error, not a RAG
+# error. Scoring is pure; judge_citations marks contract violations on its own copy.
 
 import json
+from typing import Literal
 
 from langchain.messages import HumanMessage
+
+Status = Literal["pass", "fail", "needs_review"]
 
 FIELDS = ("document", "section", "provision", "part")
 # Document and provision find the norm; a missing section or law part
@@ -19,7 +23,16 @@ COMPARISONS = ("match", "mismatch", "missing_in_answer", "unverifiable")
 CHECK_KEYS = ("field", "answer_quote", "context_quote", "comparison", "reason")
 
 
+class JudgeFormatError(ValueError):
+    """The judge reply breaks the contract (bad JSON, invented quote, cut reply).
+
+    A ValueError subclass, so older callers that catch ValueError keep working;
+    new code catches this one so that a bug in our own code is not mistaken for it.
+    """
+
+
 def _normalize(text: str) -> str:
+    # The judge may re-wrap lines or change case when quoting; compare text only.
     return " ".join(text.split()).casefold()
 
 
@@ -31,29 +44,30 @@ def parse_verdict(raw: str) -> dict:
             # Drop the opening fence line with any language tag, then the closing fence.
             raw = raw.partition("\n")[2].removesuffix("```")
         verdict = json.loads(raw)
+    # TypeError/AttributeError: content is not a string (None, or a list of parts).
     except (json.JSONDecodeError, TypeError, AttributeError) as exc:
-        raise ValueError("Judge returned invalid JSON") from exc
+        raise JudgeFormatError("Judge returned invalid JSON") from exc
 
     if not isinstance(verdict, dict):
-        raise ValueError("Expected a JSON object")
+        raise JudgeFormatError("Expected a JSON object")
 
     if "checks" not in verdict:
-        raise ValueError("Missing 'checks' key")
+        raise JudgeFormatError("Missing 'checks' key")
     if not isinstance(verdict["checks"], list):
-        raise ValueError("'checks' must be a list")
+        raise JudgeFormatError("'checks' must be a list")
 
     for check in verdict["checks"]:
         if not isinstance(check, dict):
-            raise ValueError("Each check must be an object")
+            raise JudgeFormatError("Each check must be an object")
         missing = [key for key in CHECK_KEYS if key not in check]
         if missing:
-            raise ValueError(f"Check is missing required fields: {missing}")
+            raise JudgeFormatError(f"Check is missing required fields: {missing}")
         if check["field"] not in FIELDS:
-            raise ValueError(f"Unknown field value: {check['field']!r}")
+            raise JudgeFormatError(f"Unknown field value: {check['field']!r}")
         if check["comparison"] not in COMPARISONS:
-            raise ValueError(f"Unknown comparison value: {check['comparison']!r}")
+            raise JudgeFormatError(f"Unknown comparison value: {check['comparison']!r}")
         if not isinstance(check["reason"], str) or not check["reason"].strip():
-            raise ValueError("'reason' must be a non-empty string")
+            raise JudgeFormatError("'reason' must be a non-empty string")
     return verdict
 
 
@@ -170,70 +184,85 @@ def build_citation_prompt(question: str, response: str, context: str) -> str:
 
 
 def judge_citations(llm, question: str, response: str, context: str) -> dict:
-    """Ask the judge model, validate its checks, add the computed "status"."""
+    """Ask the judge model, validate its checks, add the computed "status".
+
+    Returns the parsed verdict with "status" and, on self-contradicting checks,
+    a "contract_violation" mark — so the case stays visible in the run.
+    """
     prompt = build_citation_prompt(question, response, context)
     reply = llm.invoke([HumanMessage(prompt)])
     metadata = getattr(reply, "response_metadata", None) or {}
     if metadata.get("finish_reason") == "length":
         # Reasoning ate the output budget: the reply is cut, not malformed.
-        raise ValueError(
+        raise JudgeFormatError(
             "Judge reply truncated (finish_reason=length): "
             "raise CITATION_JUDGE_MAX_TOKENS"
         )
     verdict = parse_verdict(reply.content)
-    verdict["status"] = validate_and_score(verdict, question, response, context)
+    verdict["status"] = validate_and_score(verdict, response, context)
+    for check in verdict["checks"]:
+        if violation := contract_violation(check):
+            check["contract_violation"] = violation
     return verdict
 
 
-def validate_and_score(
-    verdict: dict, question: str, response: str, context: str
-) -> str:
+def contract_violation(check: dict) -> str | None:
+    """Name the judge's self-contradiction in a check, if any.
+
+    G001 (12.10): "missing_in_answer" yet with a quote copied from the answer.
+    """
+    if check.get("comparison") == "missing_in_answer" and check.get("answer_quote"):
+        return "missing_in_answer with answer_quote"
+    return None
+
+
+def _check_quote(quote, text: str, name: str, where: str) -> None:
+    """A quote is null or a non-empty string found in its text (JudgeFormatError)."""
+    if quote is None:
+        return
+    if not isinstance(quote, str) or not quote.strip():
+        raise JudgeFormatError(f"{name} must be a non-empty string or null")
+    if _normalize(quote) not in _normalize(text):
+        raise JudgeFormatError(f"{name} must appear in {where}: {quote!r}")
+
+
+def validate_and_score(verdict: dict, response: str, context: str) -> Status:
     """Check the quotes against their texts and compute pass / fail / needs_review.
 
-    Status rules — README.md. A quote that is not in its text, or a comparison
-    without the quotes it needs, is a judge error (ValueError), not a RAG error.
+    Reads the verdict and never changes it. Priority: fail > needs_review > pass;
+    once "fail" is set no later check lowers it. Rules — README.md.
     """
     checks = verdict.get("checks")
     if not checks:
+        # The judge found no normative claims: nothing confirmed, a human looks.
         return "needs_review"
 
-    result = "pass"
+    result: Status = "pass"
     for check in checks:
         answer_quote = check.get("answer_quote")
         context_quote = check.get("context_quote")
         comparison = check.get("comparison")
+        optional = check.get("field") in OPTIONAL_FIELDS
 
-        if answer_quote is not None:
-            if not isinstance(answer_quote, str) or not answer_quote.strip():
-                raise ValueError("answer_quote must be a non-empty string or null")
-            if _normalize(answer_quote) not in _normalize(response):
-                raise ValueError(
-                    f"answer_quote must appear in response: {answer_quote!r}"
-                )
-
-        if context_quote is not None:
-            if not isinstance(context_quote, str) or not context_quote.strip():
-                raise ValueError("context_quote must be a non-empty string or null")
-            if _normalize(context_quote) not in _normalize(context):
-                raise ValueError(
-                    f"context_quote must appear in context: {context_quote!r}"
-                )
+        _check_quote(answer_quote, response, "answer_quote", "response")
+        _check_quote(context_quote, context, "context_quote", "context")
 
         if comparison in ("match", "mismatch"):
             if answer_quote is None or context_quote is None:
-                raise ValueError(f"{comparison} requires both quotes")
+                raise JudgeFormatError(f"{comparison} requires both quotes")
 
         if comparison == "missing_in_answer":
             if context_quote is None:
-                raise ValueError("missing_in_answer requires a context_quote")
-            if answer_quote is not None:
-                # The judge contradicts itself: "absent from the answer"
-                # with a quote from the answer. Keep the case, flag it.
-                check["contract_violation"] = "missing_in_answer with answer_quote"
-                if result != "fail" and check.get("field") not in OPTIONAL_FIELDS:
+                raise JudgeFormatError("missing_in_answer requires a context_quote")
+            if contract_violation(check):
+                # The judge contradicts itself: a human decides, but an
+                # existing "fail" is not masked. Optional fields stay neutral.
+                if result != "fail" and not optional:
                     result = "needs_review"
                 continue
-            if check.get("field") in OPTIONAL_FIELDS:
+            if optional:
+                # Section or law part not named in the answer: the norm is
+                # still found by document + provision (decision 12.10).
                 continue
 
         if comparison in ("missing_in_answer", "mismatch"):
@@ -242,5 +271,5 @@ def validate_and_score(
             if result != "fail":
                 result = "needs_review"
         elif comparison != "match":
-            raise ValueError(f"Unknown comparison value: {comparison!r}")
+            raise JudgeFormatError(f"Unknown comparison value: {comparison!r}")
     return result
