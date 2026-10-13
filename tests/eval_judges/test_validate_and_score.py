@@ -81,7 +81,7 @@ def test_quote_must_be_a_nonempty_string_or_null(quote, field):
 def test_match_and_mismatch_require_both_quotes(
     comparison, answer_quote, context_quote
 ):
-    with pytest.raises(ValueError, match="require both quotes"):
+    with pytest.raises(ValueError, match=f"{comparison} requires both quotes"):
         score([make_check(comparison, answer_quote, context_quote)])
 
 
@@ -90,7 +90,7 @@ def test_match_and_mismatch_require_both_quotes(
     [(None, None), ("пункт 30", None)],
 )
 def test_missing_in_answer_requires_evidence_of_omission(answer_quote, context_quote):
-    with pytest.raises(ValueError, match="requires a null answer_quote"):
+    with pytest.raises(ValueError, match="missing_in_answer requires a context_quote"):
         score([make_check("missing_in_answer", answer_quote, context_quote)])
 
 

@@ -12,6 +12,7 @@ CLI:
 
 from __future__ import annotations
 
+import argparse
 import copy
 import csv
 import hashlib
@@ -65,7 +66,8 @@ def build_examples(csv_path: Path, labels_path: Path) -> list[dict]:
         else:
             if question not in labels:
                 raise ValueError(
-                    f"{row['case_id']}: нет разметки для вопроса {question!r}"
+                    f"{row['case_id']}: no retrieval labels for question "
+                    f"{question!r} in {labels_path}"
                 )
             chunk_ids = labels[question]
 
@@ -165,8 +167,6 @@ def _changed(old, new: dict) -> bool:
 
 
 def main() -> None:
-    import argparse
-
     parser = argparse.ArgumentParser(
         description="Upload the verified golden set to LangSmith"
     )

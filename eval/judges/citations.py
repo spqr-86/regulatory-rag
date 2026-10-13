@@ -16,6 +16,7 @@ FIELDS = ("document", "section", "provision", "part")
 # stays in checks but does not change the status.
 OPTIONAL_FIELDS = ("section", "part")
 COMPARISONS = ("match", "mismatch", "missing_in_answer", "unverifiable")
+CHECK_KEYS = ("field", "answer_quote", "context_quote", "comparison", "reason")
 
 
 def _normalize(text: str) -> str:
@@ -44,13 +45,13 @@ def parse_verdict(raw: str) -> dict:
     for check in verdict["checks"]:
         if not isinstance(check, dict):
             raise ValueError("Each check must be an object")
-        keys = ("field", "answer_quote", "context_quote", "comparison", "reason")
-        if not all(key in check for key in keys):
-            raise ValueError("Check is missing a required field")
+        missing = [key for key in CHECK_KEYS if key not in check]
+        if missing:
+            raise ValueError(f"Check is missing required fields: {missing}")
         if check["field"] not in FIELDS:
-            raise ValueError("Unknown field value")
+            raise ValueError(f"Unknown field value: {check['field']!r}")
         if check["comparison"] not in COMPARISONS:
-            raise ValueError("Unknown comparison value")
+            raise ValueError(f"Unknown comparison value: {check['comparison']!r}")
         if not isinstance(check["reason"], str) or not check["reason"].strip():
             raise ValueError("'reason' must be a non-empty string")
     return verdict
@@ -164,83 +165,82 @@ comparison и reason. Не используй Markdown или текст вне 
 """
 
 
-def build_citation_prompt(
-    question: str,
-    response: str,
-    context: str,
-) -> str:
-    return CITATION_PROMPT.format(
-        question=question,
-        response=response,
-        context=context,
-    )
+def build_citation_prompt(question: str, response: str, context: str) -> str:
+    return CITATION_PROMPT.format(question=question, response=response, context=context)
 
 
 def judge_citations(llm, question: str, response: str, context: str) -> dict:
-    prompt = build_citation_prompt(
-        question=question, response=response, context=context
-    )
-    judge_response = llm.invoke([HumanMessage(prompt)])
-    metadata = getattr(judge_response, "response_metadata", None) or {}
+    """Ask the judge model, validate its checks, add the computed "status"."""
+    prompt = build_citation_prompt(question, response, context)
+    reply = llm.invoke([HumanMessage(prompt)])
+    metadata = getattr(reply, "response_metadata", None) or {}
     if metadata.get("finish_reason") == "length":
         # Reasoning ate the output budget: the reply is cut, not malformed.
         raise ValueError(
             "Judge reply truncated (finish_reason=length): "
             "raise CITATION_JUDGE_MAX_TOKENS"
         )
-    verdict = parse_verdict(judge_response.content)
+    verdict = parse_verdict(reply.content)
     verdict["status"] = validate_and_score(verdict, question, response, context)
     return verdict
 
 
 def validate_and_score(
-    judge_response, question: str, response: str, context: str
+    verdict: dict, question: str, response: str, context: str
 ) -> str:
-    checks = judge_response.get("checks")
-    if checks:
-        result = "pass"
-        for check in checks:
-            answer_quote = check.get("answer_quote")
-            context_quote = check.get("context_quote")
-            comparison = check.get("comparison")
+    """Check the quotes against their texts and compute pass / fail / needs_review.
 
+    Status rules — README.md. A quote that is not in its text, or a comparison
+    without the quotes it needs, is a judge error (ValueError), not a RAG error.
+    """
+    checks = verdict.get("checks")
+    if not checks:
+        return "needs_review"
+
+    result = "pass"
+    for check in checks:
+        answer_quote = check.get("answer_quote")
+        context_quote = check.get("context_quote")
+        comparison = check.get("comparison")
+
+        if answer_quote is not None:
+            if not isinstance(answer_quote, str) or not answer_quote.strip():
+                raise ValueError("answer_quote must be a non-empty string or null")
+            if _normalize(answer_quote) not in _normalize(response):
+                raise ValueError(
+                    f"answer_quote must appear in response: {answer_quote!r}"
+                )
+
+        if context_quote is not None:
+            if not isinstance(context_quote, str) or not context_quote.strip():
+                raise ValueError("context_quote must be a non-empty string or null")
+            if _normalize(context_quote) not in _normalize(context):
+                raise ValueError(
+                    f"context_quote must appear in context: {context_quote!r}"
+                )
+
+        if comparison in ("match", "mismatch"):
+            if answer_quote is None or context_quote is None:
+                raise ValueError(f"{comparison} requires both quotes")
+
+        if comparison == "missing_in_answer":
+            if context_quote is None:
+                raise ValueError("missing_in_answer requires a context_quote")
             if answer_quote is not None:
-                if not isinstance(answer_quote, str) or not answer_quote.strip():
-                    raise ValueError("answer_quote must be a non-empty string or null")
-                if _normalize(answer_quote) not in _normalize(response):
-                    raise ValueError("answer_quote must appear in response")
-
-            if context_quote is not None:
-                if not isinstance(context_quote, str) or not context_quote.strip():
-                    raise ValueError("context_quote must be a non-empty string or null")
-                if _normalize(context_quote) not in _normalize(context):
-                    raise ValueError("context_quote must appear in context")
-
-            if comparison in ("match", "mismatch"):
-                if answer_quote is None or context_quote is None:
-                    raise ValueError("match and mismatch require both quotes")
-
-            if comparison == "missing_in_answer":
-                if context_quote is None:
-                    raise ValueError(
-                        "missing_in_answer requires a null answer_quote and a context_quote"
-                    )
-                if answer_quote is not None:
-                    # The judge contradicts itself: "absent from the answer"
-                    # with a quote from the answer. Keep the case, flag it.
-                    check["contract_violation"] = "missing_in_answer with answer_quote"
-                    if result != "fail" and check.get("field") not in OPTIONAL_FIELDS:
-                        result = "needs_review"
-                    continue
-                if check.get("field") in OPTIONAL_FIELDS:
-                    continue
-
-            if comparison in ("missing_in_answer", "mismatch"):
-                result = "fail"
-            elif comparison == "unverifiable":
-                if result != "fail":
+                # The judge contradicts itself: "absent from the answer"
+                # with a quote from the answer. Keep the case, flag it.
+                check["contract_violation"] = "missing_in_answer with answer_quote"
+                if result != "fail" and check.get("field") not in OPTIONAL_FIELDS:
                     result = "needs_review"
-            elif comparison != "match":
-                raise ValueError("Unknown comparison value")
-        return result
-    return "needs_review"
+                continue
+            if check.get("field") in OPTIONAL_FIELDS:
+                continue
+
+        if comparison in ("missing_in_answer", "mismatch"):
+            result = "fail"
+        elif comparison == "unverifiable":
+            if result != "fail":
+                result = "needs_review"
+        elif comparison != "match":
+            raise ValueError(f"Unknown comparison value: {comparison!r}")
+    return result
