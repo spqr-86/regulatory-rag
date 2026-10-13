@@ -6,6 +6,10 @@ CLI:
     python -m eval.ls.dataset --prune     # same, and delete examples no longer in the CSV
 """
 
+# ANCHOR: golden set → LangSmith dataset. Input: tests/dataset.csv (verified rows) and
+# retrieval labels of the active snapshot; output: examples with stable uuid5 ids, upserted
+# into DATASET_NAME (create new / update changed / report or prune stale CSV examples).
+
 from __future__ import annotations
 
 import copy
@@ -100,6 +104,10 @@ def upsert_examples(
     deleted (soft delete, earlier dataset versions keep them). Examples added by other means
     (no csv_sha256, e.g. from traces) are never touched.
     """
+    if prune and not examples:
+        raise ValueError(
+            "refusing to prune with no examples: it would empty the dataset"
+        )
     if not client.has_dataset(dataset_name=dataset_name):
         client.create_dataset(dataset_name)
 
@@ -175,6 +183,7 @@ def main() -> None:
     examples = build_examples(args.csv, args.labels)
     oos = sum(1 for e in examples if e["outputs"]["oos_type"])
     print(f"{len(examples)} examples: {len(examples) - oos} in-scope, {oos} OOS")
+    print(f"labels: {args.labels}")
     if args.dry_run:
         return
 

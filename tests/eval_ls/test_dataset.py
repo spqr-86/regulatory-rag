@@ -212,6 +212,15 @@ def test_prune_deletes_stale_examples(files):
     assert ex[0]["id"] not in client.store
 
 
+def test_prune_refuses_empty_examples(files):
+    """An empty build (e.g. no verified rows left) must not wipe the dataset."""
+    client = FakeClient()
+    upsert_examples(client, build_examples(*files))
+    with pytest.raises(ValueError, match="prune"):
+        upsert_examples(client, [], prune=True)
+    assert len(client.store) == 3
+
+
 def test_prune_keeps_foreign_examples(files):
     """Examples not built from the CSV (e.g. added from traces) have no csv_sha256."""
     client = FakeClient()
