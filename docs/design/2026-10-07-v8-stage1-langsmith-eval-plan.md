@@ -342,14 +342,14 @@ def test_upsert_updates_changed(files):
     сеть не трогает.
 - [x] **Шаг 4.** Тесты → PASS. `.venv/bin/python -m eval.ls.dataset --dry-run` →
   `24 examples: 14 in-scope, 10 OOS` (после задачи 0.6; без неё 22/12/10).
-- [ ] **Шаг 5.** Боевой upsert (бесплатно, без LLM): `.venv/bin/python -m eval.ls.dataset`.
+- [x] **Шаг 5.** Боевой upsert (бесплатно, без LLM): `.venv/bin/python -m eval.ls.dataset`.
   В UI: датасет `regrag-golden`, сплит `verified`, 24 примера. Повторный запуск →
   `created 0, updated 0, unchanged 24`.
 - [x] **Шаг 6.** Коммит `feat(eval): LangSmith dataset regrag-golden/verified`.
 
 **Статус 13.10:** шаги 1–4 и 6 сделаны на Маке с Петром, коммит `44996b8` (запушен). Тесты 9/9,
-`--dry-run` → 24 examples: 14 in-scope, 10 OOS. **Шаг 5 (боевой upsert) не запускался — решает
-Пётр.** Отличия от плана: разметка по умолчанию —
+`--dry-run` → 24 examples: 14 in-scope, 10 OOS. **Шаг 5 сделан 13.10:** `created 24`, повтор —
+`unchanged 24`; в LangSmith 24 примера, сплит `verified`. Отличия от плана: разметка по умолчанию —
 `eval/runs/gt_remap_build-tjid2k6g_2026-10-12/golden_retrieval_labeled.jsonl` (а не `eval/data/…`);
 `must_not_contain` в `outputs`; `load_dotenv` в `main`.
 
