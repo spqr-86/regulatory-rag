@@ -10,8 +10,9 @@ CONTEXT = "Раздел I. Пункт 71. Срок хранения состав
 
 
 class FakeLLM:
-    def __init__(self, content):
+    def __init__(self, content, response_metadata=None):
         self.content = content
+        self.response_metadata = response_metadata or {}
         self.prompts = []
 
     def invoke(self, messages):
@@ -22,6 +23,7 @@ class FakeLLM:
 
         reply = Reply()
         reply.content = self.content
+        reply.response_metadata = self.response_metadata
         return reply
 
 
@@ -73,3 +75,10 @@ def test_invented_quote_raises():
 def test_unknown_comparison_raises_in_parser():
     with pytest.raises(ValueError, match="Unknown comparison value"):
         run({"checks": [make_check(comparison="maybe")]})
+
+
+def test_truncated_reply_names_the_token_limit():
+    """finish_reason=length (12.10, G022): say so instead of "invalid JSON"."""
+    llm = FakeLLM("", response_metadata={"finish_reason": "length"})
+    with pytest.raises(ValueError, match="CITATION_JUDGE_MAX_TOKENS"):
+        judge_citations(llm, QUESTION, RESPONSE, CONTEXT)

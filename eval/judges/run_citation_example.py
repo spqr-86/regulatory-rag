@@ -1,3 +1,9 @@
+"""Three synthetic cases (wrong point / correct / point missing in context) for the judge.
+
+Paid: three real model calls via get_citation_judge_llm. Run only with Petr's go-ahead:
+    .venv/bin/python -m eval.judges.run_citation_example
+"""
+
 import json
 
 from eval.judges.citations import judge_citations
@@ -7,9 +13,7 @@ from src.infra.llm_factory import get_citation_judge_llm
 def main():
     question = "Какова минимальная продолжительность стажировки?"
 
-    correct_response = (
-        "Не менее двух смен согласно пункту 31 раздела III " "Правил №2464."
-    )
+    correct_response = "Не менее двух смен согласно пункту 31 раздела III Правил №2464."
 
     full_context = (
         "[Фрагмент 1]\n"

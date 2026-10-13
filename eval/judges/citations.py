@@ -1,3 +1,12 @@
+"""Citation judge: checks the normative references of a RAG answer against its context.
+
+The model returns only per-field `checks`; the code verifies the quotes and computes
+the status (pass / fail / needs_review). Contract and status rules — README.md here.
+"""
+
+# ANCHOR: judge_citations(llm, question, response, context) → {"checks": [...], "status"}.
+# A malformed or truncated judge reply raises ValueError (judge error, not a RAG error).
+
 import json
 
 from langchain.messages import HumanMessage
@@ -172,6 +181,13 @@ def judge_citations(llm, question: str, response: str, context: str) -> dict:
         question=question, response=response, context=context
     )
     judge_response = llm.invoke([HumanMessage(prompt)])
+    metadata = getattr(judge_response, "response_metadata", None) or {}
+    if metadata.get("finish_reason") == "length":
+        # Reasoning ate the output budget: the reply is cut, not malformed.
+        raise ValueError(
+            "Judge reply truncated (finish_reason=length): "
+            "raise CITATION_JUDGE_MAX_TOKENS"
+        )
     verdict = parse_verdict(judge_response.content)
     verdict["status"] = validate_and_score(verdict, question, response, context)
     return verdict
