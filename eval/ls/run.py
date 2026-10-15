@@ -13,7 +13,7 @@ import json
 import subprocess
 
 from eval.ls.dataset import DATASET_NAME, SPLIT_VERIFIED
-from eval.ls.evaluators import CODE_EVALUATORS, summarize
+from eval.ls.evaluators import CODE_EVALUATORS, summarize, summarize_cost
 from eval.ls.target import make_target
 
 
@@ -66,6 +66,9 @@ def run_experiment(split: str, prefix: str, skip_judge: bool, limit: int | None)
         for row in results
     ]
     print(json.dumps(summarize(rows), ensure_ascii=False, indent=2))
+    # A failed example has no outputs.
+    outputs = [row["run"].outputs or {} for row in results]
+    print(json.dumps({"cost": summarize_cost(outputs)}, ensure_ascii=False, indent=2))
     print(f"experiment: {results.experiment_name}")
     print(f"url: {results.url}")
     return results.experiment_name

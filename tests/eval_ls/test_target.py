@@ -37,4 +37,34 @@ def test_maps_answer_route_and_ordered_chunk_ids():
 
 def test_domain_gate_state_without_route():
     o = state_to_outputs({"answer": ""})
-    assert o == {"answer": "", "route_decision": None, "chunk_ids": [], "sources": []}
+    assert o == {
+        "answer": "",
+        "route_decision": None,
+        "chunk_ids": [],
+        "sources": [],
+        "cost_usd": 0.0,
+        "unpriced_models": [],
+    }
+
+
+def test_cost_from_llm_usage():
+    state = {
+        "answer": "x",
+        "llm_usage": [
+            {
+                "model": "deepseek/deepseek-v4.1-flash",
+                "prompt_tokens": 1_000_000,
+                "completion_tokens": 1_000_000,
+            }
+        ],
+    }
+    o = state_to_outputs(state)
+    assert o["cost_usd"] == pytest.approx(0.15 + 0.60)
+    assert o["unpriced_models"] == []
+
+
+def test_unknown_model_is_reported_not_priced():
+    state = {"llm_usage": [{"model": "no/such-model", "prompt_tokens": 10}]}
+    o = state_to_outputs(state)
+    assert o["cost_usd"] == 0.0
+    assert o["unpriced_models"] == ["no/such-model"]

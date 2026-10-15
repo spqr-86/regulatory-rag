@@ -6,15 +6,19 @@ import uuid
 from datetime import datetime, timezone
 from typing import Callable
 
+from eval.pricing import cost_for_usages
 from eval.run_retrieval_eval import extract_chunk_ids
 
 
 def state_to_outputs(state: dict) -> dict:
     """Map the final graph state to the `outputs` shape the evaluators expect.
 
-    A domain-gate refusal leaves only {"answer": ""}: no route, no passages.
+    A domain-gate refusal leaves only {"answer": ""}: no route, no passages, no LLM calls.
+    LangSmith cannot price the model (OpenRouter), so cost is computed here from the
+    token usage in the state, with the project's rate card.
     """
     passages = state.get("final_passages") or []
+    priced = cost_for_usages(state.get("llm_usage") or [])
     sources = (p.get("metadata", {}).get("source") for p in passages)
     return {
         "answer": state.get("answer") or "",
@@ -22,6 +26,9 @@ def state_to_outputs(state: dict) -> dict:
         "chunk_ids": extract_chunk_ids(passages),
         # dict.fromkeys: unique sources in order of first appearance
         "sources": list(dict.fromkeys(s for s in sources if s)),
+        "cost_usd": priced["cost_usd"],
+        # A model without a rate card counts as $0; keep it visible.
+        "unpriced_models": priced["unpriced_models"],
     }
 
 

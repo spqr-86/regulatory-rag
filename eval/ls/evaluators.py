@@ -108,3 +108,20 @@ def summarize(rows: list[dict[str, dict]]) -> dict:
     )
     summary["n"] = {key: len(values) for key, values in scores.items()}
     return summary
+
+
+def summarize_cost(outputs: list[dict]) -> dict:
+    """Total and mean cost per example from target outputs.
+
+    Models without a rate card are listed in `unpriced_models`: their calls count
+    as $0, so a non-empty list means the totals are a lower bound.
+    """
+    costs = [o["cost_usd"] for o in outputs if o.get("cost_usd") is not None]
+    unpriced = sorted({m for o in outputs for m in o.get("unpriced_models") or []})
+    total = sum(costs)
+    return {
+        "total_usd": total,
+        "mean_usd": total / len(costs) if costs else None,
+        "n": len(costs),
+        "unpriced_models": unpriced,
+    }

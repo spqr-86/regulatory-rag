@@ -11,6 +11,7 @@ from eval.ls.evaluators import (
     oos_handled,
     retrieval_hit,
     summarize,
+    summarize_cost,
 )
 
 pytestmark = pytest.mark.unit
@@ -124,3 +125,21 @@ def test_summarize_rates_and_mrr():
     assert s["doc_cited"] == pytest.approx(1 / 2)
     assert s["mrr"] == pytest.approx((1 + 0.25 + 0) / 3)
     assert s["n"]["retrieval_hit"] == 3
+
+
+def test_summarize_cost_total_mean_and_unpriced():
+    outputs = [
+        {"cost_usd": 0.01, "unpriced_models": []},
+        {"cost_usd": 0.03, "unpriced_models": ["a/b"]},
+        {},  # failed example: no outputs
+    ]
+    s = summarize_cost(outputs)
+    assert s["total_usd"] == pytest.approx(0.04)
+    assert s["mean_usd"] == pytest.approx(0.02)
+    assert s["n"] == 2
+    assert s["unpriced_models"] == ["a/b"]
+
+
+def test_summarize_cost_empty():
+    s = summarize_cost([])
+    assert s["total_usd"] == 0 and s["mean_usd"] is None
