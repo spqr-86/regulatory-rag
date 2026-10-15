@@ -69,6 +69,11 @@ def run_experiment(split: str, prefix: str, skip_judge: bool, limit: int | None)
     # A failed example has no outputs.
     outputs = [row["run"].outputs or {} for row in results]
     print(json.dumps({"cost": summarize_cost(outputs)}, ensure_ascii=False, indent=2))
+    # Failed examples are scored None by every evaluator and drop out of the rates.
+    errors = [
+        row["example"].metadata.get("case_id") for row in results if row["run"].error
+    ]
+    print(f"errors: {len(errors)} {errors}")
     print(f"experiment: {results.experiment_name}")
     print(f"url: {results.url}")
     return results.experiment_name
@@ -79,7 +84,11 @@ def main() -> None:
     parser.add_argument("--split", default=SPLIT_VERIFIED)
     parser.add_argument("--prefix", required=True, help="experiment name prefix")
     parser.add_argument("--skip-judge", action="store_true")
-    parser.add_argument("--limit", type=int, help="first N examples, for a smoke run")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        help="first N examples, for a smoke run; OOS come first, use 6+ to reach in-scope",
+    )
     args = parser.parse_args()
     run_experiment(args.split, args.prefix, args.skip_judge, args.limit)
 

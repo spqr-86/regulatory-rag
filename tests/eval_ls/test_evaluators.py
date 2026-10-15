@@ -33,7 +33,14 @@ def out(answer="", route="generate", chunks=()):
 
 @pytest.mark.parametrize(
     "cid, num",
-    [("2464.pdf#107", "2464"), ("782н.pdf#431", "782н"), ("223н.pdf#298", "223н")],
+    [
+        ("2464.pdf#107", "2464"),
+        ("782н.pdf#431", "782н"),
+        ("223н.pdf#298", "223н"),
+        ("2464.md#5", "2464"),
+        # dots inside the name: only the extension is cut, trailing dots dropped
+        ("Статья 5.27.1..pdf#2", "Статья 5.27.1"),
+    ],
 )
 def test_doc_number(cid, num):
     assert doc_number(cid) == num
@@ -108,6 +115,17 @@ class TestOosHandled:
 
     def test_not_applicable_to_in_scope(self):
         assert oos_handled(out("ответ"), IN_SCOPE)["score"] is None
+
+
+@pytest.mark.parametrize(
+    "evaluator", [retrieval_hit, doc_cited, forbidden, oos_handled]
+)
+@pytest.mark.parametrize("reference", [IN_SCOPE, OOS])
+def test_target_error_is_not_scored(evaluator, reference):
+    # A failed target reaches evaluators as outputs={}: no "answer" key at all.
+    ref = {**reference, "must_not_contain": "1 смена"}
+    r = evaluator({}, ref)
+    assert r["score"] is None and r["comment"] == "target_error"
 
 
 def test_summarize_rates_and_mrr():

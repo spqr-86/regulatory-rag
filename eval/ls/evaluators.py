@@ -1,7 +1,7 @@
 """Code evaluators for LangSmith experiments — pure functions, no network.
 
 Each evaluator returns {"key", "score", "comment"}; score is 1, 0 or None
-(None = not applicable, excluded from aggregates). LangSmith binds evaluator
+(None = not applicable or target failed, excluded from aggregates). LangSmith binds evaluator
 arguments by name, so the parameters must be `outputs` and `reference_outputs`.
 """
 
@@ -22,13 +22,26 @@ def _result(key: str, score: int | None, comment: str) -> dict:
     return {"key": key, "score": score, "comment": comment}
 
 
+def _target_failed(outputs: dict) -> bool:
+    # LangSmith still calls evaluators when the target raised, with outputs={}.
+    # state_to_outputs always sets "answer", so its absence means a failed run.
+    return "answer" not in outputs
+
+
 def doc_number(chunk_id: str) -> str:
-    """'782н.pdf#431' -> '782н'."""
-    return chunk_id.split(".")[0]
+    """Source file name without extension: '782н.pdf#431' -> '782н'.
+
+    doc_cited matches this name in the answer, so for files named by title
+    ('тк рф', '1479 ппр') it checks that the source file was named.
+    """
+    # rstrip: 'Статья 5.27.1..pdf' -> 'Статья 5.27.1'
+    return chunk_id.split("#")[0].rsplit(".", 1)[0].rstrip(".")
 
 
 def retrieval_hit(outputs: dict, reference_outputs: dict) -> dict:
     """1 if any relevant chunk was retrieved; comment holds the first hit rank (from 1)."""
+    if _target_failed(outputs):
+        return _result("retrieval_hit", None, "target_error")
     if reference_outputs.get("oos_type"):
         return _result("retrieval_hit", None, "oos")
     relevant = set(reference_outputs.get("relevant_chunk_ids") or [])
@@ -40,6 +53,8 @@ def retrieval_hit(outputs: dict, reference_outputs: dict) -> dict:
 
 def doc_cited(outputs: dict, reference_outputs: dict) -> dict:
     """1 if the answer names the number of any relevant document, case-insensitive."""
+    if _target_failed(outputs):
+        return _result("doc_cited", None, "target_error")
     if reference_outputs.get("oos_type"):
         return _result("doc_cited", None, "oos")
     answer = (outputs.get("answer") or "").lower()
@@ -57,6 +72,8 @@ def forbidden(outputs: dict, reference_outputs: dict) -> dict:
 
     forbidden_claims are free-text statements and are checked by the judge, not here.
     """
+    if _target_failed(outputs):
+        return _result("forbidden", None, "target_error")
     pattern = (reference_outputs.get("must_not_contain") or "").strip()
     if not pattern:
         return _result("forbidden", None, "no_pattern")
@@ -67,6 +84,8 @@ def forbidden(outputs: dict, reference_outputs: dict) -> dict:
 
 def oos_handled(outputs: dict, reference_outputs: dict) -> dict:
     """1 if an OOS question was refused: abstain route, empty answer or refusal text."""
+    if _target_failed(outputs):
+        return _result("oos_handled", None, "target_error")
     if not reference_outputs.get("oos_type"):
         return _result("oos_handled", None, "in_scope")
     if outputs.get("route_decision") == "abstain":
