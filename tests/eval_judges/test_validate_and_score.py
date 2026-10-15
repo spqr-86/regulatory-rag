@@ -171,9 +171,9 @@ def test_wrong_part_fails():
 # status is accuracy only; an unnamed document or provision goes to is_complete.
 def test_missing_provision_does_not_fail_accuracy():
     provision = make_check("missing_in_answer", None, "пункт 31")
-    assert score([make_check("match", "Документ 1479", "Документ 1479"), provision]) == (
-        "pass"
-    )
+    assert score(
+        [make_check("match", "Документ 1479", "Документ 1479"), provision]
+    ) == ("pass")
 
 
 def test_missing_article_alone_needs_review():

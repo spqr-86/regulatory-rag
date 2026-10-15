@@ -15,12 +15,18 @@ Provider errors are not caught: LangSmith logs them on the row.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Callable
 
 from pydantic import BaseModel
 
-from eval.judges.citations import JudgeFormatError, is_complete, judge_citations
+from eval.judges.citations import (
+    JudgeFormatError,
+    _normalize,
+    is_complete,
+    judge_citations,
+)
 from eval.ls.evaluators import _result, _target_failed
 
 PROMPT_PATH = (
@@ -38,10 +44,33 @@ class CorrectnessJudgeVariables(BaseModel):
     answer: str
 
 
-def parse_verdict(raw: str) -> dict:
-    """Judge reply → {"correct": bool, "reasoning": str, "forbidden_claims_asserted": [str]}.
+FACT_STATUSES = ("present", "absent", "contradicted")
 
-    Accepts a ```json fence. Anything else off-contract raises JudgeFormatError (a ValueError).
+
+_FRAGMENT_MARKER = re.compile(r"\s*\[Фрагмент[^\]]*\]")
+
+
+def _quotable(text: str) -> str:
+    # The judge drops "[Фрагмент N]" markers and may cut the final full stop (G022).
+    return _normalize(_FRAGMENT_MARKER.sub("", text)).rstrip(".")
+
+
+def _quote(value, answer: str, name: str) -> str:
+    """A non-empty string found in the answer, else JudgeFormatError."""
+    if not isinstance(value, str) or not value.strip():
+        raise JudgeFormatError(f"{name} must be a non-empty string")
+    if _quotable(value) not in _quotable(answer):
+        raise JudgeFormatError(f"{name} must appear in the answer: {value!r}")
+    return value
+
+
+def parse_verdict(raw: str, answer: str) -> dict:
+    """Judge reply → {"correct", "reasoning", "comment", "forbidden_claims_asserted"}.
+
+    The judge lists the reference's key facts with evidence; the code checks every
+    quote against the answer and computes "correct" (decision 15.10, alignment
+    G001/G028: the judge called present facts missing). Accepts a ```json fence.
+    Anything off-contract raises JudgeFormatError (a ValueError).
     """
     try:
         raw = raw.strip()
@@ -55,19 +84,46 @@ def parse_verdict(raw: str) -> dict:
     if not isinstance(data, dict):
         raise JudgeFormatError("Expected a JSON object")
 
-    correct = data.get("correct")
-    # bool only: "yes" or 1 would be a guess about what the judge meant.
-    if not isinstance(correct, bool):
-        raise JudgeFormatError(f"'correct' must be true or false, got {correct!r}")
+    facts = data.get("facts")
+    if not isinstance(facts, list) or not facts:
+        raise JudgeFormatError("'facts' must be a non-empty list")
+    problems = []
+    for item in facts:
+        if not isinstance(item, dict):
+            raise JudgeFormatError("each fact must be an object")
+        status = item.get("status")
+        if status not in FACT_STATUSES:
+            raise JudgeFormatError(f"unknown fact status: {status!r}")
+        if status == "absent":
+            if item.get("answer_quote") is not None:
+                # "Not in the answer" with a quote from the answer: self-contradiction.
+                raise JudgeFormatError("absent fact must have answer_quote null")
+        else:
+            _quote(item.get("answer_quote"), answer, "answer_quote")
+        if status != "present":
+            problems.append(f"{status}: {item.get('fact', '')}")
+
+    errors = data.get("errors", [])
+    if not isinstance(errors, list):
+        raise JudgeFormatError("'errors' must be a list")
+    for item in errors:
+        if not isinstance(item, dict):
+            raise JudgeFormatError("each error must be an object")
+        _quote(item.get("answer_quote"), answer, "error answer_quote")
+        problems.append(f"error: {item.get('reason', '')}")
+
     reasoning = data.get("reasoning", "")
     if not isinstance(reasoning, str):
         raise JudgeFormatError("'reasoning' must be a string")
     asserted = data.get("forbidden_claims_asserted", [])
     if not isinstance(asserted, list) or any(not isinstance(x, str) for x in asserted):
         raise JudgeFormatError("'forbidden_claims_asserted' must be a list of strings")
+    problems += [f"forbidden: {claim}" for claim in asserted]
+
     return {
-        "correct": correct,
+        "correct": not problems,
         "reasoning": reasoning,
+        "comment": "; ".join([reasoning, *problems]) if problems else reasoning,
         "forbidden_claims_asserted": asserted,
     }
 
@@ -126,12 +182,12 @@ def make_correctness_evaluator(llm) -> Callable:
         )
         reply = llm.invoke(template.format_messages(**variables.model_dump()))
         try:
-            verdict = parse_verdict(_reply_text(reply))
+            verdict = parse_verdict(_reply_text(reply), answer)
         except JudgeFormatError as exc:
             # A judge error, not an answer error: excluded from the rates.
             return _both_none(f"judge_format_error: {exc}")
         return [
-            _result("correctness", int(verdict["correct"]), verdict["reasoning"]),
+            _result("correctness", int(verdict["correct"]), verdict["comment"]),
             _forbidden_claim(verdict["forbidden_claims_asserted"], forbidden_claims),
         ]
 

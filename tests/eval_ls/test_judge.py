@@ -13,31 +13,94 @@ pytestmark = pytest.mark.unit
 FENCE = "`" * 3  # markdown-ограда
 
 
+ANS = "Стажировка длится не менее 2 смен по п. 23 Правил."
+
+
+def fact(status, quote="не менее 2 смен", text="не менее 2 смен"):
+    return {"fact": text, "answer_quote": quote, "status": status}
+
+
+def verdict(facts=None, errors=None, asserted=None, reasoning="ok"):
+    return {
+        "facts": [fact("present")] if facts is None else facts,
+        "errors": errors or [],
+        "reasoning": reasoning,
+        "forbidden_claims_asserted": asserted or [],
+    }
+
+
 def test_parse_plain_json():
-    v = parse_verdict(
-        '{"correct": true, "reasoning": "ok", "forbidden_claims_asserted": []}'
-    )
-    assert v == {"correct": True, "reasoning": "ok", "forbidden_claims_asserted": []}
+    v = parse_verdict(json.dumps(verdict()), ANS)
+    assert v["correct"] is True and v["reasoning"] == "ok"
+    assert v["forbidden_claims_asserted"] == []
 
 
 def test_parse_fenced_json():
-    raw = FENCE + 'json\n{"correct": false, "reasoning": "нет п. 53"}\n' + FENCE
-    v = parse_verdict(raw)
-    assert v["correct"] is False and v["forbidden_claims_asserted"] == []
+    raw = FENCE + "json\n" + json.dumps(verdict([fact("absent", None)])) + "\n" + FENCE
+    assert parse_verdict(raw, ANS)["correct"] is False
+
+
+# Decision 2026-10-15 (alignment, G001/G028): the code computes the verdict from
+# per-fact evidence; a "present" fact must be quoted from the answer.
+@pytest.mark.parametrize(
+    ("payload", "correct"),
+    [
+        (verdict(), True),
+        (verdict([fact("present"), fact("absent", None)]), False),
+        (verdict([fact("contradicted")]), False),
+        (verdict(errors=[{"answer_quote": "п. 23", "reason": "пункт 13"}]), False),
+        (verdict(asserted=["Утверждается, что одна смена."]), False),
+    ],
+)
+def test_verdict_computed_from_facts(payload, correct):
+    assert parse_verdict(json.dumps(payload), ANS)["correct"] is correct
+
+
+def test_quote_matches_ignoring_case_and_line_breaks():
+    payload = verdict([fact("present", "НЕ МЕНЕЕ\n2 смен")])
+    assert parse_verdict(json.dumps(payload), ANS)["correct"] is True
 
 
 @pytest.mark.parametrize(
-    "raw",
+    "payload",
     [
-        '{"correct": "yes", "reasoning": ""}',
-        '{"reasoning": "x"}',
-        "не json",
-        '{"correct": true, "forbidden_claims_asserted": "строка"}',
+        verdict([fact("present", "не менее 5 смен")]),  # invented quote
+        verdict([fact("present", None)]),  # present without evidence
+        verdict([fact("contradicted", None)]),
+        verdict([fact("absent", "не менее 2 смен")]),  # absent yet quoted
+        verdict([fact("unknown")]),
+        verdict([]),  # no facts from the reference
+        verdict(errors=[{"answer_quote": "нет такого", "reason": "x"}]),
+        verdict(errors=[{"answer_quote": None, "reason": "x"}]),
+        {"facts": "строка", "reasoning": "x"},
+        {**verdict(), "forbidden_claims_asserted": "строка"},
+        {**verdict(), "reasoning": 5},
     ],
 )
-def test_parse_rejects_garbage(raw):
+def test_parse_rejects_off_contract(payload):
     with pytest.raises(ValueError):
-        parse_verdict(raw)
+        parse_verdict(json.dumps(payload), ANS)
+
+
+# G022 (rejudge 15.10): the judge quotes a sentence without the answer's
+# "[Фрагмент N]" marker that sits before the final full stop.
+def test_quote_ignores_fragment_markers():
+    answer = (
+        "Проводит работодатель по договору [Фрагмент 9]. Далее [Фрагмент 2, 2464.md]."
+    )
+    payload = verdict([fact("present", "Проводит работодатель по договору.")])
+    assert parse_verdict(json.dumps(payload), answer)["correct"] is True
+
+
+def test_parse_rejects_garbage():
+    with pytest.raises(ValueError):
+        parse_verdict("не json", ANS)
+
+
+def test_comment_names_missing_facts():
+    payload = verdict([fact("present"), fact("absent", None, "после срока СОУТ")])
+    v = parse_verdict(json.dumps(payload), ANS)
+    assert "absent: после срока СОУТ" in v["comment"]
 
 
 class FakeLLM:
@@ -69,38 +132,32 @@ def _by_key(results):
 
 
 def test_correct_answer_scores():
-    llm = FakeLLM({"correct": True, "reasoning": "ок", "forbidden_claims_asserted": []})
+    llm = FakeLLM(verdict(reasoning="ок"))
     ev = make_correctness_evaluator(llm)
-    r = _by_key(ev({"question": "q"}, {"answer": "2 смены"}, REF))
+    r = _by_key(ev({"question": "q"}, {"answer": ANS}, REF))
     assert r["correctness"]["score"] == 1 and r["correctness"]["comment"] == "ок"
     assert r["forbidden_claim"]["score"] == 1
 
 
 def test_forbidden_claim_asserted():
-    llm = FakeLLM(
-        {
-            "correct": False,
-            "reasoning": "x",
-            "forbidden_claims_asserted": ["Утверждается, что одна смена."],
-        }
-    )
+    llm = FakeLLM(verdict(asserted=["Утверждается, что одна смена."]))
     r = _by_key(
-        make_correctness_evaluator(llm)({"question": "q"}, {"answer": "1"}, REF)
+        make_correctness_evaluator(llm)({"question": "q"}, {"answer": ANS}, REF)
     )
     assert r["correctness"]["score"] == 0 and r["forbidden_claim"]["score"] == 0
 
 
 def test_no_forbidden_claims_is_none():
-    llm = FakeLLM({"correct": True, "reasoning": "", "forbidden_claims_asserted": []})
+    llm = FakeLLM(verdict())
     ref = {**REF, "forbidden_claims": ""}
     r = _by_key(
-        make_correctness_evaluator(llm)({"question": "q"}, {"answer": "a"}, ref)
+        make_correctness_evaluator(llm)({"question": "q"}, {"answer": ANS}, ref)
     )
     assert r["forbidden_claim"]["score"] is None
 
 
 def test_oos_skips_llm():
-    llm = FakeLLM({"correct": True, "reasoning": "", "forbidden_claims_asserted": []})
+    llm = FakeLLM(verdict())
     ref = {**REF, "relevant_chunk_ids": [], "oos_type": "out_of_scope"}
     r = _by_key(
         make_correctness_evaluator(llm)({"question": "q"}, {"answer": "a"}, ref)
@@ -109,14 +166,14 @@ def test_oos_skips_llm():
 
 
 def test_target_error_skips_llm():
-    llm = FakeLLM({"correct": True, "reasoning": "", "forbidden_claims_asserted": []})
+    llm = FakeLLM(verdict())
     r = _by_key(make_correctness_evaluator(llm)({"question": "q"}, {}, REF))
     assert r["correctness"]["score"] is None and r["forbidden_claim"]["score"] is None
     assert r["correctness"]["comment"] == "target_error" and llm.calls == 0
 
 
 def test_empty_answer_is_wrong_without_llm():
-    llm = FakeLLM({"correct": True, "reasoning": "", "forbidden_claims_asserted": []})
+    llm = FakeLLM(verdict())
     r = _by_key(
         make_correctness_evaluator(llm)({"question": "q"}, {"answer": " "}, REF)
     )
@@ -137,10 +194,10 @@ def test_judge_format_error_scores_none():
 
 def test_reference_without_legal_as_of_still_judged():
     # Examples of older dataset versions (before 15.10) have no legal_as_of.
-    llm = FakeLLM({"correct": True, "reasoning": "ок", "forbidden_claims_asserted": []})
+    llm = FakeLLM(verdict())
     ref = {k: v for k, v in REF.items() if k != "legal_as_of"}
     r = _by_key(
-        make_correctness_evaluator(llm)({"question": "q"}, {"answer": "a"}, ref)
+        make_correctness_evaluator(llm)({"question": "q"}, {"answer": ANS}, ref)
     )
     assert r["correctness"]["score"] == 1
 

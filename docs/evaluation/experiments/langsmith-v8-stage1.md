@@ -128,6 +128,23 @@ document/provision goes to a separate `citations_complete`. Rescored from the st
 **11/12 = 92 %** (fp G001; G008 and G022 needs_review). Completeness fails on G002, G006, G008,
 G019 — the generator candidate above.
 
+Iteration 2 (15.10, `--rejudge`, both judges, paid). Correctness judge reworked: it lists the
+reference's key facts as present / absent / contradicted with a verbatim answer quote, the code
+checks the quotes and computes the verdict; correct extras are not errors. One code fix after the
+run, rescored offline from the stored replies: quotes are matched without "[Фрагмент N]" markers
+(G022 was a format error because of them).
+
+| judge | agreement | fp | fn |
+|---|---|---|---|
+| correctness | **12/14 = 86 %** | — | G001, G019 |
+| citations | **10/11 = 91 %** | G001 | — (G006, G020, G028 needs_review) |
+
+- G028 and G052 now pass. G001: the judge still files the civil-servant categories under
+  "errors" although they are correct and only beyond the reference. G019: the judge marks
+  "no periodicity for other objects" absent — true, the labels treated it as incompleteness.
+- Citations: the rerun gives a different verdict mix than iteration 1 (judge noise): G006,
+  G020, G028 needs_review (only omissions or unverifiable).
+
 Limits: tn = 0 — the only labelled citation error (G001) is the one the judge missed, so these
 numbers say nothing yet about catching errors. The rule was changed after seeing these cases,
 so the threshold has to be confirmed on a fresh labelled batch.
