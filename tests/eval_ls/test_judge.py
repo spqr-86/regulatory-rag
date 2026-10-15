@@ -175,9 +175,29 @@ def _citations(payload, outputs=None, ref=REF):
 
     llm = FakeLLM(payload)
     outputs = {"answer": ANSWER, "context": CONTEXT} if outputs is None else outputs
-    result = make_citations_evaluator(llm)({"question": "q"}, outputs, ref)
-    assert result["key"] == "citations"
-    return result, llm
+    results = make_citations_evaluator(llm)({"question": "q"}, outputs, ref)
+    assert [r["key"] for r in results] == ["citations", "citations_complete"]
+    return results[0], llm
+
+
+def test_citations_complete_is_a_separate_score():
+    from eval.ls.judge import make_citations_evaluator
+
+    missing = _check("missing_in_answer", answer_quote=None)
+    llm = FakeLLM({"checks": [_check("match"), missing]})
+    accuracy, complete = make_citations_evaluator(llm)(
+        {"question": "q"}, {"answer": ANSWER, "context": CONTEXT}, REF
+    )
+    assert accuracy["score"] == 1
+    assert complete["score"] == 0
+
+
+def test_citations_complete_is_none_when_judge_skipped():
+    from eval.ls.judge import make_citations_evaluator
+
+    llm = FakeLLM({"checks": []})
+    results = make_citations_evaluator(llm)({"question": "q"}, {}, REF)
+    assert [r["score"] for r in results] == [None, None]
 
 
 def test_citations_pass_and_fail():

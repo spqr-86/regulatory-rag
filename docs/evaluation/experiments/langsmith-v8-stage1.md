@@ -86,8 +86,10 @@ citations: `get_citation_judge_llm()`). Command:
 Correctness misses:
 
 - G001: the answer leaves out the members of the knowledge-check and labour-safety committees
-  and the trade-union representatives. Fair verdict.
-- G028: no subclasses 3.1 to 3.4 of harmful conditions. Fair verdict.
+  and the trade-union representatives. Fair verdict. *Corrected 15.10: wrong, the answer lists
+  both (its items 5 and 8); see "Judge alignment".*
+- G028: no subclasses 3.1 to 3.4 of harmful conditions. Fair verdict. *Corrected 15.10: the
+  answer names them in its reasoning; see "Judge alignment".*
 - G052: disputed. The answer quotes part 4 of art. 27 of 426-FZ from the fragment ("may not be
   carried out for five years from the end of the attestation"); the judge reads this as a
   contradiction of the reference. Only "after that SOUT is mandatory" is really missing. A case
@@ -101,6 +103,34 @@ prompt, not retrieval or the judge; it is the first candidate after the baseline
 Cost: generation $0.0354 ($0.0015 per example). Judge calls are not counted by the runner and
 LangSmith shows `total_cost = 0`, so the judge cost has to be taken from OpenRouter. Run time
 22 minutes at `max_concurrency=1`.
+
+## Judge alignment (task 5, 15.10)
+
+Human labels: 17 runs of `v8-judges-84daf785` (Petr confirmed each case; the assistant
+proposed a label first, so this is a check against both of them, not a blind label).
+
+Iteration 0, judges as run:
+
+| judge | agreement | fp (missed an error) | fn (rejected a correct answer) |
+|---|---|---|---|
+| correctness | 11/14 = 79 % | — | G001, G028, G052 |
+| citations | 8/13 = 62 % | G001 | G002, G006, G008, G019 |
+
+- Correctness: in G001 and G028 the judge says a fact is missing while the answer has it;
+  in G001 it also penalises correct categories beyond the reference (civil servants). G052:
+  "contradicts the reference" is wrong, only "after that SOUT is mandatory" is missing.
+- Citations: the four fn are one rule. The judge failed an answer that does not name the
+  provision; the labels judged accuracy only. G001 fp: the answer attributes programme "б"
+  to the employer, the fragment gives only "а"; the judge checks references, not the claim.
+
+Iteration 1, citations (code change, no new judge calls): status = accuracy, an unnamed
+document/provision goes to a separate `citations_complete`. Rescored from the stored verdicts:
+**11/12 = 92 %** (fp G001; G008 and G022 needs_review). Completeness fails on G002, G006, G008,
+G019 — the generator candidate above.
+
+Limits: tn = 0 — the only labelled citation error (G001) is the one the judge missed, so these
+numbers say nothing yet about catching errors. The rule was changed after seeing these cases,
+so the threshold has to be confirmed on a fresh labelled batch.
 
 ## Caveats
 

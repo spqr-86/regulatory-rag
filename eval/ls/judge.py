@@ -7,7 +7,8 @@ Provider errors are not caught: LangSmith logs them on the row.
 
 # ANCHOR: make_correctness_evaluator(llm) → evaluator returning
 # [{"key": "correctness"}, {"key": "forbidden_claim"}]; prompt eval/prompts/judge_correctness.md.
-# make_citations_evaluator(llm) → evaluator returning {"key": "citations"} over
+# make_citations_evaluator(llm) → evaluator returning
+# [{"key": "citations"}, {"key": "citations_complete"}] over
 # outputs["context"] (the generator's context, see eval/ls/target.py).
 # OOS, failed target and empty answer never reach the LLM.
 
@@ -19,7 +20,7 @@ from typing import Callable
 
 from pydantic import BaseModel
 
-from eval.judges.citations import JudgeFormatError, judge_citations
+from eval.judges.citations import JudgeFormatError, is_complete, judge_citations
 from eval.ls.evaluators import _result, _target_failed
 
 PROMPT_PATH = (
@@ -140,26 +141,34 @@ def make_correctness_evaluator(llm) -> Callable:
 def make_citations_evaluator(llm) -> Callable:
     """Evaluator: do the answer's normative references match the generator's context?
 
-    pass → 1, fail → 0, needs_review → None (a human looks; rules in eval/judges/README.md).
+    "citations" is accuracy: pass → 1, fail → 0, needs_review → None (a human looks;
+    rules in eval/judges/README.md). "citations_complete": 1 if the answer names every
+    document and provision the judge found for its claims, else 0.
     """
 
-    def citations(inputs: dict, outputs: dict, reference_outputs: dict) -> dict:
+    def skipped(comment: str) -> list[dict]:
+        return [
+            _result("citations", None, comment),
+            _result("citations_complete", None, comment),
+        ]
+
+    def citations(inputs: dict, outputs: dict, reference_outputs: dict) -> list[dict]:
         if _target_failed(outputs):
-            return _result("citations", None, "target_error")
+            return skipped("target_error")
         if reference_outputs.get("oos_type"):
-            return _result("citations", None, "oos")
+            return skipped("oos")
         answer = (outputs.get("answer") or "").strip()
         if not answer:
-            return _result("citations", None, "empty_answer")
+            return skipped("empty_answer")
         if "context" not in outputs:
             # Experiments run before 15.10 did not store the context.
-            return _result("citations", None, "no_context")
+            return skipped("no_context")
         try:
             verdict = judge_citations(
                 llm, inputs["question"], answer, outputs["context"]
             )
         except JudgeFormatError as exc:
-            return _result("citations", None, f"judge_format_error: {exc}")
+            return skipped(f"judge_format_error: {exc}")
 
         status = verdict["status"]
         problems = [
@@ -168,6 +177,18 @@ def make_citations_evaluator(llm) -> Callable:
             if c["comparison"] != "match"
         ]
         comment = "; ".join([status, *problems])
-        return _result("citations", _CITATION_SCORES.get(status), comment)
+        missing = [
+            f"{c['field']}: {c['reason']}"
+            for c in verdict["checks"]
+            if c["comparison"] == "missing_in_answer"
+        ]
+        return [
+            _result("citations", _CITATION_SCORES.get(status), comment),
+            _result(
+                "citations_complete",
+                int(is_complete(verdict)),
+                "; ".join(missing) or "complete",
+            ),
+        ]
 
     return citations

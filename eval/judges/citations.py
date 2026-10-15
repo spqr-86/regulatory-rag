@@ -17,7 +17,7 @@ Status = Literal["pass", "fail", "needs_review"]
 
 FIELDS = ("document", "section", "provision", "part")
 # Document and provision find the norm; a missing section or law part
-# stays in checks but does not change the status.
+# stays in checks but changes neither the status nor completeness.
 OPTIONAL_FIELDS = ("section", "part")
 COMPARISONS = ("match", "mismatch", "missing_in_answer", "unverifiable")
 CHECK_KEYS = ("field", "answer_quote", "context_quote", "comparison", "reason")
@@ -238,6 +238,7 @@ def validate_and_score(verdict: dict, response: str, context: str) -> Status:
         return "needs_review"
 
     result: Status = "pass"
+    matched = False
     for check in checks:
         answer_quote = check.get("answer_quote")
         context_quote = check.get("context_quote")
@@ -260,16 +261,32 @@ def validate_and_score(verdict: dict, response: str, context: str) -> Status:
                 if result != "fail" and not optional:
                     result = "needs_review"
                 continue
-            if optional:
-                # Section or law part not named in the answer: the norm is
-                # still found by document + provision (decision 12.10).
-                continue
+            # An unnamed reference is incompleteness, not an error: it goes to
+            # is_complete, the status stays about accuracy (decision 15.10).
+            continue
 
-        if comparison in ("missing_in_answer", "mismatch"):
+        if comparison == "mismatch":
             result = "fail"
         elif comparison == "unverifiable":
             if result != "fail":
                 result = "needs_review"
-        elif comparison != "match":
+        elif comparison == "match":
+            matched = True
+        else:
             raise JudgeFormatError(f"Unknown comparison value: {comparison!r}")
+    if result == "pass" and not matched:
+        # Only omissions: nothing in the answer was confirmed, a human looks.
+        return "needs_review"
     return result
+
+
+def is_complete(verdict: dict) -> bool:
+    """True unless the answer leaves out a document or provision the context names.
+
+    A separate measure from the status: a reference can be accurate yet incomplete.
+    """
+    return not any(
+        check.get("comparison") == "missing_in_answer"
+        and check.get("field") not in OPTIONAL_FIELDS
+        for check in verdict.get("checks") or []
+    )

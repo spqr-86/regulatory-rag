@@ -816,7 +816,8 @@ def test_empty_raises():
   фидбэк-ключ `human_correct` (bool) + комментарий. В очередь — 14 in-scope + 3 false_premise (G043, G044, G046) = 17 строк эксперимента
   `v7-low` с судьёй. Пётр размечает **до** того, как смотрит оценки судьи.
   **С 12.10 — общая разметка для обоих судей:** вторым ключом `human_citations` (bool: документ
-  и пункт/статья названы и верны). `align.py` запускается дважды: `--human-key human_correct
+  и пункт/статья названы и верны). **С 15.10:** `human_citations` = ссылки верны; не названный
+  пункт — не ошибка, а неполнота, её судья считает отдельно (`citations_complete`). `align.py` запускается дважды: `--human-key human_correct
   --judge-key correctness` и `--human-key human_citations --judge-key citations`; порог тот же.
   Как в курсе — сначала через UI (Align Evaluator → Annotate for alignment на эксперименте);
   `align.py` нужен, только если UI не даёт fp/fn или выгрузку.

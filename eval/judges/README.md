@@ -16,12 +16,16 @@
 текстах, и вычисляет статус (`validate_and_score` — только читает вердикт; отметку
 `contract_violation` ставит `judge_citations`):
 
-- `mismatch` и `missing_in_answer` по документу или пункту дают `fail`;
-- иначе `unverifiable` даёт `needs_review`; только `match` дают `pass`;
-- пустой массив даёт `needs_review`;
+- статус — это **точность** ссылок: `fail` даёт только `mismatch`;
+- иначе `unverifiable` даёт `needs_review`; `pass` — если есть хотя бы один
+  `match`, а остальное — `match` или `missing_in_answer`;
+- пустой массив или одни `missing_in_answer` дают `needs_review` (ничего не подтверждено);
+- `missing_in_answer` по документу или пункту — неполнота, а не ошибка (решение
+  15.10 по ручной разметке `v8-judges-84daf785`): статус не меняет, считается
+  отдельно в `is_complete` → фидбэк `citations_complete` (1/0);
 - `missing_in_answer` по `field=section` или `field=part` (часть статьи
-  закона) статус не меняет: документа и пункта/статьи достаточно, чтобы
-  найти норму. Запись остаётся в `checks`; неверная часть (`mismatch`) — `fail`;
+  закона) не меняет ни статус, ни полноту: документа и пункта/статьи достаточно,
+  чтобы найти норму. Запись остаётся в `checks`; неверная часть (`mismatch`) — `fail`;
 - `missing_in_answer` с непустым `answer_quote` — противоречие судьи
   («нет в ответе», но с цитатой из ответа). Запись получает
   `contract_violation`, статус — `needs_review` (уже вычисленный `fail`

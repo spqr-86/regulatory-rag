@@ -7,6 +7,7 @@ import pytest
 from eval.judges.citations import (
     JudgeFormatError,
     contract_violation,
+    is_complete,
     validate_and_score,
 )
 
@@ -37,7 +38,9 @@ def score(checks):
     [
         ([make_check("match", "Документ 1479", "Документ 1479")], "pass"),
         ([make_check("mismatch")], "fail"),
-        ([make_check("missing_in_answer", None)], "fail"),
+        # Decision 2026-10-15: an unnamed provision is incompleteness, not an
+        # error; with nothing matched there is nothing confirmed.
+        ([make_check("missing_in_answer", None)], "needs_review"),
         ([make_check("unverifiable", context_quote=None)], "needs_review"),
         ([make_check("unverifiable", None, None)], "needs_review"),
         ([], "needs_review"),
@@ -164,9 +167,42 @@ def test_wrong_part_fails():
     assert law_score([article, part]) == "fail"
 
 
-def test_missing_article_still_fails():
+# Decision 2026-10-15 (human labels on v8-judges-84daf785): the "citations"
+# status is accuracy only; an unnamed document or provision goes to is_complete.
+def test_missing_provision_does_not_fail_accuracy():
+    provision = make_check("missing_in_answer", None, "пункт 31")
+    assert score([make_check("match", "Документ 1479", "Документ 1479"), provision]) == (
+        "pass"
+    )
+
+
+def test_missing_article_alone_needs_review():
     article = make_check("missing_in_answer", None, "Статья 13")
-    assert law_score([article]) == "fail"
+    assert law_score([article]) == "needs_review"
+
+
+def test_missing_provision_does_not_hide_mismatch():
+    provision = make_check("missing_in_answer", None, "пункт 31")
+    assert score([provision, make_check("mismatch")]) == "fail"
+
+
+@pytest.mark.parametrize(
+    ("checks", "expected"),
+    [
+        ([make_check("match", "Документ 1479", "Документ 1479")], True),
+        ([make_check("missing_in_answer", None, "пункт 31")], False),
+        (
+            [make_check("missing_in_answer", None, "Документ 1479", field="document")],
+            False,
+        ),
+        # Section and law part stay optional for completeness too (decision 12.10).
+        ([make_check("missing_in_answer", None, "раздел I", field="section")], True),
+        ([make_check("mismatch")], True),
+        ([], True),
+    ],
+)
+def test_is_complete(checks, expected):
+    assert is_complete({"checks": checks}) is expected
 
 
 def test_contract_violation_does_not_hide_fail():
