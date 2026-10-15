@@ -775,7 +775,7 @@ def agreement(pairs: list[tuple[bool, bool]]) -> dict
 # CLI: python -m eval.ls.align <experiment> [--human-key human_correct] [--judge-key correctness]
 ```
 
-- [ ] **Шаг 1. Тест.** `tests/eval_ls/test_align.py`:
+- [x] **Шаг 1. Тест.** `tests/eval_ls/test_align.py`:
 
 ```python
 """Unit tests for eval/ls/align.py."""
@@ -800,7 +800,14 @@ def test_empty_raises():
         agreement([])
 ```
 
-- [ ] **Шаг 2.** Тест → FAIL. **Шаг 3 (Пётр):** реализация `agreement`; CLI собирает пары
+> **15.10 (решение Петра):** шаги 1–4 написал ассистент, чтобы закрыть задачу к 22.10.
+> `agreement()`, `split_rows()` и `fetch_rows()` остаются в плане как упражнение: Пётр
+> пишет их заново сам, когда будет время на drill. Очередь `regrag-correctness` создана
+> скриптом на `v8-judges-84daf785` (17 runs). Судья correctness не оценивает false_premise
+> (oos_type → None), поэтому пар для correctness — до 14, для citations — до 13 (G022
+> needs_review); 85 % от 14 = 12/14.
+
+- [x] **Шаг 2.** Тест → FAIL. **Шаг 3 (Пётр → ассистент, 15.10):** реализация `agreement`; CLI собирает пары
   через `client.list_runs(project_name=<experiment>, is_root=True)` +
   `client.list_feedback(run_ids=..., feedback_key=[...])`. Строки без человеческой метки
   пропускать и печатать их число. **Шаг 4:** PASS, коммит
