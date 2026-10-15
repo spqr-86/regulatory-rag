@@ -113,7 +113,10 @@ def test_summarize_rates_and_mrr():
     rows = [
         {"retrieval_hit": {"score": 1, "comment": "rank=1"}, "doc_cited": {"score": 1}},
         {"retrieval_hit": {"score": 1, "comment": "rank=4"}, "doc_cited": {"score": 0}},
-        {"retrieval_hit": {"score": 0, "comment": "miss"}, "doc_cited": {"score": None}},
+        {
+            "retrieval_hit": {"score": 0, "comment": "miss"},
+            "doc_cited": {"score": None},
+        },
         {"retrieval_hit": {"score": None, "comment": "oos"}},
     ]
     s = summarize(rows)
