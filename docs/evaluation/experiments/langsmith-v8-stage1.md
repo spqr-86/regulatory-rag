@@ -1,6 +1,6 @@
-# LangSmith v8, stage 1: v7 baseline without judge
+# LangSmith v8, stage 1: v7 baseline and first judge run
 
-Date: 2026-10-15. First experiments on the `regrag-golden` dataset, code evaluators only.
+Date: 2026-10-15. First experiments on the `regrag-golden` dataset, code evaluators (runs 1–2), then LLM judges (run 3).
 
 The same configuration was run twice. Run 2 is the baseline (it also reports cost); run 1 is
 kept to show run-to-run noise.
@@ -68,6 +68,40 @@ Cost comes from the token usage in the graph state, priced with `src/pricing.py`
 card as the v7 runner), because LangSmith shows `total_cost = 0` for `deepseek/deepseek-v4.1-flash`
 via OpenRouter. No unpriced models in run 2.
 
+## Run 3: with judges
+
+Experiment `v8-judges-84daf785`, git sha `1eb6807`, same settings as run 2 plus the two LLM
+judges from `eval/ls/judge.py` (correctness: `openai/gpt-4o`, temperature 0, seed 12345;
+citations: `get_citation_judge_llm()`). Command:
+`LANGSMITH_TRACING_V2=true python -m eval.ls.run --prefix v8-judges`. 24 examples, no errors.
+
+| Key | Score | n |
+|---|---|---|
+| `correctness` | 0.79 (11/14) | 14 |
+| `forbidden_claim` | 1.00 | 8 (examples with `forbidden_claims`) |
+| `citations` | 0.69 (9/13) | 13 (G022 `needs_review`, excluded) |
+| `retrieval_hit` / `doc_cited` / `oos_handled` | 1.00 / 1.00 / 1.00 | 14 / 14 / 10 |
+| MRR | 0.645 | 14 |
+
+Correctness misses:
+
+- G001: the answer leaves out the members of the knowledge-check and labour-safety committees
+  and the trade-union representatives. Fair verdict.
+- G028: no subclasses 3.1 to 3.4 of harmful conditions. Fair verdict.
+- G052: disputed. The answer quotes part 4 of art. 27 of 426-FZ from the fragment ("may not be
+  carried out for five years from the end of the attestation"); the judge reads this as a
+  contradiction of the reference. Only "after that SOUT is mandatory" is really missing. A case
+  for the judge alignment (task 5).
+- G020 failed in the smoke run (`v8-judges-smoke-b218e2af`) and passed here: generator noise.
+
+Citation misses: G002, G006, G008, G019. Same cause in all four: the answer cites
+"[Фрагмент N]" without the provision number that the fragment carries. This is the generator
+prompt, not retrieval or the judge; it is the first candidate after the baseline.
+
+Cost: generation $0.0354 ($0.0015 per example). Judge calls are not counted by the runner and
+LangSmith shows `total_cost = 0`, so the judge cost has to be taken from OpenRouter. Run time
+22 minutes at `max_concurrency=1`.
+
 ## Caveats
 
 - All 24 examples carry `corpus_support=unverified`, so there is no "supported by corpus"
@@ -75,5 +109,5 @@ via OpenRouter. No unpriced models in run 2.
 - `visual_enrichment` timed out (>3 s) on some passages. It does not change the scores here,
   but it adds latency noise.
 - 14 in-scope examples is a small sample: one example moves a rate by 7 points.
-- No judge yet: these runs say nothing about answer correctness or citation quality
-  (tasks 4 and 4a).
+- Runs 1 and 2 have no judge. Run 3 judges are not yet aligned with manual labels (task 5);
+  G052 shows at least one wrong correctness verdict.
