@@ -1,9 +1,13 @@
-"""Run a LangSmith experiment: v7 graph over the golden dataset, scored by code evaluators.
+"""Run a LangSmith experiment: v7 graph over the golden dataset, scored by code evaluators
+and the LLM judges (correctness, citations).
 
 CLI:
-    python -m eval.ls.run --split verified --prefix v7-low --skip-judge [--limit N]
+    python -m eval.ls.run --split verified --prefix v7-low [--skip-judge] [--limit N]
+    python -m eval.ls.run --rejudge <experiment>   # judges only, on stored answers
 
-Paid: every example goes through the real graph (LLM + embeddings).
+Paid: every example goes through the real graph (LLM + embeddings), and the judges
+call their models. --rejudge pays only for the judges. Experiments run before 15.10
+stored no context: their citations score None ("no_context").
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ import subprocess
 
 from eval.ls.dataset import DATASET_NAME, SPLIT_VERIFIED
 from eval.ls.evaluators import CODE_EVALUATORS, summarize, summarize_cost
+from eval.ls.judge import make_citations_evaluator, make_correctness_evaluator
 from eval.ls.target import make_target
 
 
@@ -30,11 +35,43 @@ def _git_sha() -> str:
     return out.stdout.strip()
 
 
+def judge_evaluators() -> list:
+    """Both LLM judges with their production models (paid on every call)."""
+    from src.infra.llm_factory import get_citation_judge_llm, get_judge_llm
+
+    return [
+        # Same settings as the golden judge in run_v7_eval.
+        make_correctness_evaluator(get_judge_llm(temperature=0.0, seed=12345)),
+        make_citations_evaluator(get_citation_judge_llm(temperature=0.0)),
+    ]
+
+
+def _print_scores(results) -> None:
+    rows = [
+        {
+            r.key: {"score": r.score, "comment": r.comment}
+            for r in row["evaluation_results"]["results"]
+        }
+        for row in results
+    ]
+    print(json.dumps(summarize(rows), ensure_ascii=False, indent=2))
+
+
+def rejudge(experiment: str) -> None:
+    """Run the judges on the answers of an existing experiment; no generation."""
+    from dotenv import load_dotenv
+    from langsmith import Client
+
+    load_dotenv()
+    results = Client().evaluate(
+        experiment, evaluators=judge_evaluators(), max_concurrency=1
+    )
+    _print_scores(results)
+    print(f"experiment: {experiment}")
+
+
 def run_experiment(split: str, prefix: str, skip_judge: bool, limit: int | None) -> str:
     """Run the experiment, print the summary and return the experiment name."""
-    if not skip_judge:
-        raise NotImplementedError("the correctness judge is not wired in yet")
-
     from dotenv import load_dotenv
     from langsmith import Client
 
@@ -45,10 +82,13 @@ def run_experiment(split: str, prefix: str, skip_judge: bool, limit: int | None)
     examples = list(
         client.list_examples(dataset_name=DATASET_NAME, splits=[split], limit=limit)
     )
+    evaluators = list(CODE_EVALUATORS)
+    if not skip_judge:
+        evaluators += judge_evaluators()
     results = client.evaluate(
         make_target(),
         data=examples,
-        evaluators=CODE_EVALUATORS,
+        evaluators=evaluators,
         experiment_prefix=prefix,
         max_concurrency=1,
         error_handling="log",
@@ -58,14 +98,7 @@ def run_experiment(split: str, prefix: str, skip_judge: bool, limit: int | None)
         },
     )
 
-    rows = [
-        {
-            r.key: {"score": r.score, "comment": r.comment}
-            for r in row["evaluation_results"]["results"]
-        }
-        for row in results
-    ]
-    print(json.dumps(summarize(rows), ensure_ascii=False, indent=2))
+    _print_scores(results)
     # A failed example has no outputs.
     outputs = [row["run"].outputs or {} for row in results]
     print(json.dumps({"cost": summarize_cost(outputs)}, ensure_ascii=False, indent=2))
@@ -82,14 +115,24 @@ def run_experiment(split: str, prefix: str, skip_judge: bool, limit: int | None)
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a LangSmith experiment on v7")
     parser.add_argument("--split", default=SPLIT_VERIFIED)
-    parser.add_argument("--prefix", required=True, help="experiment name prefix")
+    parser.add_argument("--prefix", help="experiment name prefix (required to run)")
     parser.add_argument("--skip-judge", action="store_true")
+    parser.add_argument(
+        "--rejudge",
+        metavar="EXPERIMENT",
+        help="run only the judges on an existing experiment's answers",
+    )
     parser.add_argument(
         "--limit",
         type=int,
         help="first N examples, for a smoke run; OOS come first, use 6+ to reach in-scope",
     )
     args = parser.parse_args()
+    if args.rejudge:
+        rejudge(args.rejudge)
+        return
+    if not args.prefix:
+        parser.error("--prefix is required unless --rejudge is given")
     run_experiment(args.split, args.prefix, args.skip_judge, args.limit)
 
 

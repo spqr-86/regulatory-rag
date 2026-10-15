@@ -8,6 +8,7 @@ from typing import Callable
 
 from eval.pricing import cost_for_usages
 from eval.run_retrieval_eval import extract_chunk_ids
+from src.v7.context_format import format_generation_context
 
 
 def state_to_outputs(state: dict) -> dict:
@@ -16,6 +17,8 @@ def state_to_outputs(state: dict) -> dict:
     A domain-gate refusal leaves only {"answer": ""}: no route, no passages, no LLM calls.
     LangSmith cannot price the model (OpenRouter), so cost is computed here from the
     token usage in the state, with the project's rate card.
+    `context` is the text the generator got (it reads final_context, like here):
+    the citation judge checks the answer's references against it.
     """
     passages = state.get("final_passages") or []
     priced = cost_for_usages(state.get("llm_usage") or [])
@@ -29,6 +32,9 @@ def state_to_outputs(state: dict) -> dict:
         "cost_usd": priced["cost_usd"],
         # A model without a rate card counts as $0; keep it visible.
         "unpriced_models": priced["unpriced_models"],
+        "context": format_generation_context(
+            (state.get("final_context") or []) if "final_context" in state else passages
+        ),
     }
 
 

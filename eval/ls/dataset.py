@@ -37,7 +37,7 @@ def build_examples(csv_path: Path, labels_path: Path) -> list[dict]:
         {"id": str (uuid5 of case_id, stable between runs),
          "inputs": {"question"},
          "outputs": {"ground_truth", "relevant_chunk_ids", "forbidden_claims",
-                     "must_not_contain", "oos_type"},
+                     "must_not_contain", "oos_type", "legal_as_of"},
          "metadata": {"case_id", "oos_type", "corpus_support", "csv_sha256"},
          "split": "verified"}
     In-scope row without labels → ValueError naming the case_id. OOS → no chunk ids.
@@ -89,6 +89,7 @@ def build_examples(csv_path: Path, labels_path: Path) -> list[dict]:
                     "forbidden_claims": row["forbidden_claims"],
                     "must_not_contain": row["must_not_contain"],
                     "oos_type": oos_type,
+                    "legal_as_of": row["legal_as_of"],
                 },
                 "metadata": {
                     "case_id": row["case_id"],

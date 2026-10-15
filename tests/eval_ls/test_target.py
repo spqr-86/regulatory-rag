@@ -44,6 +44,7 @@ def test_domain_gate_state_without_route():
         "sources": [],
         "cost_usd": 0.0,
         "unpriced_models": [],
+        "context": "",
     }
 
 
@@ -68,3 +69,20 @@ def test_unknown_model_is_reported_not_priced():
     o = state_to_outputs(state)
     assert o["cost_usd"] == 0.0
     assert o["unpriced_models"] == ["no/such-model"]
+
+
+def test_context_is_what_the_generator_saw():
+    # The generator reads final_context; the citation judge needs the same text.
+    from src.v7.context_format import format_generation_context
+
+    ctx = [_p("2464.pdf", 107)]
+    state = {"answer": "a", "final_context": ctx, "final_passages": [_p("x.pdf", 1)]}
+    assert state_to_outputs(state)["context"] == format_generation_context(ctx)
+
+
+def test_context_falls_back_to_final_passages():
+    from src.v7.context_format import format_generation_context
+
+    passages = [_p("2464.pdf", 107)]
+    state = {"answer": "a", "final_passages": passages}
+    assert state_to_outputs(state)["context"] == format_generation_context(passages)

@@ -82,6 +82,8 @@ def test_shape_and_split(files):
     assert e["outputs"]["relevant_chunk_ids"] == ["2464.pdf#107", "782н.pdf#431"]
     assert e["outputs"]["forbidden_claims"] == "Утверждается, что X."
     assert e["outputs"]["oos_type"] == ""
+    # The judge checks the answer against the law as of this date.
+    assert e["outputs"]["legal_as_of"] == "2026-09-30"
     assert e["split"] == "verified"
     assert set(e["metadata"]) == {"case_id", "oos_type", "corpus_support", "csv_sha256"}
 
