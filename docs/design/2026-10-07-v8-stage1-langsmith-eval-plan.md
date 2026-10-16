@@ -154,6 +154,7 @@ G020, G035, G043 на regrag вместо курсовых скриптов — 
 DATASET_NAME = "regrag-golden"
 SPLIT_VERIFIED = "verified"
 
+
 def build_examples(csv_path: Path, labels_path: Path) -> list[dict]:
     """Verified-строки CSV → примеры LangSmith.
 
@@ -169,7 +170,10 @@ def build_examples(csv_path: Path, labels_path: Path) -> list[dict]:
     OOS → relevant_chunk_ids = [].
     """
 
-def upsert_examples(client, examples: list[dict], dataset_name: str = DATASET_NAME) -> dict:
+
+def upsert_examples(
+    client, examples: list[dict], dataset_name: str = DATASET_NAME
+) -> dict:
     """Создать датасет при отсутствии; новые id — create_examples, изменённые — update_examples.
     Возвращает {"created": int, "updated": int, "unchanged": int}."""
 ```
@@ -192,18 +196,33 @@ from eval.ls.dataset import build_examples, upsert_examples
 pytestmark = pytest.mark.unit
 
 FIELDS = [
-    "case_id", "question", "ground_truth", "must_not_contain", "oos_type",
-    "reference_status", "reviewed_at", "review_note", "forbidden_claims",
-    "corpus_support", "legal_as_of",
+    "case_id",
+    "question",
+    "ground_truth",
+    "must_not_contain",
+    "oos_type",
+    "reference_status",
+    "reviewed_at",
+    "review_note",
+    "forbidden_claims",
+    "corpus_support",
+    "legal_as_of",
 ]
 
 
 def _row(case_id, question, *, status="verified", oos_type="", forbidden=""):
     return {
-        "case_id": case_id, "question": question, "ground_truth": f"gt {case_id}",
-        "must_not_contain": "", "oos_type": oos_type, "reference_status": status,
-        "reviewed_at": "2026-09-28", "review_note": "", "forbidden_claims": forbidden,
-        "corpus_support": "unverified", "legal_as_of": "2026-09-30",
+        "case_id": case_id,
+        "question": question,
+        "ground_truth": f"gt {case_id}",
+        "must_not_contain": "",
+        "oos_type": oos_type,
+        "reference_status": status,
+        "reviewed_at": "2026-09-28",
+        "review_note": "",
+        "forbidden_claims": forbidden,
+        "corpus_support": "unverified",
+        "legal_as_of": "2026-09-30",
     }
 
 
@@ -222,8 +241,11 @@ def files(tmp_path: Path):
         w.writeheader()
         w.writerows(rows)
     labels = [
-        {"question": "Вопрос один?", "chunk_id": "2464.pdf#107",
-         "relevant_chunk_ids": ["2464.pdf#107", "782н.pdf#431"]},
+        {
+            "question": "Вопрос один?",
+            "chunk_id": "2464.pdf#107",
+            "relevant_chunk_ids": ["2464.pdf#107", "782н.pdf#431"],
+        },
         {"question": "Вопрос два?", "chunk_id": "2464.pdf#20"},
     ]
     labels_path.write_text(
@@ -260,7 +282,9 @@ def test_oos_has_no_labels(files):
 
 
 def test_ids_stable_between_runs(files):
-    assert [e["id"] for e in build_examples(*files)] == [e["id"] for e in build_examples(*files)]
+    assert [e["id"] for e in build_examples(*files)] == [
+        e["id"] for e in build_examples(*files)
+    ]
 
 
 def test_csv_hash_changes_with_csv(files):
@@ -495,7 +519,10 @@ def test_summarize_rates_and_mrr():
     rows = [
         {"retrieval_hit": {"score": 1, "comment": "rank=1"}, "doc_cited": {"score": 1}},
         {"retrieval_hit": {"score": 1, "comment": "rank=4"}, "doc_cited": {"score": 0}},
-        {"retrieval_hit": {"score": 0, "comment": "miss"}, "doc_cited": {"score": None}},
+        {
+            "retrieval_hit": {"score": 0, "comment": "miss"},
+            "doc_cited": {"score": None},
+        },
         {"retrieval_hit": {"score": None, "comment": "oos"}},
     ]
     s = summarize(rows)
@@ -556,15 +583,23 @@ pytestmark = pytest.mark.unit
 
 
 def _p(source, cid):
-    return {"text": "t", "metadata": {"source": source, "chunk_id": cid}, "chunk_id": cid,
-            "doc_id": source}
+    return {
+        "text": "t",
+        "metadata": {"source": source, "chunk_id": cid},
+        "chunk_id": cid,
+        "doc_id": source,
+    }
 
 
 def test_maps_answer_route_and_ordered_chunk_ids():
     state = {
         "answer": "Ответ",
         "route_decision": "generate",
-        "final_passages": [_p("782н.pdf", 431), _p("2464.pdf", 107), _p("782н.pdf", 431)],
+        "final_passages": [
+            _p("782н.pdf", 431),
+            _p("2464.pdf", 107),
+            _p("782н.pdf", 431),
+        ],
     }
     o = state_to_outputs(state)
     assert o["answer"] == "Ответ"
@@ -654,7 +689,9 @@ FENCE = "`" * 3  # markdown-ограда; литералом сломала бы
 
 
 def test_parse_plain_json():
-    v = parse_verdict('{"correct": true, "reasoning": "ok", "forbidden_claims_asserted": []}')
+    v = parse_verdict(
+        '{"correct": true, "reasoning": "ok", "forbidden_claims_asserted": []}'
+    )
     assert v == {"correct": True, "reasoning": "ok", "forbidden_claims_asserted": []}
 
 
@@ -666,8 +703,12 @@ def test_parse_fenced_json():
 
 @pytest.mark.parametrize(
     "raw",
-    ['{"correct": "yes", "reasoning": ""}', '{"reasoning": "x"}', "не json",
-     '{"correct": true, "forbidden_claims_asserted": "строка"}'],
+    [
+        '{"correct": "yes", "reasoning": ""}',
+        '{"reasoning": "x"}',
+        "не json",
+        '{"correct": true, "forbidden_claims_asserted": "строка"}',
+    ],
 )
 def test_parse_rejects_garbage(raw):
     with pytest.raises(ValueError):
@@ -688,9 +729,13 @@ class FakeLLM:
         return AIMessage(content=json.dumps(self.payload, ensure_ascii=False))
 
 
-REF = {"ground_truth": "2 смены", "relevant_chunk_ids": ["2464.pdf#1"],
-       "must_not_contain": "", "forbidden_claims": "Утверждается, что одна смена.",
-       "oos_type": ""}
+REF = {
+    "ground_truth": "2 смены",
+    "relevant_chunk_ids": ["2464.pdf#1"],
+    "must_not_contain": "",
+    "forbidden_claims": "Утверждается, что одна смена.",
+    "oos_type": "",
+}
 
 
 def _by_key(results):
@@ -706,23 +751,34 @@ def test_correct_answer_scores():
 
 
 def test_forbidden_claim_asserted():
-    llm = FakeLLM({"correct": False, "reasoning": "x",
-                   "forbidden_claims_asserted": ["Утверждается, что одна смена."]})
-    r = _by_key(make_correctness_evaluator(llm)({"question": "q"}, {"answer": "1"}, REF))
+    llm = FakeLLM(
+        {
+            "correct": False,
+            "reasoning": "x",
+            "forbidden_claims_asserted": ["Утверждается, что одна смена."],
+        }
+    )
+    r = _by_key(
+        make_correctness_evaluator(llm)({"question": "q"}, {"answer": "1"}, REF)
+    )
     assert r["correctness"]["score"] == 0 and r["forbidden_claim"]["score"] == 0
 
 
 def test_no_forbidden_claims_is_none():
     llm = FakeLLM({"correct": True, "reasoning": "", "forbidden_claims_asserted": []})
     ref = {**REF, "forbidden_claims": ""}
-    r = _by_key(make_correctness_evaluator(llm)({"question": "q"}, {"answer": "a"}, ref))
+    r = _by_key(
+        make_correctness_evaluator(llm)({"question": "q"}, {"answer": "a"}, ref)
+    )
     assert r["forbidden_claim"]["score"] is None
 
 
 def test_oos_skips_llm():
     llm = FakeLLM({"correct": True, "reasoning": "", "forbidden_claims_asserted": []})
     ref = {**REF, "relevant_chunk_ids": [], "oos_type": "out_of_scope"}
-    r = _by_key(make_correctness_evaluator(llm)({"question": "q"}, {"answer": "a"}, ref))
+    r = _by_key(
+        make_correctness_evaluator(llm)({"question": "q"}, {"answer": "a"}, ref)
+    )
     assert r["correctness"]["score"] is None and llm.calls == 0
 ```
 
@@ -792,7 +848,14 @@ pytestmark = pytest.mark.unit
 def test_confusion_and_rate():
     pairs = [(True, True), (True, True), (False, False), (False, True), (True, False)]
     a = agreement(pairs)
-    assert a == {"n": 5, "agreement": pytest.approx(0.6), "tp": 2, "tn": 1, "fp": 1, "fn": 1}
+    assert a == {
+        "n": 5,
+        "agreement": pytest.approx(0.6),
+        "tp": 2,
+        "tn": 1,
+        "fp": 1,
+        "fn": 1,
+    }
 
 
 def test_empty_raises():
@@ -859,10 +922,15 @@ pytestmark = pytest.mark.unit
 FENCE = "`" * 3
 
 
-@pytest.mark.parametrize("raw, want", [
-    ('{"winner": "A"}', 0), ('{"winner": "b"}', 1), ('{"winner": "TIE"}', -1),
-    (FENCE + 'json\n{"winner": "A"}\n' + FENCE, 0),
-])
+@pytest.mark.parametrize(
+    "raw, want",
+    [
+        ('{"winner": "A"}', 0),
+        ('{"winner": "b"}', 1),
+        ('{"winner": "TIE"}', -1),
+        (FENCE + 'json\n{"winner": "A"}\n' + FENCE, 0),
+    ],
+)
 def test_parse(raw, want):
     assert parse_preference(raw) == want
 

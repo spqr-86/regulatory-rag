@@ -147,7 +147,10 @@ def main() -> None:
     a.out.write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
     print(
         json.dumps(
-            {k: result[k] for k in ("n", "measured", "n_escalated", "all", "escalated")},
+            {
+                k: result[k]
+                for k in ("n", "measured", "n_escalated", "all", "escalated")
+            },
             indent=1,
         )
     )

@@ -209,8 +209,18 @@ class TestPhase1MMRRelevance:
     def test_mmr_prefers_rerank_score_over_vector_score(self):
         """The cross-encoder score is the best available relevance signal."""
         passages = [
-            {"chunk_id": "v", "vector_score": 0.9, "rerank_score": 0.2, "doc_id": "a.pdf"},
-            {"chunk_id": "r", "vector_score": 0.3, "rerank_score": 0.95, "doc_id": "b.pdf"},
+            {
+                "chunk_id": "v",
+                "vector_score": 0.9,
+                "rerank_score": 0.2,
+                "doc_id": "a.pdf",
+            },
+            {
+                "chunk_id": "r",
+                "vector_score": 0.3,
+                "rerank_score": 0.95,
+                "doc_id": "b.pdf",
+            },
         ]
         result = mmr_select(passages, top_k=1, lambda_param=1.0)
         assert [p["chunk_id"] for p in result] == ["r"]
@@ -249,8 +259,12 @@ PLAN = {"mmr_lambda": 0.7}
 
 
 def _p(cid, rerank=None, vector=0.5, source="doc.pdf"):
-    p = {"chunk_id": cid, "doc_id": source, "vector_score": vector,
-         "metadata": {"source": source}}
+    p = {
+        "chunk_id": cid,
+        "doc_id": source,
+        "vector_score": vector,
+        "metadata": {"source": source},
+    }
     if rerank is not None:
         p["rerank_score"] = rerank
     return p
@@ -260,12 +274,20 @@ def _state(complex_passages, anchors=None, stages=("simple", "complex")):
     attempts = [{"stage": s, "passages": [], "attempt_plan": PLAN} for s in stages]
     if "complex" in stages:
         attempts[-1]["passages"] = complex_passages
-    state = {"query": "q", "active_query": "q", "plan": PLAN,
-             "retrieval_attempts": attempts}
+    state = {
+        "query": "q",
+        "active_query": "q",
+        "plan": PLAN,
+        "retrieval_attempts": attempts,
+    }
     if anchors is not None:
         state["fallback_snapshot"] = {
-            "passages": anchors, "plan": PLAN, "active_query": "q",
-            "origin": "fallback_snapshot", "packed": True, "pack_status": "ok",
+            "passages": anchors,
+            "plan": PLAN,
+            "active_query": "q",
+            "origin": "fallback_snapshot",
+            "packed": True,
+            "pack_status": "ok",
         }
     return state
 
@@ -350,9 +372,7 @@ Expected: FAIL как минимум `test_mmr_prefers_rerank_score_over_vector_
 В `src/v7/nlp_core.py`:
 
 ```python
-            relevance = (
-                p.get("rerank_score") or p.get("vector_score") or p.get("score", 0.0)
-            )
+relevance = p.get("rerank_score") or p.get("vector_score") or p.get("score", 0.0)
 ```
 
 - [ ] **Step 5: Правка `_candidates`**
