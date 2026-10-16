@@ -169,6 +169,43 @@ article 8, at rank 9 instead. The answer is still correct (the employer organise
 assessment). This is ranking noise at the edge of the list, not a regression of the
 snapshot. MRR moved by 0.03, within the ~0.05 run-to-run noise.
 
+## Runs 5–6: simple path, reasoning low vs off (task 6, 16.10)
+
+Commit `133d6b1`, split `verified`, with judges. `v8-simple-low-e2a95d6a`: the default effort
+(`low`) everywhere. `v8-simple-none-20bc3871`: `SIMPLE_REASONING_EFFORT=none`, so only
+`get_simple_llm` runs with `reasoning.enabled=false`; the complex path stays on `low`. The runs
+went one after the other, not in parallel, so latency is comparable. Pairwise:
+`eval.ls.pairwise` (randomised order, comparative experiment `40dda76d`).
+
+| Metric | low | off |
+|---|---|---|
+| `correctness` (judge) | 0.857 | 0.857 |
+| `citations_complete` | 0.43 (6/14) | 0.79 (11/14) |
+| `retrieval_hit` / `doc_cited` / `oos_handled` | 1.00 / 1.00 / 1.00 | 1.00 / 1.00 / 1.00 |
+| MRR | 0.667 | 0.650 |
+| Cost, total | $0.0324 | $0.0295 |
+
+Split by route (taken from per-run `reasoning_tokens`: on the off run, a simple route has 0):
+12 simple, 8 complex, 4 cut off by the domain gate before generation.
+
+| Simple path, 12 examples | low | off |
+|---|---|---|
+| Completion tokens | 9 924 (5 921 reasoning, 60 %) | 5 509 (−44 %) |
+| `elapsed_sec`, mean / median | 9.98 / 7.19 | 6.22 / 5.66 |
+
+Pairwise, 24 examples: off won 2 (`2b282ed3` simple, `6313b632` complex, where both runs use
+`low`, so that win is noise), low won 1 (`a64fb418` simple), 21 ties. On the simple path the
+score is 1:1 with 10 ties.
+
+The quality of the simple path does not drop with reasoning off: correctness is the same, and
+pairwise is even. Generation is about 1.6× faster on average, and half of the output tokens go
+away. The `citations_complete` gain (+5 examples) is larger than the noise seen before, but it
+comes from one run each, so it is a hypothesis, not a result. The complex path did not change,
+as expected: its tokens and time are the same in both runs.
+
+Before switching the default: check on golden 56, where the simple path takes ~80 % of the
+questions (decision 16.10).
+
 ## Caveats
 
 - All 24 examples carry `corpus_support=unverified`, so there is no "supported by corpus"
