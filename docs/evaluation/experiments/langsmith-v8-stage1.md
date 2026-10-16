@@ -149,6 +149,26 @@ Limits: tn = 0 — the only labelled citation error (G001) is the one the judge 
 numbers say nothing yet about catching errors. The rule was changed after seeing these cases,
 so the threshold has to be confirmed on a fresh labelled batch.
 
+## Run 4: snapshot `build-8cs1plb3` (16.10)
+
+Experiment `v7-low-0336acbd`, split `verified`, code evaluators only (`--skip-judge`), labels
+remapped to the new snapshot (`eval/runs/gt_remap_build-8cs1plb3_2026-10-16/`).
+
+| Metric | Run 3 (`build-tjid2k6g`) | Run 4 (`build-8cs1plb3`) |
+|---|---|---|
+| `retrieval_hit` | 1.00 (14/14) | 0.93 (13/14) |
+| `doc_cited` / `oos_handled` | 1.00 / 1.00 | 1.00 / 1.00 |
+| MRR | 0.645 | 0.614 |
+
+Cost $0.0334 ($0.0014 per example), 0 errors.
+
+The only changed example is G022 (who organises the special assessment of working conditions).
+Labelled chunks 426-ФЗ #50 and #60 have identical text in both snapshots (the rebuild changed
+only the Labour Code). Run 3 found #50 at rank 9; run 4 found #51, the next part of the same
+article 8, at rank 9 instead. The answer is still correct (the employer organises the
+assessment). This is ranking noise at the edge of the list, not a regression of the
+snapshot. MRR moved by 0.03, within the ~0.05 run-to-run noise.
+
 ## Caveats
 
 - All 24 examples carry `corpus_support=unverified`, so there is no "supported by corpus"
