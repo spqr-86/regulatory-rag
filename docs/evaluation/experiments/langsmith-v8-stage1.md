@@ -206,6 +206,43 @@ as expected: its tokens and time are the same in both runs.
 Before switching the default: check on golden 56, where the simple path takes ~80 % of the
 questions (decision 16.10).
 
+## Runs 7–8: golden 56, simple path reasoning low vs off (16.10)
+
+`eval/run_v7_eval.py`, commit `8d2e4ef`, snapshot `build-8cs1plb3`, judge `gpt-4o`, dataset
+sha `03f9dff58074`. Both arms ran one after the other on the same snapshot:
+`eval-20261016T124628Z-f7fe` (`SIMPLE_REASONING_EFFORT=low`) and
+`eval-20261016T123318Z-1761` (`none`). Artifacts `benchmarks/eval_v7_simple_{low,none}_2026-10-16.jsonl`
+(gitignored, kept locally). 51/56 valid in both: four out-of-scope questions cut by the domain
+gate, plus G005 (`complex_exhausted`, a known defect of the complex path).
+
+| Metric | low | off |
+|---|---:|---:|
+| Correctness, verified in-scope (n=14) | **9.43** | 8.86 |
+| False-sufficiency (simple, scored) | **0 %** | 11.1 % (1/9) |
+| Faithfulness, all / simple (n=38) | **0.975 / 0.982** | 0.922 / 0.921 |
+| Simple answers with faithfulness < 0.8 | 0 | 4 |
+| Answer relevance | **0.908** | 0.857 |
+| Latency p50 / p95, all | 10.4 / 25.5 s | **6.4 / 16.6 s** |
+| Latency p50 / p95, simple | 8.0 / 19.3 s | **5.8 / 9.0 s** |
+| Simple completion tokens | 61 868 | **21 393** |
+| Cost, run | $0.101 | **$0.074** |
+
+With off, 5 of 38 simple answers open with «Прямого ответа в фрагментах нет» and then list
+fragments (G022, G023, G024, G029, G033); with low, none do. Real losses: G022 «who organises
+SOUT» 9 → 3 (off quotes art. 4 of 426-FZ, the employer's duty, but draws no conclusion; the
+only false-sufficiency case) and G020 10 → 5 (drops the fact that item 18.2 sets no
+periodicity). The faithfulness drop sits on the same «no direct answer» replies and is
+mostly a judge artefact: the judge penalises missing procedure in the context, not
+ungrounded claims. G023 0.9 → 0.0 is a plain judge error (off answers in substance as low
+does, fully cited, yet is called «fabricated»). Off won G028 7 → 9 and G019 9 → 10. On the complex path, which both
+arms run on `low`, G037 and G038 swap low faithfulness between the runs: that is noise.
+
+On golden 56 reasoning off is worse in quality, unlike the 14 verified examples in runs
+5–6: without reasoning the model falls back to «no direct answer» where low draws the
+conclusion from the same fragments. The default stays `low`; off gives 1.4× faster simple
+answers and −27 % cost, which does not cover the correctness and false-sufficiency loss.
+One run per arm; the faithfulness judge needs a fix for «no direct answer» replies.
+
 ## Caveats
 
 - All 24 examples carry `corpus_support=unverified`, so there is no "supported by corpus"
