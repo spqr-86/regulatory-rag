@@ -15,7 +15,7 @@ import structlog
 from src.v7.config import v7_config
 from src.v7.contract import OBL_REFS, Candidate, PackResult, RejectedCandidate
 from src.v7.decide import accept, terminal_update
-from src.v7.nlp_core import merge_all_passages, passage_identity
+from src.v7.nlp_core import mmr_select, passage_identity
 from src.v7.nodes.visual_enrichment import enrich_passages
 from src.v7.pack_context import pack_context
 from src.v7.state_types import RAGState, RetrievalPlan
@@ -30,28 +30,43 @@ _ORIGIN_REASON = {
 }
 
 
+def _merged_passages(state: RAGState, plan: RetrievalPlan) -> List[dict]:
+    """Simple top-k anchors, then MMR over the last complex attempt.
+
+    Escalation is an additive search step: the simple top-k stays at the head
+    so a direct norm cannot be displaced. The complex pool is ranked by the
+    reranker (see mmr_select); simple scores are not comparable with it, so the
+    simple attempt is not pooled. With nothing new from complex the candidate is
+    empty: the anchors alone would only repeat the packed fallback snapshot.
+    """
+    snapshot = state.get("fallback_snapshot") or {}
+    anchors = list(snapshot.get("passages") or [])[: v7_config.SIMPLE_TOP_K]
+    seen = {passage_identity(p) for p in anchors}
+    complex_attempts = [
+        a for a in state.get("retrieval_attempts") or [] if a.get("stage") == "complex"
+    ]
+    last_complex = complex_attempts[-1].get("passages") if complex_attempts else None
+    pool: List[dict] = []
+    for p in last_complex or []:
+        pid = passage_identity(p)
+        if pid not in seen:
+            seen.add(pid)
+            pool.append(p)
+    if not pool:
+        return []
+    room = max(v7_config.FINAL_MERGE_TOP_K - len(anchors), 0)
+    return anchors + mmr_select(pool, room, plan.get("mmr_lambda"))
+
+
 def _candidates(state: RAGState) -> List[Candidate]:
     """Return merged, last-attempt, then immutable simple snapshot candidates."""
     attempts = state.get("retrieval_attempts") or []
     last = attempts[-1]
     plan = cast(RetrievalPlan, last.get("attempt_plan") or state.get("plan") or {})
     active_q = state.get("active_query", state.get("query", ""))
-
-    merged = merge_all_passages(
-        attempts,
-        top_k=v7_config.FINAL_MERGE_TOP_K,
-        mmr_lambda=plan.get("mmr_lambda"),
-    )
     snapshot = state.get("fallback_snapshot")
-    if snapshot:
-        # Escalation is an additive search step. Keep the original simple top-k
-        # at the head so a high-scoring direct norm cannot be displaced by a
-        # larger complex pool with scores from a different ranking stage.
-        anchors = list(snapshot.get("passages") or [])[: v7_config.SIMPLE_TOP_K]
-        anchor_ids = {passage_identity(p) for p in anchors}
-        novel = [p for p in merged if passage_identity(p) not in anchor_ids]
-        if novel:
-            merged = (anchors + novel)[: v7_config.FINAL_MERGE_TOP_K]
+
+    merged = _merged_passages(state, plan)
     out: List[Candidate] = [
         {
             "passages": merged,

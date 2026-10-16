@@ -1,0 +1,27 @@
+{
+  "same_bytes_two_names": {
+    "expected_sources": [
+      "a.pdf",
+      "b.pdf"
+    ],
+    "actual_sources": [
+      "a.pdf"
+    ],
+    "count": 1
+  },
+  "one_document_empty": {
+    "input_documents": 2,
+    "returned_sources": [
+      "good.pdf"
+    ],
+    "raised": false
+  },
+  "embedding_failure": {
+    "old_index_survives": false
+  },
+  "cleaning_examples": {
+    "приказ от 14/34": "приказ от",
+    "приказ № 14/34": "приказ №",
+    "код 12/2026": "код 12/2026"
+  }
+}

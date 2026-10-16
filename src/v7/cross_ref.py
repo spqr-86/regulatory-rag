@@ -30,6 +30,18 @@ _REF_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("subpara", re.compile(r'(?:подпункт\w*|пп\.?)\s+[«"]([а-яё])[»"]', re.IGNORECASE)),
 ]
 
+# A clause/article number followed within a few words by the name of another
+# act ("статьи 213 Трудового кодекса", "пунктом 3 Федерального закона") points
+# outside the current document. "настоящих Правил"/"настоящего Кодекса" keeps
+# the ref internal. The tail stops at sentence punctuation.
+_REF_TAIL_RE = re.compile(r"[^.;:()]{0,80}")
+_OTHER_ACT_RE = re.compile(
+    r"\b(?:(настоящ\w*)\s+)?"
+    r"(?:кодекс\w*|закон(?:а|у|ом|е|ы|ов|ам|ами)?|постановлени\w*|приказ\w*)\b",
+    re.IGNORECASE,
+)
+_REF_TAIL_WORDS = 6
+
 # Subparagraph of a numbered list, e.g. "46. а) ..."
 _SUBPARA_RE = re.compile(r"^\s*(\d+)\.\s+[а-яё]\)", re.IGNORECASE)
 
@@ -38,6 +50,14 @@ _CAP_MECH1_PER_PASSAGE = 5
 _CAP_MECH1_TOTAL = 15
 _CAP_MECH3_TOTAL = 10
 _CAP_MECH4_TOTAL = 10
+
+
+def _names_other_act(text: str, pos: int) -> bool:
+    """True if the words right after a ref number name a different act."""
+    tail = _REF_TAIL_RE.match(text, pos).group(0)
+    tail = " ".join(tail.split()[:_REF_TAIL_WORDS])
+    m = _OTHER_ACT_RE.search(tail)
+    return bool(m) and not m.group(1)
 
 
 def _extract_refs(text: str) -> list[tuple[str, str]]:
@@ -50,6 +70,8 @@ def _extract_refs(text: str) -> list[tuple[str, str]]:
     seen: set[tuple[str, str]] = set()
     for kind, pattern in _REF_PATTERNS:
         for m in pattern.finditer(text):
+            if kind != "subpara" and _names_other_act(text, m.end()):
+                continue
             ref = (kind, m.group(1))
             if ref not in seen:
                 seen.add(ref)

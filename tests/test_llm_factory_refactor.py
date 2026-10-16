@@ -283,3 +283,80 @@ def test_openrouter_embeddings_require_key(monkeypatch):
 
     with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
         lf.get_embedding_model()
+
+
+# --- Citation judge: own model and reasoning cap ------------------------------
+
+
+@pytest.mark.unit
+def test_citation_judge_defaults_to_deepseek_capped_at_24k():
+    from config.settings import Settings
+
+    assert (
+        Settings.model_fields["CITATION_JUDGE_MODEL_NAME"].default
+        == "deepseek/deepseek-v4.1-flash"
+    )
+    assert Settings.model_fields["CITATION_JUDGE_MAX_TOKENS"].default == 24000
+
+
+@pytest.mark.unit
+def test_citation_judge_caps_tokens_and_disables_retries(monkeypatch):
+    """Uncapped reasoning looped to 131k tokens (12.10); retries re-bill timeouts."""
+    import src.infra.llm_factory as lf
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
+    monkeypatch.setattr(lf.settings, "JUDGE_LLM_PROVIDER", "openrouter")
+    monkeypatch.setattr(lf.settings, "JUDGE_MODEL_NAME", "openai/gpt-4o")
+    monkeypatch.setattr(lf.settings, "CITATION_JUDGE_MODEL_NAME", "deepseek/x")
+    monkeypatch.setattr(lf.settings, "CITATION_JUDGE_MAX_TOKENS", 24000)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_MAX_TOKENS", None)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_REASONING_EFFORT", "low")
+
+    llm = lf.get_citation_judge_llm()
+
+    assert llm.model_name == "deepseek/x"
+    assert llm.max_tokens == 24000
+    assert llm.extra_body["max_tokens"] == 24000
+    assert llm.extra_body["reasoning"] == {"effort": "low"}
+    assert llm.root_client.max_retries == 0
+    assert llm.root_client.timeout == 300
+    assert llm.client is not None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "simple_effort,budget,want",
+    [
+        (None, 4096, {"effort": "low"}),
+        ("none", 4096, {"enabled": False}),
+        ("medium", 4096, {"effort": "medium"}),
+        ("medium", 0, {"enabled": False}),
+    ],
+)
+def test_simple_effort_override_is_isolated(monkeypatch, simple_effort, budget, want):
+    import src.infra.llm_factory as lf
+
+    spy = MagicMock()
+    monkeypatch.setattr(lf, "_OpenRouterChat", spy)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(lf.settings, "SIMPLE_LLM_PROVIDER", "openrouter")
+    monkeypatch.setattr(lf.settings, "COMPLEX_LLM_PROVIDER", "openrouter")
+    monkeypatch.setattr(lf.settings, "JUDGE_LLM_PROVIDER", "openrouter")
+    monkeypatch.setattr(lf.settings, "OPENROUTER_REASONING_EFFORT", "low")
+    monkeypatch.setattr(lf.settings, "SIMPLE_REASONING_EFFORT", simple_effort)
+    lf.get_simple_llm(thinking_budget=budget)
+    assert spy.call_args.kwargs["extra_body"]["reasoning"] == want
+    for getter in (lf.get_complex_llm, lf.get_judge_llm):
+        getter(thinking_budget=4096)
+        assert spy.call_args.kwargs["extra_body"]["reasoning"] == {"effort": "low"}
+
+
+@pytest.mark.unit
+def test_simple_effort_defaults_to_inheritance():
+    from config.settings import Settings
+
+    assert Settings.model_fields["SIMPLE_REASONING_EFFORT"].default is None
+    assert (
+        Settings.model_fields["SIMPLE_REASONING_EFFORT"].annotation
+        == Settings.model_fields["OPENROUTER_REASONING_EFFORT"].annotation
+    )

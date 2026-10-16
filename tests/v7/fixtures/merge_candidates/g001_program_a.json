@@ -1,0 +1,1385 @@
+{
+ "query": "Кто проходит обучение по программе А обучения требований охраны труда?",
+ "active_query": "Кто проходит обучение по программе А обучения требований охраны труда?\n\n[Глоссарий: программа а → программа обучения по общим вопросам охраны труда и функционирования системы управления охраной труда]",
+ "plan": {
+  "borderline_threshold": 0.3,
+  "max_single_doc_ratio": 0.7,
+  "min_keyword_overlap": 0.2,
+  "min_keyword_overlap_original": 0.1,
+  "min_passages": 8,
+  "min_verifier_confidence": 0.7,
+  "mmr_lambda": 0.7,
+  "require_multi_doc": false,
+  "rerank": true,
+  "threshold": 0.35,
+  "timeout_ms": 1200,
+  "top_k": 60
+ },
+ "filters": null,
+ "retrieval_attempts": [
+  {
+   "stage": "simple",
+   "attempt_plan": {
+    "borderline_threshold": 0.38,
+    "max_single_doc_ratio": 0.8,
+    "min_keyword_overlap": 0.15,
+    "min_keyword_overlap_original": 0.1,
+    "min_passages": 5,
+    "min_verifier_confidence": 0.7,
+    "mmr_lambda": 0.7,
+    "require_multi_doc": false,
+    "rerank": false,
+    "threshold": 0.5,
+    "timeout_ms": 250,
+    "top_k": 12
+   },
+   "retrieval_error": false,
+   "passages": [
+    {
+     "chunk_id": 89,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.56,
+     "rrf_score": 0.10891,
+     "score": 0.56,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 89,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 279,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5662,
+     "rrf_score": 0.07582,
+     "score": 0.5662,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 279,
+      "page_no": 28
+     }
+    },
+    {
+     "chunk_id": 107,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5786,
+     "rrf_score": 0.0618,
+     "score": 0.5786,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 107,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 120,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5582,
+     "rrf_score": 0.06011,
+     "score": 0.5582,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 120,
+      "page_no": 13
+     }
+    },
+    {
+     "chunk_id": 92,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5514,
+     "rrf_score": 0.05967,
+     "score": 0.5514,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 92,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 104,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5605,
+     "rrf_score": 0.04693,
+     "score": 0.5605,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 104,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 94,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5525,
+     "rrf_score": 0.0458,
+     "score": 0.5525,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 94,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 102,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5344,
+     "rrf_score": 0.04512,
+     "score": 0.5344,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 102,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 42,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5656,
+     "rrf_score": 0.04508,
+     "score": 0.5656,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 42,
+      "page_no": 6
+     }
+    },
+    {
+     "chunk_id": 138,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5748,
+     "rrf_score": 0.04486,
+     "score": 0.5748,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 138,
+      "page_no": 14
+     }
+    },
+    {
+     "chunk_id": 103,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5546,
+     "rrf_score": 0.04393,
+     "score": 0.5546,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 103,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 97,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5634,
+     "rrf_score": 0.03012,
+     "score": 0.5634,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 97,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 1428,
+     "doc_id": "тк рф.pdf",
+     "bm25_score": 18.7457,
+     "score": 0.7894,
+     "metadata": {
+      "source": "тк рф.pdf",
+      "chunk_id": 1428,
+      "page_no": 150
+     }
+    },
+    {
+     "chunk_id": 87,
+     "doc_id": "2464.pdf",
+     "bm25_score": 18.7745,
+     "score": 0.7897,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 87,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 299,
+     "doc_id": "2464.pdf",
+     "bm25_score": 25.3635,
+     "score": 0.8353,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 299,
+      "page_no": 31
+     }
+    },
+    {
+     "chunk_id": 298,
+     "doc_id": "2464.pdf",
+     "bm25_score": 25.236,
+     "score": 0.8346,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 298,
+      "page_no": 31
+     }
+    }
+   ]
+  },
+  {
+   "stage": "complex",
+   "attempt_plan": {
+    "borderline_threshold": 0.3,
+    "max_single_doc_ratio": 0.7,
+    "min_keyword_overlap": 0.2,
+    "min_keyword_overlap_original": 0.1,
+    "min_passages": 8,
+    "min_verifier_confidence": 0.7,
+    "mmr_lambda": 0.7,
+    "require_multi_doc": false,
+    "rerank": true,
+    "threshold": 0.35,
+    "timeout_ms": 1200,
+    "top_k": 60
+   },
+   "retrieval_error": false,
+   "passages": [
+    {
+     "chunk_id": 95,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5294,
+     "rerank_score": 0.9995,
+     "rrf_score": 0.02215,
+     "score": 0.9995,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 95,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 94,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5525,
+     "rerank_score": 0.9993,
+     "rrf_score": 0.02967,
+     "score": 0.9993,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 94,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 102,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5503,
+     "rerank_score": 0.9992,
+     "rrf_score": 0.02798,
+     "score": 0.9992,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 102,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 87,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5213,
+     "rerank_score": 0.9988,
+     "rrf_score": 0.01848,
+     "score": 0.9988,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 87,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 118,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.544,
+     "rerank_score": 0.9977,
+     "rrf_score": 0.0233,
+     "score": 0.9977,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 118,
+      "page_no": 12
+     }
+    },
+    {
+     "chunk_id": 109,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.892,
+     "rerank_score": 0.9976,
+     "bm25_score": 41.2911,
+     "rrf_score": 0.01064,
+     "score": 0.9976,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 109,
+      "page_no": 12
+     }
+    },
+    {
+     "chunk_id": 1428,
+     "doc_id": "тк рф.pdf",
+     "vector_score": 0.5305,
+     "rerank_score": 0.9975,
+     "rrf_score": 0.01064,
+     "score": 0.9975,
+     "metadata": {
+      "source": "тк рф.pdf",
+      "chunk_id": 1428,
+      "page_no": 150
+     }
+    },
+    {
+     "chunk_id": 114,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5298,
+     "rerank_score": 0.9975,
+     "rrf_score": 0.02134,
+     "score": 0.9975,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 114,
+      "page_no": 12
+     }
+    },
+    {
+     "chunk_id": 105,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5469,
+     "rerank_score": 0.9973,
+     "rrf_score": 0.02174,
+     "score": 0.9973,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 105,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 103,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5546,
+     "rerank_score": 0.9969,
+     "rrf_score": 0.02964,
+     "score": 0.9969,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 103,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 89,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.56,
+     "rerank_score": 0.9968,
+     "rrf_score": 0.03154,
+     "score": 0.9968,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 89,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 120,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5582,
+     "rerank_score": 0.9965,
+     "rrf_score": 0.02963,
+     "score": 0.9965,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 120,
+      "page_no": 13
+     }
+    },
+    {
+     "chunk_id": 106,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5331,
+     "rerank_score": 0.9942,
+     "rrf_score": 0.02313,
+     "score": 0.9942,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 106,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 140,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5305,
+     "rerank_score": 0.994,
+     "rrf_score": 0.02525,
+     "score": 0.994,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 140,
+      "page_no": 14
+     }
+    },
+    {
+     "chunk_id": 116,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5409,
+     "rerank_score": 0.9935,
+     "rrf_score": 0.02097,
+     "score": 0.9935,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 116,
+      "page_no": 12
+     }
+    },
+    {
+     "chunk_id": 108,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5259,
+     "rerank_score": 0.9931,
+     "rrf_score": 0.0226,
+     "score": 0.9931,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 108,
+      "page_no": 12
+     }
+    },
+    {
+     "chunk_id": 279,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5662,
+     "rerank_score": 0.9924,
+     "rrf_score": 0.03226,
+     "score": 0.9924,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 279,
+      "page_no": 28
+     }
+    },
+    {
+     "chunk_id": 117,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8851,
+     "rerank_score": 0.9903,
+     "bm25_score": 38.5005,
+     "rrf_score": 0.00909,
+     "score": 0.9903,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 117,
+      "page_no": 12
+     }
+    },
+    {
+     "chunk_id": 142,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5302,
+     "rerank_score": 0.9902,
+     "rrf_score": 0.02129,
+     "score": 0.9902,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 142,
+      "page_no": 15
+     }
+    },
+    {
+     "chunk_id": 101,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5472,
+     "rerank_score": 0.9895,
+     "rrf_score": 0.0276,
+     "score": 0.9895,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 101,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 288,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8918,
+     "rerank_score": 0.9893,
+     "bm25_score": 41.2061,
+     "rrf_score": 0.01053,
+     "score": 0.9893,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 288,
+      "page_no": 30
+     }
+    },
+    {
+     "chunk_id": 138,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5427,
+     "rerank_score": 0.9881,
+     "rrf_score": 0.02431,
+     "score": 0.9881,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 138,
+      "page_no": 14
+     }
+    },
+    {
+     "chunk_id": 104,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5605,
+     "rerank_score": 0.9877,
+     "rrf_score": 0.02729,
+     "score": 0.9877,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 104,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 281,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.9116,
+     "rerank_score": 0.9854,
+     "bm25_score": 51.5501,
+     "rrf_score": 0.01562,
+     "score": 0.9854,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 281,
+      "page_no": 28
+     }
+    },
+    {
+     "chunk_id": 7,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5299,
+     "rerank_score": 0.9848,
+     "rrf_score": 0.01031,
+     "score": 0.9848,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 7,
+      "page_no": 2
+     }
+    },
+    {
+     "chunk_id": 13,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5206,
+     "rerank_score": 0.984,
+     "rrf_score": 0.00862,
+     "score": 0.984,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 13,
+      "page_no": 3
+     }
+    },
+    {
+     "chunk_id": 201,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5181,
+     "rerank_score": 0.9828,
+     "rrf_score": 0.01695,
+     "score": 0.9828,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 201,
+      "page_no": 19
+     }
+    },
+    {
+     "chunk_id": 107,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5786,
+     "rerank_score": 0.9815,
+     "rrf_score": 0.03028,
+     "score": 0.9815,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 107,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 128,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8806,
+     "rerank_score": 0.9812,
+     "bm25_score": 36.8797,
+     "rrf_score": 0.00833,
+     "score": 0.9812,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 128,
+      "page_no": 13
+     }
+    },
+    {
+     "chunk_id": 280,
+     "doc_id": "2464.pdf",
+     "vector_score": 0,
+     "rerank_score": 0.98,
+     "score": 0.98,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 280,
+      "page_no": 28
+     }
+    },
+    {
+     "chunk_id": 250,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8895,
+     "rerank_score": 0.9782,
+     "bm25_score": 40.2391,
+     "rrf_score": 0.0101,
+     "score": 0.9782,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 250,
+      "page_no": 23
+     }
+    },
+    {
+     "chunk_id": 190,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8987,
+     "rerank_score": 0.9781,
+     "bm25_score": 44.3459,
+     "rrf_score": 0.0125,
+     "score": 0.9781,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 190,
+      "page_no": 19
+     }
+    },
+    {
+     "chunk_id": 112,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8993,
+     "rerank_score": 0.975,
+     "bm25_score": 44.6482,
+     "rrf_score": 0.01299,
+     "score": 0.975,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 112,
+      "page_no": 12
+     }
+    },
+    {
+     "chunk_id": 282,
+     "doc_id": "2464.pdf",
+     "vector_score": 0,
+     "rerank_score": 0.9746,
+     "score": 0.9746,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 282,
+      "page_no": 29
+     }
+    },
+    {
+     "chunk_id": 42,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5656,
+     "rerank_score": 0.9732,
+     "rrf_score": 0.0308,
+     "score": 0.9732,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 42,
+      "page_no": 6
+     }
+    },
+    {
+     "chunk_id": 183,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5303,
+     "rerank_score": 0.9732,
+     "rrf_score": 0.02272,
+     "score": 0.9732,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 183,
+      "page_no": 19
+     }
+    },
+    {
+     "chunk_id": 72,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5368,
+     "rerank_score": 0.9706,
+     "rrf_score": 0.01176,
+     "score": 0.9706,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 72,
+      "page_no": 8
+     }
+    },
+    {
+     "chunk_id": 88,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5457,
+     "rerank_score": 0.9698,
+     "rrf_score": 0.02391,
+     "score": 0.9698,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 88,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 96,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5509,
+     "rerank_score": 0.9684,
+     "rrf_score": 0.02282,
+     "score": 0.9684,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 96,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 97,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5634,
+     "rerank_score": 0.9642,
+     "rrf_score": 0.02828,
+     "score": 0.9642,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 97,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 92,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5514,
+     "rerank_score": 0.9639,
+     "rrf_score": 0.02996,
+     "score": 0.9639,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 92,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 71,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.526,
+     "rerank_score": 0.9629,
+     "rrf_score": 0.02287,
+     "score": 0.9629,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 71,
+      "page_no": 8
+     }
+    },
+    {
+     "chunk_id": 99,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5401,
+     "rerank_score": 0.9615,
+     "rrf_score": 0.02333,
+     "score": 0.9615,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 99,
+      "page_no": 11
+     }
+    },
+    {
+     "chunk_id": 137,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5247,
+     "rerank_score": 0.9591,
+     "rrf_score": 0.00901,
+     "score": 0.9591,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 137,
+      "page_no": 14
+     }
+    },
+    {
+     "chunk_id": 144,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5272,
+     "rerank_score": 0.9554,
+     "rrf_score": 0.02286,
+     "score": 0.9554,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 144,
+      "page_no": 15
+     }
+    },
+    {
+     "chunk_id": 127,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5377,
+     "rerank_score": 0.9524,
+     "rrf_score": 0.02368,
+     "score": 0.9524,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 127,
+      "page_no": 13
+     }
+    },
+    {
+     "chunk_id": 91,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5331,
+     "rerank_score": 0.9524,
+     "rrf_score": 0.02149,
+     "score": 0.9524,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 91,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 55,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8889,
+     "rerank_score": 0.9435,
+     "bm25_score": 40.0227,
+     "rrf_score": 0.0098,
+     "score": 0.9435,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 55,
+      "page_no": 7
+     }
+    },
+    {
+     "chunk_id": 182,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8992,
+     "rerank_score": 0.9417,
+     "bm25_score": 44.5855,
+     "rrf_score": 0.01282,
+     "score": 0.9417,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 182,
+      "page_no": 18
+     }
+    },
+    {
+     "chunk_id": 283,
+     "doc_id": "2464.pdf",
+     "vector_score": 0,
+     "rerank_score": 0.9414,
+     "score": 0.9414,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 283,
+      "page_no": 29
+     }
+    },
+    {
+     "chunk_id": 10,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5581,
+     "rerank_score": 0.9412,
+     "rrf_score": 0.01471,
+     "score": 0.9412,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 10,
+      "page_no": 2
+     }
+    },
+    {
+     "chunk_id": 93,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8872,
+     "rerank_score": 0.9409,
+     "bm25_score": 39.3288,
+     "rrf_score": 0.00952,
+     "score": 0.9409,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 93,
+      "page_no": 10
+     }
+    },
+    {
+     "chunk_id": 123,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.5295,
+     "rerank_score": 0.9305,
+     "rrf_score": 0.01852,
+     "score": 0.9305,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 123,
+      "page_no": 13
+     }
+    },
+    {
+     "chunk_id": 306,
+     "doc_id": "2464.pdf",
+     "vector_score": 0,
+     "rerank_score": 0.9304,
+     "score": 0.9304,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 306,
+      "page_no": 31
+     }
+    },
+    {
+     "chunk_id": 285,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8956,
+     "rerank_score": 0.9293,
+     "bm25_score": 42.9085,
+     "rrf_score": 0.01205,
+     "score": 0.9293,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 285,
+      "page_no": 29
+     }
+    },
+    {
+     "chunk_id": 287,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.8896,
+     "rerank_score": 0.9254,
+     "bm25_score": 40.278,
+     "rrf_score": 0.0102,
+     "score": 0.9254,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 287,
+      "page_no": 29
+     }
+    },
+    {
+     "chunk_id": 307,
+     "doc_id": "2464.pdf",
+     "vector_score": 0,
+     "rerank_score": 0.9246,
+     "score": 0.9246,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 307,
+      "page_no": 31
+     }
+    },
+    {
+     "chunk_id": 204,
+     "doc_id": "2464.pdf",
+     "vector_score": 0.521,
+     "rerank_score": 0.9076,
+     "rrf_score": 0.01787,
+     "score": 0.9076,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 204,
+      "page_no": 19
+     }
+    },
+    {
+     "chunk_id": 286,
+     "doc_id": "2464.pdf",
+     "vector_score": 0,
+     "rerank_score": 0.9015,
+     "score": 0.9015,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 286,
+      "page_no": 29
+     }
+    },
+    {
+     "chunk_id": 284,
+     "doc_id": "2464.pdf",
+     "vector_score": 0,
+     "rerank_score": 0.9009,
+     "score": 0.9009,
+     "metadata": {
+      "source": "2464.pdf",
+      "chunk_id": 284,
+      "page_no": 29
+     }
+    }
+   ]
+  }
+ ],
+ "fallback_snapshot": {
+  "active_query": "Кто проходит обучение по программе А обучения требований охраны труда?\n\n[Глоссарий: программа а → программа обучения по общим вопросам охраны труда и функционирования системы управления охраной труда]",
+  "origin": "fallback_snapshot",
+  "pack_status": "ok",
+  "packed": true,
+  "plan": {
+   "borderline_threshold": 0.38,
+   "max_single_doc_ratio": 0.8,
+   "min_keyword_overlap": 0.15,
+   "min_keyword_overlap_original": 0.1,
+   "min_passages": 5,
+   "min_verifier_confidence": 0.7,
+   "mmr_lambda": 0.7,
+   "require_multi_doc": false,
+   "rerank": false,
+   "threshold": 0.5,
+   "timeout_ms": 250,
+   "top_k": 12
+  },
+  "passages": [
+   {
+    "chunk_id": 89,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.56,
+    "rrf_score": 0.10891,
+    "score": 0.56,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 89,
+     "page_no": 10
+    }
+   },
+   {
+    "chunk_id": 279,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5662,
+    "rrf_score": 0.07582,
+    "score": 0.5662,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 279,
+     "page_no": 28
+    }
+   },
+   {
+    "chunk_id": 107,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5786,
+    "rrf_score": 0.0618,
+    "score": 0.5786,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 107,
+     "page_no": 11
+    }
+   },
+   {
+    "chunk_id": 120,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5582,
+    "rrf_score": 0.06011,
+    "score": 0.5582,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 120,
+     "page_no": 13
+    }
+   },
+   {
+    "chunk_id": 92,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5514,
+    "rrf_score": 0.05967,
+    "score": 0.5514,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 92,
+     "page_no": 10
+    }
+   },
+   {
+    "chunk_id": 104,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5605,
+    "rrf_score": 0.04693,
+    "score": 0.5605,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 104,
+     "page_no": 11
+    }
+   },
+   {
+    "chunk_id": 94,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5525,
+    "rrf_score": 0.0458,
+    "score": 0.5525,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 94,
+     "page_no": 10
+    }
+   },
+   {
+    "chunk_id": 102,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5344,
+    "rrf_score": 0.04512,
+    "score": 0.5344,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 102,
+     "page_no": 11
+    }
+   },
+   {
+    "chunk_id": 42,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5656,
+    "rrf_score": 0.04508,
+    "score": 0.5656,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 42,
+     "page_no": 6
+    }
+   },
+   {
+    "chunk_id": 138,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5748,
+    "rrf_score": 0.04486,
+    "score": 0.5748,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 138,
+     "page_no": 14
+    }
+   },
+   {
+    "chunk_id": 103,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5546,
+    "rrf_score": 0.04393,
+    "score": 0.5546,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 103,
+     "page_no": 11
+    }
+   },
+   {
+    "chunk_id": 97,
+    "doc_id": "2464.pdf",
+    "vector_score": 0.5634,
+    "rrf_score": 0.03012,
+    "score": 0.5634,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 97,
+     "page_no": 10
+    }
+   },
+   {
+    "chunk_id": 1428,
+    "doc_id": "тк рф.pdf",
+    "bm25_score": 18.7457,
+    "score": 0.7894,
+    "metadata": {
+     "source": "тк рф.pdf",
+     "chunk_id": 1428,
+     "page_no": 150
+    }
+   },
+   {
+    "chunk_id": 87,
+    "doc_id": "2464.pdf",
+    "bm25_score": 18.7745,
+    "score": 0.7897,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 87,
+     "page_no": 10
+    }
+   },
+   {
+    "chunk_id": 299,
+    "doc_id": "2464.pdf",
+    "bm25_score": 25.3635,
+    "score": 0.8353,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 299,
+     "page_no": 31
+    }
+   },
+   {
+    "chunk_id": 298,
+    "doc_id": "2464.pdf",
+    "bm25_score": 25.236,
+    "score": 0.8346,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 298,
+     "page_no": 31
+    }
+   },
+   {
+    "chunk_id": 93,
+    "doc_id": "2464.pdf",
+    "score": 0.5514,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 93,
+     "page_no": 10
+    }
+   },
+   {
+    "chunk_id": 41,
+    "doc_id": "2464.pdf",
+    "score": 0.5656,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 41,
+     "page_no": 6
+    }
+   },
+   {
+    "chunk_id": 136,
+    "doc_id": "2464.pdf",
+    "score": 0.5748,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 136,
+     "page_no": 14
+    }
+   },
+   {
+    "chunk_id": 137,
+    "doc_id": "2464.pdf",
+    "score": 0.5748,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 137,
+     "page_no": 14
+    }
+   },
+   {
+    "chunk_id": 1429,
+    "doc_id": "тк рф.pdf",
+    "score": 0.7894,
+    "metadata": {
+     "source": "тк рф.pdf",
+     "chunk_id": 1429,
+     "page_no": 150
+    }
+   },
+   {
+    "chunk_id": 289,
+    "doc_id": "2464.pdf",
+    "score": 0.8353,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 289,
+     "page_no": 31
+    }
+   },
+   {
+    "chunk_id": 290,
+    "doc_id": "2464.pdf",
+    "score": 0.8353,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 290,
+     "page_no": 31
+    }
+   },
+   {
+    "chunk_id": 291,
+    "doc_id": "2464.pdf",
+    "score": 0.8353,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 291,
+     "page_no": 31
+    }
+   },
+   {
+    "chunk_id": 292,
+    "doc_id": "2464.pdf",
+    "score": 0.8353,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 292,
+     "page_no": 31
+    }
+   },
+   {
+    "chunk_id": 293,
+    "doc_id": "2464.pdf",
+    "score": 0.8353,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 293,
+     "page_no": 31
+    }
+   },
+   {
+    "chunk_id": 289,
+    "doc_id": "2464.pdf",
+    "score": 0.8353,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 289,
+     "page_no": 31
+    }
+   },
+   {
+    "chunk_id": 290,
+    "doc_id": "2464.pdf",
+    "score": 0.8353,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 290,
+     "page_no": 31
+    }
+   },
+   {
+    "chunk_id": 291,
+    "doc_id": "2464.pdf",
+    "score": 0.8353,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 291,
+     "page_no": 31
+    }
+   },
+   {
+    "chunk_id": 292,
+    "doc_id": "2464.pdf",
+    "score": 0.8353,
+    "metadata": {
+     "source": "2464.pdf",
+     "chunk_id": 292,
+     "page_no": 31
+    }
+   }
+  ]
+ }
+}

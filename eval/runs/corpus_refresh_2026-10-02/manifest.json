@@ -1,0 +1,115 @@
+{
+  "retrieved_at": "2026-10-02",
+  "legal_as_of": "2026-10-02",
+  "active_index_changed": false,
+  "sources": [
+    {
+      "act": "2464",
+      "source_url": "https://drive.google.com/file/d/1ScFMUufZL6yKAp1819obXFwyHyrNJrUL/view",
+      "source_kind": "user_supplied_1otruda_export",
+      "files": [
+        {
+          "path": "2464.doc",
+          "bytes": 418854,
+          "sha256": "1e5cafea8e9cbc829c371f3cc2474055f5c8d37b5588b7035cc649bce93fbf5c"
+        },
+        {
+          "path": "2464.txt",
+          "bytes": 178724,
+          "sha256": "3f29f0d77ad9df0434cfd479f02c27a723000ef5748d12764831e85d8b69c370"
+        }
+      ],
+      "verification": "candidate; no index changes"
+    },
+    {
+      "act": "342n",
+      "source_url": "https://drive.google.com/file/d/1jX-i2D6mewlI_fitFTleAYIuy5BenH4J/view",
+      "source_kind": "user_supplied_1otruda_export",
+      "files": [
+        {
+          "path": "342n.doc",
+          "bytes": 106434,
+          "sha256": "014027b6f7e9de88dc8b2f8e6756cd4881b16210d957bbee6d43228c8fa5a0a5"
+        },
+        {
+          "path": "342n.txt",
+          "bytes": 37672,
+          "sha256": "d202f3e0c0569655279f041122c0d6cd704a971c2292bb443836415dccab2310"
+        }
+      ],
+      "verification": "candidate; no index changes"
+    },
+    {
+      "act": "125fz",
+      "source_url": "https://drive.google.com/file/d/1s5xvp6QD9ODsIttmz7KzSpjN425mBhCa/view",
+      "source_kind": "user_supplied_1otruda_export",
+      "files": [
+        {
+          "path": "125fz.doc",
+          "bytes": 1304307,
+          "sha256": "d44baaa735522181a57a554c30eb3c16abacea7827645e23019d75ba32e10403"
+        },
+        {
+          "path": "125fz.txt",
+          "bytes": 649110,
+          "sha256": "45412150e2f8b5e074cdb7fc6d078034961404c3ef263feb5aae010c32d6be2e"
+        }
+      ],
+      "verification": "candidate; no index changes"
+    },
+    {
+      "act": "696n",
+      "source_url": "https://drive.google.com/file/d/1rWsEjzxT9RK4X8rDR5-ApeB0SC8pWeoY/view",
+      "source_kind": "user_supplied_1otruda_export",
+      "files": [
+        {
+          "path": "696n.doc",
+          "bytes": 934954,
+          "sha256": "581aad4d2054bdcbcb79b7b9e8c443cf21819c64aea673b3192d82ea673c92e1"
+        },
+        {
+          "path": "696n.txt",
+          "bytes": 120754,
+          "sha256": "7e277a26afa424f5892c56a1d7d37a31eefce32930c058d2a36b2c7e2d2e8774"
+        }
+      ],
+      "verification": "candidate; no index changes"
+    },
+    {
+      "act": "1120",
+      "source_url": "https://50.mchs.gov.ru/uploads/resource/2025-04-29/teksty-normativnyh-pravovyh-aktov-reguliruyushchih-osushchestvlenie-gosudarstvennogo-kontrolya-nadzora-municipalnogo-kontrolya_1745934237258822162.pdf",
+      "source_kind": "mchs_hosted_consultant_copy",
+      "sha256": "ef75fdd59268c17fe601eaa34b2a8a88af03141e205c5e5249adc033c4ca1662",
+      "pages": 16,
+      "verification": "candidate; appendix 4 present"
+    },
+    {
+      "act": "805-mirror",
+      "source_url": "https://www.garant.ru/products/ipo/prime/doc/414360397/",
+      "sha256": "fa1a16cc83f709ecace90134e10aba6ef0383386c02e6943f0f343fa564c2347",
+      "source_kind": "secondary_host",
+      "verification": "candidate; official portal inaccessible"
+    },
+    {
+      "act": "392n-mirror",
+      "source_url": "https://www.consultant.ru/document/cons_doc_LAW_512050/",
+      "sha256": "3022b972e4d66cafd57ea5fd450217e8199cb8ac06f690b9d0d42f1731ad125a",
+      "source_kind": "secondary_host",
+      "verification": "candidate; official portal inaccessible"
+    },
+    {
+      "act": "327n-mirror",
+      "source_url": "https://www.kontur-extern.ru/info/normativ/document/1/506377-prikaz-minzdrava-rf-ot-29-04-2026-n-327n",
+      "sha256": "dc7b8e567e4a5e862e835b88b3b84120f110f4ec145a8341cd63c760ab597373",
+      "source_kind": "secondary_host",
+      "verification": "candidate; official portal inaccessible"
+    },
+    {
+      "act": "370fz",
+      "source_url": "https://www.consultant.ru/document/cons_doc_LAW_427330/",
+      "source_kind": "secondary_host",
+      "verification": "four articles obtained; article 3 repealed; official scan unavailable",
+      "sha256": "26fa69b05da18496ef559c05a1e16aced096295bf0c35eed6928414cd024731f"
+    }
+  ]
+}

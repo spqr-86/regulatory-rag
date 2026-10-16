@@ -145,7 +145,7 @@ class TestMakeGenerateFn:
 
     @pytest.mark.unit
     def test_includes_low_ranked_passages_in_prompt(self):
-        """final_passages is capped at 24 upstream (merge_all_passages). The
+        """final_passages is capped at 24 upstream (evaluate_complex merge). The
         generator must not re-truncate below that — the answer-bearing passage
         can rank low (#22 observed in eval) and must still reach the LLM.
         """

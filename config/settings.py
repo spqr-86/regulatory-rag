@@ -77,11 +77,20 @@ class Settings(BaseSettings):
     OPENROUTER_REASONING_EFFORT: (
         Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"] | None
     ) = "low"
+    # None inherits shared effort; "none" disables simple reasoning.
+    SIMPLE_REASONING_EFFORT: (
+        Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"] | None
+    ) = None
     OPENROUTER_MAX_TOKENS: int | None = Field(default=None, gt=0)
     OPENROUTER_PROVIDER_SORT: Literal["latency", "throughput", "price"] | None = None
     # Eval judge — independent from pipeline provider
     JUDGE_LLM_PROVIDER: str = "openai"
     JUDGE_MODEL_NAME: str = "gpt-4o"
+    # Citation judge (eval/judges/citations.py) — same provider, own model and cap.
+    # Reasoning counts toward the cap: uncapped, a call looped to 131k tokens
+    # (12.10); normal calls peaked at 13.6k.
+    CITATION_JUDGE_MODEL_NAME: str = "deepseek/deepseek-v4.1-flash"
+    CITATION_JUDGE_MAX_TOKENS: int = Field(default=24000, gt=0)
 
     # V7 node limits
     MAX_SEARCH_CALLS: int = 2

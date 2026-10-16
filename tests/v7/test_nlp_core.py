@@ -9,7 +9,6 @@ from src.v7.nlp_core import (
     compute_doc_diversity,
     compute_keyword_overlap,
     extract_keywords,
-    merge_all_passages,
     mmr_select,
     rrf_merge,
 )
@@ -299,72 +298,6 @@ class TestComputeDocDiversity:
         assert ratio == 1.0
 
 
-# ─── merge_all_passages ───────────────────────────────────────────────────
-
-
-class TestMergeAllPassages:
-    @pytest.mark.unit
-    def test_dedup_by_chunk_id(self):
-        attempts = [
-            {"passages": [{"chunk_id": "c1", "score": 0.9, "doc_id": "d1"}]},
-            {"passages": [{"chunk_id": "c1", "score": 0.9, "doc_id": "d1"}]},
-        ]
-        result = merge_all_passages(attempts, top_k=5, mmr_lambda=0.7)
-        assert len(result) == 1
-
-    @pytest.mark.unit
-    def test_merges_across_attempts(self):
-        attempts = [
-            {"passages": [{"chunk_id": "c1", "score": 0.9, "doc_id": "d1"}]},
-            {"passages": [{"chunk_id": "c2", "score": 0.8, "doc_id": "d2"}]},
-        ]
-        result = merge_all_passages(attempts, top_k=5, mmr_lambda=0.7)
-        assert len(result) == 2
-
-    @pytest.mark.unit
-    def test_empty_attempts(self):
-        assert merge_all_passages([], top_k=5) == []
-
-    @pytest.mark.unit
-    def test_dedup_by_content_hash_when_chunk_id_absent(self):
-        """Without chunk_id, identical chunks must still dedup via content hash."""
-        p = {
-            "text": "одинаковый текст фрагмента",
-            "score": 0.9,
-            "doc_id": "d1",
-            "metadata": {"source": "a.pdf", "page_no": 1},
-        }
-        attempts = [{"passages": [dict(p)]}, {"passages": [dict(p)]}]
-        result = merge_all_passages(attempts, top_k=5, mmr_lambda=0.7)
-        assert len(result) == 1
-
-    @pytest.mark.unit
-    def test_distinct_chunks_without_chunk_id_not_collapsed(self):
-        """Different chunks without chunk_id must NOT collapse to one."""
-        attempts = [
-            {
-                "passages": [
-                    {
-                        "text": "первый фрагмент",
-                        "score": 0.9,
-                        "metadata": {"source": "a.pdf", "page_no": 1},
-                    }
-                ]
-            },
-            {
-                "passages": [
-                    {
-                        "text": "второй фрагмент",
-                        "score": 0.8,
-                        "metadata": {"source": "a.pdf", "page_no": 2},
-                    }
-                ]
-            },
-        ]
-        result = merge_all_passages(attempts, top_k=5, mmr_lambda=0.7)
-        assert len(result) == 2
-
-
 # ─── rrf_merge fallback identity ──────────────────────────────────────────
 
 
@@ -440,14 +373,50 @@ class TestPhase1BM25Normalization:
         assert results[0]["doc_id"] == "2464.pdf"
 
 
-class TestPhase1MMRPrefersVectorScore:
+class TestPhase1MMRRelevance:
     @pytest.mark.unit
-    def test_mmr_prefers_vector_score(self):
-        """Chunk with vector_score=0.9 must rank above chunk with only bm25_score=12.
+    def test_mmr_prefers_rerank_score_over_vector_score(self):
+        """The cross-encoder score is the best available relevance signal."""
+        passages = [
+            {
+                "chunk_id": "v",
+                "vector_score": 0.9,
+                "rerank_score": 0.2,
+                "doc_id": "a.pdf",
+            },
+            {
+                "chunk_id": "r",
+                "vector_score": 0.3,
+                "rerank_score": 0.95,
+                "doc_id": "b.pdf",
+            },
+        ]
+        result = mmr_select(passages, top_k=1, lambda_param=1.0)
+        assert [p["chunk_id"] for p in result] == ["r"]
 
-        mmr_select reads vector_score first; BM25-only chunks fall back to
-        normalised score (~0.7 for bm25=12), so the vector chunk should win.
-        """
+    @pytest.mark.unit
+    def test_zero_rerank_score_is_a_score_not_missing(self):
+        """A rounded-to-zero rerank score must not fall back to vector_score."""
+        passages = [
+            {
+                "chunk_id": "zero",
+                "vector_score": 0.8,
+                "rerank_score": 0.0,
+                "doc_id": "a.pdf",
+            },
+            {
+                "chunk_id": "low",
+                "vector_score": 0.3,
+                "rerank_score": 0.2,
+                "doc_id": "b.pdf",
+            },
+        ]
+        result = mmr_select(passages, top_k=1, lambda_param=1.0)
+        assert [p["chunk_id"] for p in result] == ["low"]
+
+    @pytest.mark.unit
+    def test_vector_score_beats_bm25_only_without_rerank(self):
+        """Without rerank_score a vector chunk still beats a BM25-only chunk."""
         passages = [
             {
                 "text": "чанк из векторного поиска",
@@ -465,8 +434,7 @@ class TestPhase1MMRPrefersVectorScore:
             },
         ]
         result = mmr_select(passages, top_k=1, lambda_param=1.0)
-        assert len(result) == 1
-        assert result[0]["chunk_id"] == "v1"
+        assert [p["chunk_id"] for p in result] == ["v1"]
 
 
 class TestPhase1DocDiversityTwoSources:

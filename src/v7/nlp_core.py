@@ -313,7 +313,7 @@ def rrf_merge(
     return result
 
 
-# ─── MMR select (fallback only) ──────────────────────────────────────────
+# ─── MMR select ───────────────────────────────────────────────────────────
 
 
 def mmr_select(
@@ -321,13 +321,11 @@ def mmr_select(
     top_k: int,
     lambda_param: float | None = None,
 ) -> List[dict]:
-    """Maximal Marginal Relevance — FALLBACK ONLY.
+    """Maximal Marginal Relevance over already retrieved passages.
 
-    In production the primary MMR is done natively by Chroma/Qdrant.
-    This mmr_select is used ONLY in merge_all_passages(),
-    where VectorDB access is unavailable (passages already extracted).
-
-    Diversity penalty based on doc_id.
+    Used by evaluate_complex to fill the merged candidate from the complex
+    pool. Relevance is rerank_score, then vector_score, then score; the
+    diversity penalty is based on doc_id.
     """
     if lambda_param is None:
         lambda_param = v7_config.MMR_LAMBDA
@@ -344,9 +342,10 @@ def mmr_select(
         best_mmr = -1.0
 
         for i, p in enumerate(remaining):
-            relevance = (
-                p.get("vector_score") or p.get("rerank_score") or p.get("score", 0.0)
-            )
+            # A rerank score rounded to 0.0 is a score, not a missing value.
+            relevance = p.get("rerank_score")
+            if relevance is None:
+                relevance = p.get("vector_score") or p.get("score", 0.0)
             doc_id = p.get("doc_id", "unknown")
             doc_count = selected_doc_ids.get(doc_id, 0)
             diversity_penalty = doc_count / max(len(selected), 1)
@@ -366,37 +365,3 @@ def mmr_select(
         selected_doc_ids[chosen.get("doc_id", "unknown")] += 1
 
     return selected
-
-
-# ─── merge_all_passages ───────────────────────────────────────────────────
-
-
-def merge_all_passages(
-    attempts: List[dict],
-    top_k: int = 12,
-    mmr_lambda: float | None = None,
-) -> List[dict]:
-    """Merge unique passages from ALL retrieval attempts.
-
-    1. Collect all passages from all attempts.
-    2. Dedup by chunk_id.
-    3. MMR-select top_k for diversity.
-    """
-    if mmr_lambda is None:
-        mmr_lambda = v7_config.MMR_LAMBDA
-
-    seen_chunks: set[str] = set()
-    all_passages: List[dict] = []
-
-    for attempt in attempts:
-        for p in attempt.get("passages", []):
-            cid = passage_identity(p)
-            if cid in seen_chunks:
-                continue
-            seen_chunks.add(cid)
-            all_passages.append(p)
-
-    if not all_passages:
-        return []
-
-    return mmr_select(all_passages, top_k, mmr_lambda)

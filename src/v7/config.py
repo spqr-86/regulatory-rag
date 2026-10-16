@@ -52,7 +52,7 @@ class V7Config(BaseSettings):
     COMPLEX_TOP_K: int = 60  # plan.top_k for slow path
     # Потолок итоговой выдачи complex-ветки: столько чанков видит генератор,
     # и выше этого k Hit Rate для complex_final не определён (issue #10).
-    FINAL_MERGE_TOP_K: int = 24  # merge_all_passages(top_k=...)
+    FINAL_MERGE_TOP_K: int = 24  # merged candidate size (evaluate_complex)
     RERANK_CANDIDATE_CAP: int = 100  # hard limit on CrossEncoder input; prevents O(n) blowup on large section fetches
     COMPLEX_TIMEOUT_MS: int = 1200
 

@@ -29,6 +29,7 @@ FlashRank
 # Document processing
 docling
 PyMuPDF
+tiktoken  # table row budget (src/indexing/table_rows.py)
 
 # Web / UI
 streamlit

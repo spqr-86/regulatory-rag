@@ -30,6 +30,7 @@ from src.infra.parsers import (
 from src.infra.prompt_manager import PromptManager
 from src.v7 import pack_context as pack_context_mod
 from src.v7.config import v7_config
+from src.v7.context_format import format_generation_context
 from src.v7.cross_ref import expand_cross_references
 from src.v7.nlp_core import BM25Index, init_bm25_index
 from src.v7.nodes import generate_answer as generate_answer_mod
@@ -415,42 +416,6 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
             raise ValueError("Empty generation response")
         return answer, usage_from_response(response, model, "generate")
 
-    def _score_label(score: float) -> str:
-        if score >= 0.6:
-            return "HIGH"
-        if score >= 0.4:
-            return "MED"
-        return "LOW"
-
-    def _short_source(passage: dict) -> str:
-        """Extract short document name from metadata.source."""
-        raw = passage.get("metadata", {}).get("source", "")
-        # "Трудовой кодекс РФ - Система Охрана труда. Премиальная версия.pdf"
-        # → "Трудовой кодекс РФ"
-        name = raw.split(" - ")[0].replace(".pdf", "").strip()
-        return name or "Unknown source"
-
-    def _section_label(passage: dict) -> str:
-        """Extract short section label (parent_section / heading_path) for the chunk.
-
-        Helps the LLM and reranker distinguish similar wording across different
-        normative sections (e.g. Ст.228 vs Ст.228.1).
-        """
-        meta = passage.get("metadata", {}) or {}
-        raw = (meta.get("parent_section") or meta.get("heading_path") or "").strip()
-        if not raw:
-            return ""
-        # Truncate very long section titles
-        return raw[:120] + ("…" if len(raw) > 120 else "")
-
-    def _chunk_header(i: int, passage: dict) -> str:
-        score = _score_label(passage.get("score", 0.0))
-        src = _short_source(passage)
-        section = _section_label(passage)
-        if section:
-            return f"[{i + 1}] ({score}) [Источник: {src}; Раздел: {section}]"
-        return f"[{i + 1}] ({score}) [Источник: {src}]"
-
     def _generate(query: str, active_query: str, passages: List[dict]) -> tuple:
         if not passages:
             # Nothing to answer from: no call, no context (issue #22).
@@ -459,10 +424,7 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
         # and budgeted it before the verdict (spec 2026-09-09, §1). It must
         # remain unchanged here so the generator sees what was validated.
         top_passages = passages
-        passages_text = "\n\n".join(
-            f"{_chunk_header(i, p)}\n{p.get('text', '')}"
-            for i, p in enumerate(top_passages)
-        )
+        passages_text = format_generation_context(top_passages)
         prompt = _pm.render(
             "generate_answer",
             query=query,
