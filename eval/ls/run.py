@@ -46,6 +46,26 @@ def judge_evaluators() -> list:
     ]
 
 
+def with_current_references(evaluators: list, current: dict[str, dict]) -> list:
+    """Evaluators scored against the current references, keyed by question.
+
+    LangSmith pins an existing experiment to the dataset version it ran on, so a
+    rejudge after editing references silently used the old ones (16.10).
+    """
+
+    def wrap(evaluator):
+        def evaluator_with_current_reference(inputs, outputs, reference_outputs):
+            reference = current[inputs["question"].strip()]
+            return evaluator(inputs, outputs, reference)
+
+        evaluator_with_current_reference.__name__ = getattr(
+            evaluator, "__name__", "evaluator"
+        )
+        return evaluator_with_current_reference
+
+    return [wrap(e) for e in evaluators]
+
+
 def _print_scores(results) -> None:
     rows = [
         {
@@ -63,8 +83,15 @@ def rejudge(experiment: str) -> None:
     from langsmith import Client
 
     load_dotenv()
-    results = Client().evaluate(
-        experiment, evaluators=judge_evaluators(), max_concurrency=1
+    client = Client()
+    current = {
+        e.inputs["question"].strip(): e.outputs
+        for e in client.list_examples(dataset_name=DATASET_NAME)
+    }
+    results = client.evaluate(
+        experiment,
+        evaluators=with_current_references(judge_evaluators(), current),
+        max_concurrency=1,
     )
     _print_scores(results)
     print(f"experiment: {experiment}")
