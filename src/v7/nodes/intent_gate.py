@@ -18,9 +18,9 @@ from src.v7.state_types import NextAfterIntent, RAGState
 # ANCHOR: deterministic product-scope rejection precedes embeddings/retrieval.
 # Narrow command/topic patterns avoid rejecting ordinary worker-rights questions.
 _SCOPE_RE = re.compile(
-    r"^\s*(?:расскажи|придумай|напиши)\s+(?:\w+\s+){0,3}(?:анекдот|шутк|стих)"
+    r"^\s*(?:расскажи|придумай|напиши)\s+(?:\w+\s+){0,3}(?:анекдот\w*|шутк[уиа]\b|шуточ\w*|стих(?:и|ов|отворени\w*)?\b)"
     r"|^\s*игнорируй\s+(?:свои\s+|все\s+)?инструкци"
-    r"|(?:раздел[а-я]*\s+наследств|наследств[а-я]*\s+между\s+родственник)"
+    r"|(?:раздел[а-я]*\s+наследств\w*\s+(?:имуществ|между)|наследств[а-я]*\s+между\s+родственник)"
     r"|^\s*(?:ignore\s+(?:all\s+|your\s+)?instructions)",
     re.IGNORECASE,
 )

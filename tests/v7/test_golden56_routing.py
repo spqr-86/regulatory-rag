@@ -125,3 +125,20 @@ def test_worker_rights_question_with_quoted_unsafe_instruction_stays_in_domain()
         }
     )
     assert result["intent"] == "domain"
+
+
+def test_scope_regex_keeps_legitimate_safety_questions():
+    from src.v7.nodes.intent_gate import _SCOPE_RE
+
+    for q in (
+        "Расскажи про стихийные бедствия и эвакуацию",
+        "Напиши инструкцию по шуткам на производстве",
+        "Расскажи о разделе наследственных обязанностей",
+    ):
+        assert not _SCOPE_RE.search(q), q
+    for q in (
+        "Расскажи анекдот",
+        "Напиши стихи про осень",
+        "Как разделить наследство между родственниками",
+    ):
+        assert _SCOPE_RE.search(q), q
