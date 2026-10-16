@@ -109,4 +109,18 @@ def generate_answer(state: RAGState, *, dependencies=None) -> RAGState:
         fn = _stub_generate
     answer, usages = unpack(fn(query, active_query, passages))
 
-    return {"answer": answer, LLM_USAGE_KEY: stamp_stage(usages, stage)}
+    failed = next((u for u in usages if u.get("generation_failed")), None)
+    return {
+        "answer": answer,
+        LLM_USAGE_KEY: stamp_stage(usages, stage),
+        "generation_failed": failed is not None,
+        "generation_error": (
+            {
+                key: failed.get(key)
+                for key in ("error_type", "finish_reason", "usage_unknown")
+            }
+            if failed
+            else {}
+        ),
+        **({"technical_failure": True} if failed else {}),
+    }

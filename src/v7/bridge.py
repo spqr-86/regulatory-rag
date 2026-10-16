@@ -360,7 +360,7 @@ def model_name_of(llm) -> str:
 
 
 def _zero_usage(model: str, node: str) -> LLMUsage:
-    """Usage record for a call that never reached the provider (or failed)."""
+    """Zero counters for a skipped call; failures must separately mark unknown usage."""
     return {
         "model": model,
         "node": node,
@@ -402,70 +402,79 @@ def make_generate_fn(llm, backend=None) -> Callable[..., tuple]:
     the answer plus the token usage of the call (roadmap 4a).
     Relies on ChatGoogleGenerativeAI's built-in retry (max_retries=3 in
     ``get_gemini_llm``) for transient 5xx / 429 errors. On final failure
-    falls back to a stub (concatenated top passages).
+    returns a safe diagnostic with an explicit generation_failed flag.
     ``backend`` is no longer used for cross-reference expansion: that belongs to
     ``pack_context``. The parameter remains for backward-compatible call sites.
     """
 
     model = model_name_of(llm)
 
-    def _call_llm(prompt: str) -> tuple[str, LLMUsage]:
-        response = llm.invoke([HumanMessage(content=prompt)])
-        answer = extract_text(response.content).strip()
-        if not answer:
-            raise ValueError("Empty generation response")
-        return answer, usage_from_response(response, model, "generate")
-
     def _generate(query: str, active_query: str, passages: List[dict]) -> tuple:
-        if not passages:
-            # Nothing to answer from: no call, no context (issue #22).
-            return "", {**_zero_usage(model, "generate"), "n_passages": 0}
-        # Context arrives packed: pack_context expanded, sanitised, truncated,
-        # and budgeted it before the verdict (spec 2026-09-09, §1). It must
-        # remain unchanged here so the generator sees what was validated.
-        top_passages = passages
-        passages_text = format_generation_context(top_passages)
-        prompt = _pm.render(
-            "generate_answer",
-            query=query,
-            context=passages_text,
-            passages_count=len(top_passages),
-        )
-        prompt_tokens_approx = len(prompt) // 4
-        if prompt_tokens_approx > v7_config.PROMPT_TOKEN_BUDGET:
-            raise ValueError(
-                f"prompt budget exceeded: ~{prompt_tokens_approx} tokens > "
-                f"{v7_config.PROMPT_TOKEN_BUDGET} (passages={len(top_passages)})"
-            )
-        logger.info(
-            "generate.timing.context",
-            passages_in=len(passages),
-            passages_out=len(top_passages),
-            prompt_tokens_approx=prompt_tokens_approx,
-        )
-        t1 = time.perf_counter()
+        usage = {**_zero_usage(model, "generate"), "n_passages": 0}
+        attempted = False
+        response = None
         try:
-            result, usage = _call_llm(prompt)
-            # Issue #22: only this fn knows how big the prompt context got —
-            # cross-reference expansion above adds passages the graph state
-            # never sees.
-            usage["n_passages"] = len(top_passages)
+            if not passages:
+                raise ValueError("Empty generation context")
+            prompt = _pm.render(
+                "generate_answer",
+                query=query,
+                context=format_generation_context(passages),
+                passages_count=len(passages),
+            )
+            if len(prompt) // 4 > v7_config.PROMPT_TOKEN_BUDGET:
+                raise ValueError("prompt budget exceeded")
+            attempted = True
+            usage["n_passages"] = len(passages)
+            started = time.perf_counter()
+            response = llm.invoke([HumanMessage(content=prompt)])
+            # Providers may charge for reasoning even when visible content is empty.
+            usage = {
+                **usage_from_response(response, model, "generate"),
+                "n_passages": len(passages),
+            }
+            usage["finish_reason"] = (
+                getattr(response, "response_metadata", None) or {}
+            ).get("finish_reason")
+            answer = extract_text(response.content).strip()
+            if not answer:
+                raise ValueError("Empty generation response")
+            usage["usage_unknown"] = not bool(
+                getattr(response, "usage_metadata", None)
+                or (getattr(response, "response_metadata", None) or {}).get(
+                    "token_usage"
+                )
+            )
             logger.info(
                 "generate.timing.llm",
-                llm_s=round(time.perf_counter() - t1, 3),
+                llm_s=round(time.perf_counter() - started, 3),
                 completion_tokens=usage["completion_tokens"],
                 reasoning_tokens=usage["reasoning_tokens"],
                 provider=usage["provider"],
-                answer_chars=len(result),
+                answer_chars=len(answer),
             )
-            return result, usage
+            return answer, usage
         except Exception as exc:
-            logger.warning(
-                "LLM generate failed after retries: %s, falling back to stub", exc
+            logger.warning("generate.failed", error_type=type(exc).__name__)
+            usage.update(
+                generation_failed=True,
+                error_type=type(exc).__name__,
+                usage_unknown=attempted
+                and not (
+                    response is not None
+                    and (
+                        getattr(response, "usage_metadata", None)
+                        or (getattr(response, "response_metadata", None) or {}).get(
+                            "token_usage"
+                        )
+                    )
+                ),
             )
-            fallback = "\n\n".join(p.get("text", "") for p in passages[:10])
-            # The call never reached the model: no context went anywhere.
-            return fallback, {**_zero_usage(model, "generate"), "n_passages": 0}
+            return (
+                "Не удалось сформировать ответ из-за технического сбоя. "
+                "Пожалуйста, повторите запрос позже.",
+                usage,
+            )
 
     return _generate
 

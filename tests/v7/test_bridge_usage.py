@@ -61,7 +61,7 @@ class TestGenerateFnUsage:
         assert usage["completion_tokens"] == 0
 
     def test_fallback_path_still_returns_usage_shape(self):
-        """LLM failure falls back to a stub answer — the caller must not need to
+        """LLM failure returns a safe diagnostic — the caller must not need to
         special-case the return shape."""
         llm = MagicMock(spec=["invoke", "model_name"])
         llm.model_name = "gpt-4o-mini"

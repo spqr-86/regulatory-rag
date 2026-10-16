@@ -12,6 +12,9 @@ Contract for injected LLM functions: they may return either the bare value
 both, so nothing breaks when an fn is not usage-aware.
 """
 
+# ANCHOR: normalize and carry per-call usage through the graph to pricing.
+# Unknown provider accounting is explicit alongside additive integer counters.
+
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Tuple, TypedDict
@@ -41,6 +44,11 @@ class LLMUsage(TypedDict, total=False):
     # it, and only it can: cross-reference expansion happens inside the fn,
     # after the graph state was written (issue #22).
     n_passages: int
+    generation_failed: bool
+    error_type: str
+    finish_reason: str | None
+    # Zero counters with this flag mean unknown cost, never a free failed call.
+    usage_unknown: bool
 
 
 def _as_int(value: Any) -> int:

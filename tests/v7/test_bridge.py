@@ -114,11 +114,12 @@ class TestMakeGenerateFn:
         mock_llm.invoke.assert_called_once()
 
     @pytest.mark.unit
-    def test_returns_empty_for_no_passages(self):
+    def test_returns_diagnostic_for_no_passages(self):
         mock_llm = MagicMock()
         fn = make_generate_fn(mock_llm)
         result = fn(query="вопрос", active_query="вопрос", passages=[])
-        assert result[0] == ""
+        assert result[1]["generation_failed"]
+        assert result[1]["usage_unknown"] is False
         mock_llm.invoke.assert_not_called()
 
     @pytest.mark.unit
@@ -128,7 +129,9 @@ class TestMakeGenerateFn:
         fn = make_generate_fn(mock_llm)
         passages = [{"text": "текст фрагмента", "score": 0.7}]
         result = fn(query="вопрос", active_query="вопрос", passages=passages)
-        assert "текст фрагмента" in result
+        assert "текст фрагмента" not in result[0]
+        assert result[1]["generation_failed"]
+        assert result[1]["usage_unknown"] is True
 
     @pytest.mark.unit
     def test_handles_gemini_style_content(self):
@@ -211,7 +214,7 @@ def test_generate_uses_passages_verbatim(monkeypatch):
     )
 
 
-def test_generate_raises_when_prompt_exceeds_budget(monkeypatch):
+def test_generate_reports_failure_when_prompt_exceeds_budget(monkeypatch):
     """Спек §1: превышение бюджета на сборке промпта — ошибка, не тихая обрезка."""
     from src.v7 import bridge
 
@@ -219,8 +222,10 @@ def test_generate_raises_when_prompt_exceeds_budget(monkeypatch):
     seen = {}
     fn = bridge.make_generate_fn(_fake_llm(seen), backend=None)
     huge = [{"text": "я" * 4000, "score": 0.5, "metadata": {"source": "d.pdf"}}]
-    with pytest.raises(ValueError, match="prompt budget"):
-        fn("q", "q", huge)
+    answer, usage = fn("q", "q", huge)
+    assert usage["generation_failed"]
+    assert usage["usage_unknown"] is False
+    assert "я" * 100 not in answer
     assert "prompt" not in seen  # до модели не дошло
 
 
