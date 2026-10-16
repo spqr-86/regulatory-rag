@@ -92,7 +92,7 @@ class V7Config(BaseSettings):
     V8_EXPAND_N: int = 3  # number of query reformulations to generate
 
     # ── Domain Gate ───────────────────────────────────────────────────────
-    DOMAIN_GATE_THRESHOLD: float = 0.0  # cosine similarity floor; 0.0 = disabled
+    DOMAIN_GATE_THRESHOLD: float = 0.25  # cosine similarity floor; 0.0 = disabled
 
     # ── Monitoring (module 05) ────────────────────────────────────────────
     # Off → the runner calls the graph and writes nothing at all (issue #17).

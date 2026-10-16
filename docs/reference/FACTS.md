@@ -36,7 +36,7 @@ Defined in `src/v7/config.py` (env prefix `V7_`). Values below are the **runtime
 | RERANK_CANDIDATE_CAP | 100 | `V7_RERANK_CANDIDATE_CAP` | hard limit on CrossEncoder input; dominant latency/quality knob |
 | RRF_K | 60 | `V7_RRF_K` | RRF constant — measured dead on {1…200}, kept at 60 |
 | MMR_LAMBDA | 0.7 | `V7_MMR_LAMBDA` | |
-| DOMAIN_GATE_THRESHOLD | 0.25 | `V7_DOMAIN_GATE_THRESHOLD` | **`.env` override**; config default 0.0 (disabled) |
+| DOMAIN_GATE_THRESHOLD | 0.25 | `V7_DOMAIN_GATE_THRESHOLD` | config default (enabled 16.10.2026; 0.0 disables) |
 
 ### V8 flags (env prefix `V7_`, field name keeps `V8_`)
 
