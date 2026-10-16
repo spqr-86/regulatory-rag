@@ -14,7 +14,7 @@
   OSS/OpenAI alternative: `openai` / `gpt-4o-mini`
 - complex: `openrouter` / `deepseek/deepseek-v4.1-flash`  (`COMPLEX_LLM_PROVIDER`, `COMPLEX_MODEL_NAME`)
   — same model as simple since 18.09.2026; OSS/OpenAI alternative: `openai` / `gpt-4o`
-- judge (eval only): `gpt-4o`  (`JUDGE_MODEL_NAME`)
+- judge (eval only): `deepseek/deepseek-v4-pro` since 16.10.2026, was `gpt-4o`  (`JUDGE_MODEL_NAME`)
 - reranker: `crossencoder`  (`RERANKER_BACKEND`; alt: `flashrank`)
 - embeddings: `openai` / `text-embedding-3-small`
 

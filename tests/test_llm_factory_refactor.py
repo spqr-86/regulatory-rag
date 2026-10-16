@@ -360,3 +360,18 @@ def test_simple_effort_defaults_to_inheritance():
         Settings.model_fields["SIMPLE_REASONING_EFFORT"].annotation
         == Settings.model_fields["OPENROUTER_REASONING_EFFORT"].annotation
     )
+
+
+@pytest.mark.unit
+def test_main_judge_is_token_capped_by_default(monkeypatch):
+    """Reasoning judge looped uncapped (12.10); the cap must cover the main judge too."""
+    import src.infra.llm_factory as lf
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
+    monkeypatch.setattr(lf.settings, "JUDGE_LLM_PROVIDER", "openrouter")
+    monkeypatch.setattr(lf.settings, "JUDGE_MODEL_NAME", "deepseek/deepseek-v4-pro")
+    monkeypatch.setattr(lf.settings, "JUDGE_MAX_TOKENS", 16000)
+    monkeypatch.setattr(lf.settings, "OPENROUTER_MAX_TOKENS", None)
+
+    assert lf.get_judge_llm().max_tokens == 16000
+    assert lf.get_judge_llm(max_tokens=500).max_tokens == 500

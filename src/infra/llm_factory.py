@@ -340,6 +340,7 @@ def get_judge_llm(**kwargs):
     kwargs.setdefault("model_name", model)
     if provider == "gemini":
         return get_gemini_llm(**kwargs)
+    kwargs.setdefault("max_tokens", settings.JUDGE_MAX_TOKENS)
     factory = _LLM_PROVIDERS.get(provider)
     if not factory:
         available = ", ".join(sorted(_LLM_PROVIDERS.keys()))
