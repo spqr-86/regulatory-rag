@@ -85,7 +85,14 @@ def test_shape_and_split(files):
     # The judge checks the answer against the law as of this date.
     assert e["outputs"]["legal_as_of"] == "2026-09-30"
     assert e["split"] == "verified"
-    assert set(e["metadata"]) == {"case_id", "oos_type", "corpus_support", "csv_sha256"}
+    assert set(e["metadata"]) == {
+        "case_id",
+        "oos_type",
+        "corpus_support",
+        "csv_sha256",
+        "split",
+    }
+    assert e["metadata"]["split"] == "verified"
 
 
 def test_join_strips_whitespace_and_falls_back_to_chunk_id(files):
@@ -244,3 +251,55 @@ def test_prune_keeps_foreign_examples(files):
         "deleted": 0,
     }
     assert "foreign-1" in client.store
+
+
+def test_other_status_goes_to_its_own_split(files):
+    """Unconfirmed references (e.g. a judge-alignment batch) never land in verified."""
+    csv_path, labels_path = files
+    labels = labels_path.read_text(encoding="utf-8")
+    labels_path.write_text(
+        labels + "\n" + json.dumps({"question": "Не проверен?", "chunk_id": "x#1"}),
+        encoding="utf-8",
+    )
+    ex = build_examples(
+        csv_path, labels_path, status="needs_clarification", split="align2"
+    )
+    assert [e["metadata"]["case_id"] for e in ex] == ["G003"]
+    assert ex[0]["split"] == "align2"
+    assert ex[0]["metadata"]["split"] == "align2"
+
+
+def test_stale_and_prune_stay_within_split(files, tmp_path):
+    """Uploading align2 must not report or prune the verified examples."""
+    csv_path, labels_path = files
+    client = FakeClient()
+    upsert_examples(client, build_examples(csv_path, labels_path))
+    labels = labels_path.read_text(encoding="utf-8")
+    labels_path.write_text(
+        labels + "\n" + json.dumps({"question": "Не проверен?", "chunk_id": "x#1"}),
+        encoding="utf-8",
+    )
+    align = build_examples(
+        csv_path, labels_path, status="needs_clarification", split="align2"
+    )
+    result = upsert_examples(client, align, split="align2", prune=True)
+    assert result == {
+        "created": 1,
+        "updated": 0,
+        "unchanged": 0,
+        "stale": 0,
+        "deleted": 0,
+    }
+    assert len(client.store) == 4
+
+
+def test_legacy_examples_without_split_count_as_verified(files):
+    """Examples uploaded before metadata carried "split" belong to verified."""
+    client = FakeClient()
+    ex = build_examples(*files)
+    upsert_examples(client, ex)
+    for d in client.store.values():
+        del d["metadata"]["split"]
+    result = upsert_examples(client, ex[1:])
+    assert result["stale"] == 1
+    assert upsert_examples(client, ex[1:], split="align2")["stale"] == 0
