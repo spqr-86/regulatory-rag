@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+from pathlib import Path
 
 from eval.ls.dataset import DATASET_NAME, SPLIT_VERIFIED
 from eval.ls.evaluators import CODE_EVALUATORS, summarize, summarize_cost
@@ -122,6 +123,8 @@ def run_experiment(split: str, prefix: str, skip_judge: bool, limit: int | None)
         metadata={
             "effort": settings.OPENROUTER_REASONING_EFFORT,
             "git_sha": _git_sha(),
+            # Chunk ids in the labels are tied to the index snapshot.
+            "index_snapshot": Path(settings.CHROMA_DB_PATH).resolve().name,
         },
     )
 
