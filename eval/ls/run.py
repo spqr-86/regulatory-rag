@@ -10,6 +10,9 @@ call their models. --rejudge pays only for the judges. Experiments run before 15
 stored no context: their citations score None ("no_context").
 """
 
+# ANCHOR: Run/rejudge LangSmith experiments serially; metadata records shared and
+# effective simple effort so low vs disabled experiments are reproducible.
+
 from __future__ import annotations
 
 import argparse
@@ -122,6 +125,11 @@ def run_experiment(split: str, prefix: str, skip_judge: bool, limit: int | None)
         error_handling="log",
         metadata={
             "effort": settings.OPENROUTER_REASONING_EFFORT,
+            "simple_effort": (
+                settings.SIMPLE_REASONING_EFFORT
+                if settings.SIMPLE_REASONING_EFFORT is not None
+                else settings.OPENROUTER_REASONING_EFFORT
+            ),
             "git_sha": _git_sha(),
             # Chunk ids in the labels are tied to the index snapshot.
             "index_snapshot": Path(settings.CHROMA_DB_PATH).resolve().name,

@@ -43,6 +43,8 @@ def test_domain_gate_state_without_route():
         "chunk_ids": [],
         "sources": [],
         "cost_usd": 0.0,
+        "completion_tokens": 0,
+        "reasoning_tokens": 0,
         "unpriced_models": [],
         "context": "",
     }
@@ -86,3 +88,52 @@ def test_context_falls_back_to_final_passages():
     passages = [_p("2464.pdf", 107)]
     state = {"answer": "a", "final_passages": passages}
     assert state_to_outputs(state)["context"] == format_generation_context(passages)
+
+
+def test_outputs_sum_tokens_across_calls():
+    outputs = state_to_outputs(
+        {
+            "llm_usage": [
+                {"completion_tokens": 10, "reasoning_tokens": 7},
+                {"completion_tokens": 20, "reasoning_tokens": 5},
+                {},
+            ]
+        }
+    )
+    assert outputs["completion_tokens"] == 30
+    assert outputs["reasoning_tokens"] == 12
+
+
+def test_target_measures_elapsed_without_extra_graph_calls(monkeypatch):
+    from unittest.mock import MagicMock
+
+    import eval.ls.target as target_module
+    import src.backends.vector_store as store_module
+    import src.v7.bridge as bridge_module
+    import src.v7.graph as graph_module
+    import src.v7.runner as runner_module
+
+    graph = MagicMock()
+    build_graph = MagicMock(return_value=graph)
+    runner = MagicMock(
+        return_value=(
+            {
+                "answer": "Ответ",
+                "llm_usage": [{"completion_tokens": 12, "reasoning_tokens": 8}],
+            },
+            "query-id",
+        )
+    )
+    monkeypatch.setattr(store_module, "get_vector_store_backend", MagicMock())
+    monkeypatch.setattr(bridge_module, "build_full_v7_runtime", MagicMock())
+    monkeypatch.setattr(graph_module, "build_graph", build_graph)
+    monkeypatch.setattr(runner_module, "default_writer", MagicMock())
+    monkeypatch.setattr(runner_module, "run_query", runner)
+    ticks = iter([10.0, 12.5])
+    monkeypatch.setattr(target_module.time, "perf_counter", lambda: next(ticks))
+    outputs = target_module.make_target()({"question": "Вопрос"})
+    assert outputs["elapsed_sec"] == 2.5
+    assert outputs["completion_tokens"] == 12
+    assert outputs["reasoning_tokens"] == 8
+    runner.assert_called_once()
+    assert runner.call_args.args == (graph.compile.return_value, "Вопрос")

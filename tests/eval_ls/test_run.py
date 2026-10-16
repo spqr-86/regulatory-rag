@@ -30,3 +30,33 @@ def test_question_missing_from_current_set_fails_loudly():
     )
     with pytest.raises(KeyError):
         wrapped({"question": "нет такого"}, {}, {})
+
+
+@pytest.mark.parametrize(
+    "override,effective", [(None, "low"), ("none", "none"), ("medium", "medium")]
+)
+def test_experiment_metadata_records_effective_simple_effort(
+    monkeypatch, override, effective
+):
+    from unittest.mock import MagicMock
+
+    import dotenv
+    import langsmith
+
+    import eval.ls.run as run_module
+    from config.settings import settings
+
+    results = MagicMock()
+    results.experiment_name = "offline"
+    client = MagicMock()
+    client.evaluate.return_value = results
+    monkeypatch.setattr(langsmith, "Client", MagicMock(return_value=client))
+    monkeypatch.setattr(dotenv, "load_dotenv", MagicMock())
+    monkeypatch.setattr(run_module, "make_target", MagicMock())
+    monkeypatch.setattr(run_module, "_git_sha", lambda: "abc123")
+    monkeypatch.setattr(settings, "OPENROUTER_REASONING_EFFORT", "low")
+    monkeypatch.setattr(settings, "SIMPLE_REASONING_EFFORT", override)
+    assert run_module.run_experiment("verified", "offline", True, None) == "offline"
+    metadata = client.evaluate.call_args.kwargs["metadata"]
+    assert metadata["effort"] == "low"
+    assert metadata["simple_effort"] == effective

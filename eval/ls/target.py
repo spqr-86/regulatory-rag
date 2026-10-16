@@ -1,7 +1,11 @@
 """LangSmith target: runs the v7 graph on a dataset example."""
 
+# ANCHOR: Final v7 state → evaluator outputs, usage totals and priced cost.
+# make_target measures elapsed_sec around the telemetry runner, without extra calls.
+
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Callable
@@ -21,7 +25,8 @@ def state_to_outputs(state: dict) -> dict:
     the citation judge checks the answer's references against it.
     """
     passages = state.get("final_passages") or []
-    priced = cost_for_usages(state.get("llm_usage") or [])
+    usages = state.get("llm_usage") or []
+    priced = cost_for_usages(usages)
     sources = (p.get("metadata", {}).get("source") for p in passages)
     return {
         "answer": state.get("answer") or "",
@@ -30,6 +35,8 @@ def state_to_outputs(state: dict) -> dict:
         # dict.fromkeys: unique sources in order of first appearance
         "sources": list(dict.fromkeys(s for s in sources if s)),
         "cost_usd": priced["cost_usd"],
+        "completion_tokens": sum(u.get("completion_tokens", 0) for u in usages),
+        "reasoning_tokens": sum(u.get("reasoning_tokens", 0) for u in usages),
         # A model without a rate card counts as $0; keep it visible.
         "unpriced_models": priced["unpriced_models"],
         "context": format_generation_context(
@@ -59,9 +66,12 @@ def make_target() -> Callable[[dict], dict]:
     run_id = f"eval-{stamp}-{uuid.uuid4().hex[:4]}"
 
     def target(inputs: dict) -> dict:
+        start = time.perf_counter()
         state, _query_id = run_query(
             graph, inputs["question"], source="eval", writer=writer, run_id=run_id
         )
-        return state_to_outputs(state)
+        outputs = state_to_outputs(state)
+        outputs["elapsed_sec"] = time.perf_counter() - start
+        return outputs
 
     return target

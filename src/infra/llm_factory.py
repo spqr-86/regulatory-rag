@@ -1,3 +1,7 @@
+# ANCHOR: Provider factories translate shared settings and caller overrides into
+# native requests. SIMPLE_REASONING_EFFORT applies only to get_simple_llm;
+# thinking_budget=0 always disables OpenRouter reasoning.
+
 from __future__ import annotations
 
 import os
@@ -124,19 +128,26 @@ class _OpenRouterChat(ChatOpenAI):
         return result
 
 
-def _openrouter_request_fields(thinking_budget) -> tuple[dict, dict]:
+def _openrouter_request_fields(
+    thinking_budget, reasoning_effort=None
+) -> tuple[dict, dict]:
     """Translate settings + caller intent into OpenRouter-native request fields.
 
     thinking_budget=0 is the caller asking for no thinking — sent as
     ``reasoning.enabled=false``. Any other value defers to
-    OPENROUTER_REASONING_EFFORT: DeepSeek on OpenRouter takes effort levels,
+    the simple override or OPENROUTER_REASONING_EFFORT: DeepSeek takes effort levels,
     not a token budget, so the number itself cannot be forwarded.
     """
+    effort = (
+        reasoning_effort
+        if reasoning_effort is not None
+        else settings.OPENROUTER_REASONING_EFFORT
+    )
     extra_body: dict = {}
     if thinking_budget == 0:
         extra_body["reasoning"] = {"enabled": False}
-    elif settings.OPENROUTER_REASONING_EFFORT:
-        extra_body["reasoning"] = {"effort": settings.OPENROUTER_REASONING_EFFORT}
+    elif effort:
+        extra_body["reasoning"] = {"effort": effort}
     if settings.OPENROUTER_PROVIDER_SORT:
         extra_body["provider"] = {"sort": settings.OPENROUTER_PROVIDER_SORT}
 
@@ -150,6 +161,7 @@ def _openrouter_request_fields(thinking_budget) -> tuple[dict, dict]:
 
 def _create_openrouter_llm(**kwargs):
     thinking_budget = kwargs.pop("thinking_budget", None)
+    reasoning_effort = kwargs.pop("_reasoning_effort", None)
     dropped = {k: kwargs.pop(k) for k in list(kwargs) if k in _GEMINI_ONLY_KWARGS}
     if dropped:
         _log.warning("llm_factory.kwarg_drop", provider="openrouter", dropped=dropped)
@@ -158,7 +170,9 @@ def _create_openrouter_llm(**kwargs):
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         raise ValueError("OPENROUTER_API_KEY not set")
-    client_kwargs, extra_body = _openrouter_request_fields(thinking_budget)
+    client_kwargs, extra_body = _openrouter_request_fields(
+        thinking_budget, reasoning_effort
+    )
     _log.info(
         "llm_factory.openrouter_request",
         model=model,
@@ -277,6 +291,13 @@ def get_simple_llm(**kwargs):
     # Applies to every provider: without this the OpenAI branch fell through to
     # the ChatOpenAI default and the configured model name was silently ignored.
     kwargs.setdefault("model_name", model)
+    if provider == "openrouter":
+        effort = settings.SIMPLE_REASONING_EFFORT
+        if effort == "none":
+            kwargs["thinking_budget"] = 0
+        elif effort is not None:
+            kwargs["_reasoning_effort"] = effort
+
     if provider == "gemini":
         return get_gemini_llm(**kwargs)
     factory = _LLM_PROVIDERS.get(provider)

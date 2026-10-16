@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     OPENROUTER_REASONING_EFFORT: (
         Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"] | None
     ) = "low"
+    # None inherits shared effort; "none" disables simple reasoning.
+    SIMPLE_REASONING_EFFORT: (
+        Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"] | None
+    ) = None
     OPENROUTER_MAX_TOKENS: int | None = Field(default=None, gt=0)
     OPENROUTER_PROVIDER_SORT: Literal["latency", "throughput", "price"] | None = None
     # Eval judge — independent from pipeline provider
