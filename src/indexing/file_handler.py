@@ -22,7 +22,7 @@ from utils.logging import logger
 FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
 
 # Chunk-cache version changes when normalization or occurrence identity changes.
-PIPELINE_VERSION = "v3.5-fake-law-headings"
+PIPELINE_VERSION = "v3.6-glued-article-headings"
 PARSER_VERSION = "v1-complete-docling"
 CHUNKER_MAX_TOKENS = 400
 CHUNKER_MERGE_PEERS = True
@@ -88,6 +88,123 @@ def is_article_heading(text: str) -> bool:
     return _ARTICLE_HEADING_RE.match(" ".join(text.split())) is not None
 
 
+# Docling glues law structure into paragraphs. «Статья N. Название (в ред. …)
+# тело» as one item (ТК ст. 82, 173, 349, 370) outgrows the chunk budget as a
+# heading: HybridChunker drops it and the body never reaches any chunk. «… конец
+# статьи. Статья N. Название …» inside a paragraph (ТК ст. 5, 6, 174, 349.1)
+# leaves the next article under the previous heading. Items are cut at inner
+# «Статья N.» and at the amendment note right after a title; a title followed
+# by a note becomes its own item, a title whose end is unknown stays glued to
+# its body as a PARAGRAPH (never promoted, resolved per chunk in
+# _process_docling_document).
+_GLUED_BODY_RE = re.compile(r"\s\((?:в ред\.|введен|Статья в ред\.)")
+_INNER_ARTICLE_RE = re.compile(r"(?<=[.)])\s+(?=Статья\s+\d+(?:\.\d+)*\.\s+[А-ЯЁ])")
+# Longest real title (ТК ст. 351.7) is ~510 chars.
+_MAX_TITLE_CHARS = 600
+_BARE_ARTICLE_RE = re.compile(r"Статья\s+\d+(?:\.\d+)*\.")
+
+
+def _article_segments(text: str) -> list[tuple[str, bool]]:
+    """Split text into (segment, title_end_known) at article boundaries."""
+    starts = [0] + [m.end() for m in _INNER_ARTICLE_RE.finditer(text)]
+    ends = starts[1:] + [len(text)]
+    cuts = set(starts)
+    titled = set()
+    for s, e in zip(starts, ends):
+        if not is_article_heading(text[s:e]):
+            continue
+        note = _GLUED_BODY_RE.search(text, s, e)
+        if (
+            note
+            and note.start() - s <= _MAX_TITLE_CHARS
+            and text[note.end() : e].strip()
+        ):
+            cuts.add(note.start())
+            titled.add(s)
+    points = sorted(cuts) + [len(text)]
+    return [
+        (text[a:b].strip(), a in titled or not is_article_heading(text[a:b]))
+        for a, b in zip(points, points[1:])
+        if text[a:b].strip()
+    ]
+
+
+def split_glued_article_headings(doc: Any) -> int:
+    """Cut items at inner article headings and amendment notes; return count."""
+    from docling_core.types.doc import DocItemLabel
+
+    glued = [
+        (item, segments)
+        for item in doc.texts
+        if len(segments := _article_segments(item.text)) > 1
+    ]
+    for item, segments in glued:
+        prev = item
+        item.text = item.orig = segments[0][0]
+        for text, title_known in segments[1:]:
+            prev = doc.insert_text(
+                sibling=prev,
+                label=DocItemLabel.TEXT if title_known else DocItemLabel.PARAGRAPH,
+                text=text,
+                prov=item.prov[0] if item.prov else None,
+            )
+    return len(glued)
+
+
+def _inline_title(line: str) -> str:
+    """Short heading for «Статья N. Название тело…» whose title end is unknown."""
+    line = " ".join(line.split())
+    if len(line) <= 200:
+        return line
+    return line[:200].rsplit(" ", 1)[0] + "…"
+
+
+def resolve_inline_article(
+    headings: list[str], text: str, inline: dict[tuple[str, ...], str]
+) -> tuple[list[str], bool]:
+    """Swap the article heading for an article that opened inside the text.
+
+    `inline` maps a chunker heading path to the last article met in its text;
+    later chunks under the same path belong to that article. Returns the heading
+    path and whether the chunk itself opens with the article line.
+    """
+    key = tuple(headings)
+    lines = text.split("\n")
+    if is_article_heading(lines[0]):
+        current = _inline_title(lines[0])
+    else:
+        current = inline.get(key)
+    # The chunker may cut a long paragraph right after «Статья N.».
+    found = [
+        line
+        for line in lines
+        if is_article_heading(line) or _BARE_ARTICLE_RE.fullmatch(line.strip())
+    ]
+    if found:
+        inline[key] = _inline_title(found[-1])
+    if current is None:
+        return headings, False
+    if headings and is_article_heading(headings[-1]):
+        headings = headings[:-1]
+    return [*headings, current], is_article_heading(lines[0])
+
+
+def headings_by_ref(doc: Any) -> dict[str, list[str]]:
+    """Heading path for every item, as HierarchicalChunker tracks it."""
+    from docling_core.types.doc import SectionHeaderItem, TitleItem
+
+    by_level: dict[int, str] = {}
+    paths: dict[str, list[str]] = {}
+    for item, _ in doc.iterate_items():
+        if isinstance(item, (TitleItem, SectionHeaderItem)):
+            level = item.level if isinstance(item, SectionHeaderItem) else 0
+            by_level = {k: v for k, v in by_level.items() if k < level}
+            by_level[level] = item.text
+            continue
+        paths[item.self_ref] = [by_level[k] for k in sorted(by_level)]
+    return paths
+
+
 def promote_lost_article_headings(doc: Any) -> int:
     """Relabel plain-text «Статья N.» items as section headers; return count."""
     from docling_core.types.doc import DocItemLabel, SectionHeaderItem, TextItem
@@ -148,10 +265,11 @@ def annotate_article_parts(chunks: List[Document]) -> None:
     article_has_parts: dict[str, bool] = {}
     bodies: list[tuple[Document, str, str]] = []
     for ch in chunks:
-        m = _ARTICLE_NUM_RE.search(ch.metadata.get("heading_path", ""))
-        if not m:
+        # Last match: a chapter heading may carry a repealed article (ТК гл. 14).
+        found = _ARTICLE_NUM_RE.findall(ch.metadata.get("heading_path", ""))
+        if not found:
             continue
-        article = m.group(1)
+        article = found[-1]
         lines = ch.page_content.split("\n")
         if lines and is_article_heading(lines[0]):
             lines = lines[1:]
@@ -478,14 +596,23 @@ class DocumentProcessor:
 
     def _process_docling_document(self, doc: Any, source: str) -> List[Document]:
         chunks = []
+        split_glued_article_headings(doc)
         promote_lost_article_headings(doc)
         demote_fake_law_headings(doc)
+        heading_paths = headings_by_ref(doc)
+        inline_articles: dict[tuple[str, ...], str] = {}
         for chunk in self._chunker.chunk(doc):
             text = _clean_noise(chunk.text.strip())
             if not text:
                 continue
 
             headings = chunk.meta.headings or []
+            # HybridChunker drops headings longer than the chunk budget (ТК ст. 351.7).
+            if not headings and chunk.meta.doc_items:
+                headings = heading_paths.get(chunk.meta.doc_items[0].self_ref, [])
+            headings, title_in_text = resolve_inline_article(
+                headings, text, inline_articles
+            )
             parent_section = headings[-1] if headings else "Document start"
             heading_path = " > ".join(headings) if headings else ""
 
@@ -534,6 +661,7 @@ class DocumentProcessor:
             if (
                 parent_section
                 and parent_section != "Document start"
+                and not title_in_text
                 and not text.startswith(parent_section)
             ):
                 embed_text = f"{parent_section}\n{text}"
