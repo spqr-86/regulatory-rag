@@ -95,6 +95,25 @@ def test_shape_and_split(files):
     assert e["metadata"]["split"] == "verified"
 
 
+def test_supplementary_facts_pass_through(tmp_path, files):
+    csv_path, labels_path = files
+    rows = list(csv.DictReader(csv_path.open(encoding="utf-8")))
+    rows[0]["ground_truth_extra"] = "доп. факт"
+    with_extra = tmp_path / "with_extra.csv"
+    with with_extra.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=[*FIELDS, "ground_truth_extra"])
+        w.writeheader()
+        w.writerows(rows)
+    ex = build_examples(with_extra, labels_path)
+    assert ex[0]["outputs"]["ground_truth_extra"] == "доп. факт"
+    assert ex[1]["outputs"]["ground_truth_extra"] == ""
+
+
+def test_csv_without_supplementary_column_gives_empty(files):
+    # tests/dataset.csv has no ground_truth_extra column.
+    assert build_examples(*files)[0]["outputs"]["ground_truth_extra"] == ""
+
+
 def test_join_strips_whitespace_and_falls_back_to_chunk_id(files):
     e = build_examples(*files)[1]
     assert e["inputs"]["question"] == "Вопрос два?"

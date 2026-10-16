@@ -109,11 +109,13 @@ class FakeLLM:
     def __init__(self, payload):
         self.payload = payload
         self.calls = 0
+        self.prompt = ""
 
-    def invoke(self, *_a, **_kw):
+    def invoke(self, messages, *_a, **_kw):
         from langchain_core.messages import AIMessage
 
         self.calls += 1
+        self.prompt = "\n".join(m.content for m in messages)
         return AIMessage(content=json.dumps(self.payload, ensure_ascii=False))
 
 
@@ -198,6 +200,26 @@ def test_reference_without_legal_as_of_still_judged():
     ref = {k: v for k, v in REF.items() if k != "legal_as_of"}
     r = _by_key(
         make_correctness_evaluator(llm)({"question": "q"}, {"answer": ANS}, ref)
+    )
+    assert r["correctness"]["score"] == 1
+
+
+def test_supplementary_facts_reach_the_prompt_apart_from_reference():
+    # Alignment 16.10: the judge failed right answers for missing facts beyond the
+    # question. Supplementary facts go in their own slot: checked only for contradiction.
+    llm = FakeLLM(verdict())
+    ref = {**REF, "ground_truth_extra": "для 3 группы — 1 раз в 5 лет"}
+    make_correctness_evaluator(llm)({"question": "q"}, {"answer": ANS}, ref)
+    assert "Дополнительные сведения" in llm.prompt
+    assert "для 3 группы — 1 раз в 5 лет" in llm.prompt
+    assert "Эталонный ответ: 2 смены\n" in llm.prompt
+
+
+def test_reference_without_supplementary_facts_still_judged():
+    # Examples before 16.10 have no ground_truth_extra.
+    llm = FakeLLM(verdict())
+    r = _by_key(
+        make_correctness_evaluator(llm)({"question": "q"}, {"answer": ANS}, REF)
     )
     assert r["correctness"]["score"] == 1
 

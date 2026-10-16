@@ -40,6 +40,7 @@ class CorrectnessJudgeVariables(BaseModel):
     question: str
     legal_as_of: str
     ground_truth: str
+    ground_truth_extra: str
     forbidden_claims: str
     answer: str
 
@@ -177,6 +178,8 @@ def make_correctness_evaluator(llm) -> Callable:
             # Examples of dataset versions before 15.10 have no legal_as_of.
             legal_as_of=reference_outputs.get("legal_as_of") or "",
             ground_truth=reference_outputs.get("ground_truth") or "",
+            # Examples before 16.10 have no supplementary facts.
+            ground_truth_extra=reference_outputs.get("ground_truth_extra") or "",
             forbidden_claims=forbidden_claims,
             answer=answer,
         )

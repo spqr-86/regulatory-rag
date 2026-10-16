@@ -43,8 +43,8 @@ def build_examples(
     Example shape:
         {"id": str (uuid5 of case_id, stable between runs),
          "inputs": {"question"},
-         "outputs": {"ground_truth", "relevant_chunk_ids", "forbidden_claims",
-                     "must_not_contain", "oos_type", "legal_as_of"},
+         "outputs": {"ground_truth", "ground_truth_extra", "relevant_chunk_ids",
+                     "forbidden_claims", "must_not_contain", "oos_type", "legal_as_of"},
          "metadata": {"case_id", "oos_type", "corpus_support", "csv_sha256", "split"},
          "split": split}
     In-scope row without labels → ValueError naming the case_id. OOS → no chunk ids.
@@ -92,6 +92,8 @@ def build_examples(
                 "inputs": {"question": question},
                 "outputs": {
                     "ground_truth": row["ground_truth"],
+                    # Supplementary facts: their absence is not an error (16.10).
+                    "ground_truth_extra": row.get("ground_truth_extra") or "",
                     "relevant_chunk_ids": chunk_ids,
                     "forbidden_claims": row["forbidden_claims"],
                     "must_not_contain": row["must_not_contain"],
