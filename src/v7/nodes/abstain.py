@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+# ANCHOR: keep technical abstain diagnostics separate from the user answer.
 from typing import List
 
 from src.v7.state_types import RAGState
@@ -35,6 +36,7 @@ def abstain(state: RAGState) -> RAGState:
         reasons.append("контекст недостаточен для ответа")
 
     return {
+        "answer": "Не могу надёжно ответить по найденным документам. Уточните обстоятельства или укажите номер документа.",
         "abstain_reason": (
             f'Не удалось найти контекст для: "{query[:80]}". '
             f"Причины: {'; '.join(reasons)}. "
