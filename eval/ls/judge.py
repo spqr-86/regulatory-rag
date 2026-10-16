@@ -52,8 +52,31 @@ _FRAGMENT_MARKER = re.compile(r"\s*\[Фрагмент[^\]]*\]")
 
 
 def _quotable(text: str) -> str:
-    # The judge drops "[Фрагмент N]" markers and may cut the final full stop (G022).
-    return _normalize(_FRAGMENT_MARKER.sub("", text)).rstrip(".")
+    # The judge drops "[Фрагмент N]" markers and may cut the final full stop (G022);
+    # it also drops markdown bold (G056).
+    text = _FRAGMENT_MARKER.sub("", text).replace("*", "")
+    return _normalize(text).rstrip(".")
+
+
+_WORD = re.compile(r"\w+")
+
+
+def _words(text: str) -> set[str]:
+    # Digits always count (3 года vs 5 лет); short words (и, в, по) do not.
+    return {w for w in _WORD.findall(_normalize(text)) if w.isdigit() or len(w) >= 3}
+
+
+def _overlap(fact: str, source: str) -> float:
+    words = _words(fact)
+    return len(words & _words(source)) / len(words) if words else 0.0
+
+
+def _supplementary(fact: str, ground_truth: str, extra: str) -> bool:
+    """The fact comes from the supplementary facts rather than the reference.
+
+    Rejudge 16.10: told to skip them, the judge (gpt-4o) still listed them as absent.
+    """
+    return bool(extra) and _overlap(fact, extra) > _overlap(fact, ground_truth)
 
 
 def _quote(value, answer: str, name: str) -> str:
@@ -65,12 +88,15 @@ def _quote(value, answer: str, name: str) -> str:
     return value
 
 
-def parse_verdict(raw: str, answer: str) -> dict:
+def parse_verdict(
+    raw: str, answer: str, ground_truth: str = "", extra: str = ""
+) -> dict:
     """Judge reply → {"correct", "reasoning", "comment", "forbidden_claims_asserted"}.
 
     The judge lists the reference's key facts with evidence; the code checks every
     quote against the answer and computes "correct" (decision 15.10, alignment
-    G001/G028: the judge called present facts missing). Accepts a ```json fence.
+    G001/G028: the judge called present facts missing). An absent fact taken from
+    `extra` (supplementary facts) is not a problem. Accepts a ```json fence.
     Anything off-contract raises JudgeFormatError (a ValueError).
     """
     try:
@@ -101,6 +127,10 @@ def parse_verdict(raw: str, answer: str) -> dict:
                 raise JudgeFormatError("absent fact must have answer_quote null")
         else:
             _quote(item.get("answer_quote"), answer, "answer_quote")
+        if status == "absent" and _supplementary(
+            item.get("fact", ""), ground_truth, extra
+        ):
+            continue
         if status != "present":
             problems.append(f"{status}: {item.get('fact', '')}")
 
@@ -185,7 +215,12 @@ def make_correctness_evaluator(llm) -> Callable:
         )
         reply = llm.invoke(template.format_messages(**variables.model_dump()))
         try:
-            verdict = parse_verdict(_reply_text(reply), answer)
+            verdict = parse_verdict(
+                _reply_text(reply),
+                answer,
+                variables.ground_truth,
+                variables.ground_truth_extra,
+            )
         except JudgeFormatError as exc:
             # A judge error, not an answer error: excluded from the rates.
             return _both_none(f"judge_format_error: {exc}")

@@ -314,3 +314,56 @@ def test_citations_format_error_is_none():
 def test_citations_skips_llm(outputs, ref, comment):
     r, llm = _citations({"checks": []}, outputs, ref)
     assert r["score"] is None and r["comment"] == comment and llm.calls == 0
+
+
+# ── supplementary facts: filtered in code (rejudge 16.10: gpt-4o ignored the prompt) ──
+
+GT_H014 = (
+    "Периодическое обучение безопасным методам и приёмам работ на высоте для 1 и 2 "
+    "групп — не реже 1 раза в 3 года (п. 23 Правил № 782н)."
+)
+EXTRA_H014 = (
+    "Для 3 группы — не реже 1 раза в 5 лет. У работников 1 и 2 групп ежегодно "
+    "(не реже 1 раза в год) проводится периодическая проверка знаний без обучения (п. 32)."
+)
+
+
+def test_absent_supplementary_fact_is_not_an_error():
+    payload = verdict(
+        [
+            fact("present"),
+            fact("absent", None, "для 3 группы — не реже 1 раза в 5 лет"),
+            fact(
+                "absent",
+                None,
+                "у работников 1 и 2 групп ежегодно проводится проверка знаний",
+            ),
+        ]
+    )
+    v = parse_verdict(json.dumps(payload), ANS, GT_H014, EXTRA_H014)
+    assert v["correct"] is True
+
+
+def test_absent_required_fact_still_fails_when_extra_given():
+    payload = verdict(
+        [fact("absent", None, "для 1 и 2 групп — не реже 1 раза в 3 года")]
+    )
+    v = parse_verdict(json.dumps(payload), ANS, GT_H014, EXTRA_H014)
+    assert v["correct"] is False
+
+
+def test_contradicted_supplementary_fact_still_fails():
+    payload = verdict(
+        [fact("contradicted", text="для 3 группы — не реже 1 раза в 5 лет")]
+    )
+    v = parse_verdict(json.dumps(payload), ANS, GT_H014, EXTRA_H014)
+    assert v["correct"] is False
+
+
+def test_quote_ignores_markdown_bold():
+    # G056: the answer bolds a phrase, the judge quotes it without asterisks.
+    answer = "СОУТ проводится **совместно работодателем и организацией**."
+    payload = verdict(
+        [fact("present", "проводится совместно работодателем и организацией")]
+    )
+    assert parse_verdict(json.dumps(payload), answer)["correct"] is True
