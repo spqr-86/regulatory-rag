@@ -350,7 +350,7 @@ def test_upsert_updates_changed(files):
 **Статус 13.10:** шаги 1–4 и 6 сделаны на Маке с Петром, коммит `44996b8` (запушен). Тесты 9/9,
 `--dry-run` → 24 examples: 14 in-scope, 10 OOS. **Шаг 5 сделан 13.10:** `created 24`, повтор —
 `unchanged 24`; в LangSmith 24 примера, сплит `verified`. Отличия от плана: разметка по умолчанию —
-`eval/runs/gt_remap_build-tjid2k6g_2026-10-12/golden_retrieval_labeled.jsonl` (а не `eval/data/…`);
+`eval/runs/gt_remap_build-tjid2k6g_2026-10-12/golden_retrieval_labeled.jsonl` (а не `eval/data/…`; с 16.10 — `gt_remap_build-8cs1plb3_2026-10-16/`);
 `must_not_contain` в `outputs`; `load_dotenv` в `main`.
 
 ---
