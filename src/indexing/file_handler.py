@@ -22,7 +22,7 @@ from utils.logging import logger
 FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
 
 # Chunk-cache version changes when normalization or occurrence identity changes.
-PIPELINE_VERSION = "v3.4-article-address"
+PIPELINE_VERSION = "v3.5-fake-law-headings"
 PARSER_VERSION = "v1-complete-docling"
 CHUNKER_MAX_TOKENS = 400
 CHUNKER_MERGE_PEERS = True
@@ -109,6 +109,38 @@ def promote_lost_article_headings(doc: Any) -> int:
             doc.texts[i] = SectionHeaderItem(**fields, level=level)
             promoted += 1
     return promoted
+
+
+# Docling also labels amendment notes and wrapped lines as headings (ТК: «(в ред.
+# … 311-ФЗ)», «их защиты», «28.11.2019 N 37-П.»). All ТК headings share level 1,
+# so such a line replaces the article heading for every chunk after it. Real law
+# headings start with a capital letter; these start lowercase, «(» or a date.
+_FAKE_LAW_HEADING_RE = re.compile(
+    r"^(?:[a-zа-яё(]|\d{2}\.\d{2}\.\d{4}|КонсультантПлюс)"
+)
+
+
+def is_fake_law_heading(text: str) -> bool:
+    """True for a heading line that cannot open a law structural unit."""
+    return _FAKE_LAW_HEADING_RE.match(" ".join(text.split())) is not None
+
+
+def demote_fake_law_headings(doc: Any) -> int:
+    """Relabel fake headings after the first article as plain text; return count."""
+    from docling_core.types.doc import DocItemLabel, SectionHeaderItem, TextItem
+
+    demoted = 0
+    seen_article = False
+    for i, item in enumerate(doc.texts):
+        if not isinstance(item, SectionHeaderItem):
+            continue
+        if is_article_heading(item.text):
+            seen_article = True
+        elif seen_article and is_fake_law_heading(item.text):
+            fields = item.model_dump(exclude={"label", "level"})
+            doc.texts[i] = TextItem(**fields, label=DocItemLabel.TEXT)
+            demoted += 1
+    return demoted
 
 
 def annotate_article_parts(chunks: List[Document]) -> None:
@@ -447,6 +479,7 @@ class DocumentProcessor:
     def _process_docling_document(self, doc: Any, source: str) -> List[Document]:
         chunks = []
         promote_lost_article_headings(doc)
+        demote_fake_law_headings(doc)
         for chunk in self._chunker.chunk(doc):
             text = _clean_noise(chunk.text.strip())
             if not text:

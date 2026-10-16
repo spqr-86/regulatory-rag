@@ -12,7 +12,9 @@ from langchain_core.documents import Document
 from src.indexing.file_handler import (
     DocumentProcessor,
     annotate_article_parts,
+    demote_fake_law_headings,
     is_article_heading,
+    is_fake_law_heading,
     promote_lost_article_headings,
 )
 
@@ -130,3 +132,62 @@ def test_annotate_parts_bare_marker_cut_by_chunker_starts_next_part():
     annotate_article_parts(chunks)
     assert chunks[1].metadata["part"] == "1"
     assert chunks[1].metadata["part_inherited"] is True
+
+
+def _law_doc_with_fake_heading() -> DoclingDocument:
+    doc = DoclingDocument(name="law")
+    doc.add_heading(text="ТРУДОВОЙ КОДЕКС РОССИЙСКОЙ ФЕДЕРАЦИИ", level=1)
+    doc.add_heading(text="Статья 209. Основные понятия", level=1)
+    # Docling labelled amendment notes and wrapped lines as headings (ТК стр. 133, 72).
+    doc.add_heading(text="(в ред. Федерального закона от 02.07.2021 N 311-ФЗ)", level=1)
+    doc.add_text(label=DocItemLabel.TEXT, text="Охрана труда - " + _filler("d"))
+    doc.add_heading(text="их защиты", level=1)
+    doc.add_text(label=DocItemLabel.TEXT, text="продолжение статьи " + _filler("e"))
+    return doc
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("(в ред. Федерального закона от 02.07.2021 N 311-ФЗ)", True),
+        ("(введена Федеральным законом от 28.12.2013 N 421-ФЗ)", True),
+        ("их защиты", True),
+        ("28.11.2019 N 37-П.", True),
+        ("КонсультантПлюс: примечание.", True),
+        ("Статья 209. Основные понятия", False),
+        ("Глава 33. ОБЩИЕ ПОЛОЖЕНИЯ", False),
+        ("ЗАНЯТЫХ НА СЕЗОННЫХ РАБОТАХ Статья 293. Сезонные работы", False),
+        ("О пожарной безопасности", False),
+    ],
+)
+def test_is_fake_law_heading(text, expected):
+    assert is_fake_law_heading(text) is expected
+
+
+@pytest.mark.unit
+def test_demote_fake_headings_only_after_first_article():
+    doc = _law_doc_with_fake_heading()
+    assert demote_fake_law_headings(doc) == 2
+    assert doc.texts[0].label == DocItemLabel.SECTION_HEADER
+    assert doc.texts[2].label == DocItemLabel.TEXT
+    assert doc.texts[2].self_ref == "#/texts/2"
+
+
+@pytest.mark.unit
+def test_demote_skips_documents_without_articles():
+    doc = DoclingDocument(name="order")
+    doc.add_heading(text="(приложение к приказу)", level=1)
+    doc.add_text(label=DocItemLabel.TEXT, text=_filler("f"))
+    assert demote_fake_law_headings(doc) == 0
+
+
+@pytest.mark.unit
+def test_chunks_under_fake_heading_keep_article(processor):
+    chunks = processor._process_docling_document(
+        _law_doc_with_fake_heading(), "тк рф.pdf"
+    )
+    for tag in "de":
+        ch = next(c for c in chunks if f"{tag}слово0" in c.page_content)
+        assert ch.metadata["parent_section"] == "Статья 209. Основные понятия"
+        assert ch.metadata["article"] == "209"
