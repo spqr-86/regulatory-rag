@@ -125,6 +125,14 @@ def _prepare(
 
 
 def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
+    parent_stats = []
+
+    def finish(**kwargs):
+        update = terminal_update(**kwargs)
+        if parent_stats:
+            update["parent_context_stats"] = parent_stats
+        return update
+
     query = state.get("query", "")
     active_q = state.get("active_query", query)
     required = required_obligations(query)
@@ -134,7 +142,7 @@ def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
     if not attempts:
         return cast(
             RAGState,
-            terminal_update(
+            finish(
                 route="abstain",
                 reason="complex_exhausted",
                 final_context=[],
@@ -155,6 +163,8 @@ def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
     admissible = []
     for cand in candidates:
         packed = _prepare(cand, cache, dependencies, state.get("filters"))
+        if "parent_context" in packed:
+            parent_stats.append(packed["parent_context"])
         if packed["status"] == "degraded":
             technical = True
         verdict = validate_context(
@@ -186,7 +196,7 @@ def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
                 reason = "enumeration_best_effort"
             return cast(
                 RAGState,
-                terminal_update(
+                finish(
                     route="generate",
                     reason=reason,
                     final_context=packed["final_context"],
@@ -225,7 +235,7 @@ def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
         )
         return cast(
             RAGState,
-            terminal_update(
+            finish(
                 route="generate",
                 reason=reason,
                 final_context=packed["final_context"],
@@ -240,7 +250,7 @@ def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
     empty_verdict = validate_context([], query, active_q, plan, required)
     return cast(
         RAGState,
-        terminal_update(
+        finish(
             route="abstain",
             reason="complex_exhausted",
             final_context=[],

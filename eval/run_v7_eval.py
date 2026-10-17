@@ -59,6 +59,7 @@ from eval.advanced_generation_metrics import (  # noqa: E402
 from eval.pricing import cost_for_usages, percentile  # noqa: E402
 from src.backends.vector_store import get_vector_store_backend  # noqa: E402
 from src.v7.bridge import build_full_v7_runtime  # noqa: E402
+from src.v7.config import v7_config  # noqa: E402
 from src.v7.graph import build_graph  # noqa: E402
 from src.v7.runner import default_writer  # noqa: E402
 from src.v7.runner import run_query as run_with_telemetry  # noqa: E402
@@ -233,6 +234,11 @@ def run_query(
         # Per-call breakdown: the cost figure has to be checkable — which model,
         # which node, how many tokens — not taken on the summary's word.
         "usage": usages,
+        **(
+            {"parent_context_stats": state.get("parent_context_stats", [])}
+            if v7_config.PARENT_CONTEXT_ENABLE
+            else {}
+        ),
         "prompt_tokens": sum(u.get("prompt_tokens", 0) for u in usages),
         "completion_tokens": sum(u.get("completion_tokens", 0) for u in usages),
         "reasoning_tokens": sum(u.get("reasoning_tokens", 0) for u in usages),
@@ -254,6 +260,7 @@ _RECORD_FIELDS = (
     "retrieval_attempts",
     "llm_calls",
     "usage",
+    "parent_context_stats",
     "prompt_tokens",
     "completion_tokens",
     "reasoning_tokens",
@@ -270,6 +277,22 @@ def record_fields(run_result: dict[str, Any]) -> dict[str, Any]:
     to run_query cannot silently miss the summary again.
     """
     return {key: run_result[key] for key in _RECORD_FIELDS if key in run_result}
+
+
+def summarize_parents(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Sum replacement-stage diagnostics across all packing passes and questions."""
+    stats = [s for row in results for s in row.get("parent_context_stats", [])]
+    reasons: dict[str, int] = {}
+    for item in stats:
+        reason = item.get("unavailable_reason")
+        if reason:
+            reasons[reason] = reasons.get(reason, 0) + 1
+    return {
+        "parent_replaced_total": sum(s.get("replaced", 0) for s in stats),
+        "parent_children_total": sum(s.get("children", 0) for s in stats),
+        "parent_deduplicated_total": sum(s.get("deduplicated", 0) for s in stats),
+        "parent_unavailable_reasons": reasons,
+    }
 
 
 def summarize_cost(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -648,6 +671,15 @@ def run(
                 "false_sufficiency_rate": round(false_sufficiency_rate, 3),
             }
         )
+
+    if v7_config.PARENT_CONTEXT_ENABLE:
+        aggregate.update(summarize_parents(results))
+        if aggregate["parent_replaced_total"] == 0:
+            raise RuntimeError(
+                "V7_PARENT_CONTEXT_ENABLE is enabled but parent_replaced_total == 0; "
+                "eval is invalid: проверьте или пересоберите sidecar. "
+                f"Reasons: {aggregate['parent_unavailable_reasons']}"
+            )
 
     summary = {
         "timestamp": datetime.now().isoformat(),

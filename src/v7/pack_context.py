@@ -10,10 +10,14 @@ import hashlib
 import inspect
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Callable, Dict, List, Optional
 
-from src.indexing.parent_context import parent_cache_version, replace_parents
+from src.indexing.parent_context import (
+    ParentStats,
+    parent_cache_version,
+    replace_parents,
+)
 from src.v7.config import v7_config
 from src.v7.context_format import _chunk_header
 from src.v7.contract import PackResult, PackStatus
@@ -210,8 +214,12 @@ def pack_context(
             status = "degraded"
             working = copy.deepcopy(passages)
 
+    parent_stats = None
     if v7_config.PARENT_CONTEXT_ENABLE:
-        working = replace_parents(working, v7_config.PARENT_MAX_CHARS)
+        parent_stats = ParentStats()
+        working = replace_parents(
+            working, v7_config.PARENT_MAX_CHARS, stats=parent_stats
+        )
 
     packed = [{**p, "text": sanitize_for_llm(p.get("text", ""))} for p in working]
 
@@ -234,6 +242,8 @@ def pack_context(
         "status": status,
         "dropped": n_before - len(kept),
     }
+    if parent_stats is not None:
+        result["parent_context"] = asdict(parent_stats)
     if cache is not None:
         cache[key] = copy.deepcopy(result)
     return result

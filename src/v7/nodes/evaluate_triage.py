@@ -61,6 +61,13 @@ def evaluate_triage(state: RAGState, *, dependencies=None) -> RAGState:
             filters=state.get("filters"),
             limits=dependencies.pack_limits,
         )
+
+    def finish(**kwargs):
+        update = terminal_update(**kwargs)
+        if "parent_context" in packed:
+            update["parent_context_stats"] = [packed["parent_context"]]
+        return update
+
     verdict = validate_context(
         packed["final_context"],
         query,
@@ -89,7 +96,7 @@ def evaluate_triage(state: RAGState, *, dependencies=None) -> RAGState:
 
     return cast(
         RAGState,
-        terminal_update(
+        finish(
             route=route,
             reason=reason,
             final_context=packed["final_context"],

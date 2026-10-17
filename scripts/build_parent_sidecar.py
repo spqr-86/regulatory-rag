@@ -91,7 +91,7 @@ def build_sidecar(snapshot: Path, source_docs: Path) -> ParentSidecar:
         }
     if snapshot_hash(snapshot) != digest:
         raise RuntimeError("Snapshot changed while building parent sidecar")
-    return ParentSidecar(version=1, snapshot_sha256=digest, entries=entries)
+    return ParentSidecar(version=2, snapshot_sha256=digest, entries=entries)
 
 
 def main() -> int:

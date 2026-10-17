@@ -7,7 +7,11 @@ from __future__ import annotations
 # Alignment is offline; request handling never reads source documents or calls models.
 import copy
 import hashlib
+import json
 import logging
+import sqlite3
+from contextlib import closing
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -40,15 +44,26 @@ def active_snapshot() -> Path:
 
 
 def snapshot_hash(snapshot: Path) -> str:
-    """Bind to the stored SQLite snapshot, including an outstanding WAL if any."""
-    digest = hashlib.sha256()
-    for path in (snapshot / "chroma.sqlite3", snapshot / "chroma.sqlite3-wal"):
-        if path.name.endswith("-wal") and not path.exists():
-            continue
-        with path.open("rb") as stream:
-            while block := stream.read(1024 * 1024):
-                digest.update(block)
-    return digest.hexdigest()
+    """Hash logical chunks, including text; ignore SQLite layout and bookkeeping.
+
+    One read-only SELECT observes a consistent SQLite snapshot, including WAL.
+    Sorted records retain duplicates and the count, independent of internal row IDs.
+    """
+    with closing(
+        sqlite3.connect(
+            f"{(snapshot / 'chroma.sqlite3').resolve().as_uri()}?mode=ro", uri=True
+        )
+    ) as con:
+        rows = con.execute(
+            "select max(case when key='source' then string_value end), "
+            "max(case when key='chunk_id' then coalesce(string_value,cast(int_value as text)) end), "
+            "max(case when key='chroma:document' then string_value end) "
+            "from embedding_metadata group by id"
+        ).fetchall()
+    records = sorted(json.dumps(row, ensure_ascii=False) for row in rows)
+    return hashlib.sha256(
+        json.dumps([len(records), records], ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
 
 
 def _revision(path: Path) -> tuple:
@@ -61,44 +76,72 @@ def _revision(path: Path) -> tuple:
 
 def _identity() -> tuple:
     snapshot = active_snapshot()
-    return (
-        str(snapshot),
-        *(
-            _revision(snapshot / name)
-            for name in (SIDECAR_NAME, "chroma.sqlite3", "chroma.sqlite3-wal")
-        ),
-    )
+    try:
+        digest = snapshot_hash(snapshot)
+    except (OSError, sqlite3.Error) as exc:
+        digest = f"unavailable: {exc}"
+    return str(snapshot), digest, _revision(snapshot / SIDECAR_NAME)
+
+
+@dataclass(frozen=True)
+class SidecarLoad:
+    sidecar: ParentSidecar | None
+    reason: str | None = None
+
+
+@dataclass
+class ParentStats:
+    # Counts describe the replacement stage, before pack limits/sanitization.
+    replaced: int = 0
+    children: int = 0
+    deduplicated: int = 0
+    unavailable_reason: str | None = None
 
 
 @lru_cache(maxsize=8)
-def _load_sidecar(identity: tuple) -> ParentSidecar | None:
+def _load_sidecar(identity: tuple) -> SidecarLoad:
     snapshot = Path(identity[0])
     try:
         sidecar = ParentSidecar.model_validate_json(
             (snapshot / SIDECAR_NAME).read_bytes()
         )
-        if sidecar.version != 1 or sidecar.snapshot_sha256 != snapshot_hash(snapshot):
-            raise ValueError("snapshot hash/version mismatch")
+        if sidecar.version != 2:
+            raise ValueError(
+                f"sidecar version {sidecar.version}: пересобрать sidecar (requires version 2)"
+            )
+        if identity[1].startswith("unavailable:"):
+            raise ValueError(f"collection {identity[1]}")
+        if sidecar.snapshot_sha256 != identity[1]:
+            raise ValueError("collection fingerprint mismatch: пересобрать sidecar")
         if any(
             entry.snapshot_sha256 != sidecar.snapshot_sha256
             for entries in sidecar.entries.values()
             for entry in entries.values()
         ):
-            raise ValueError("entry snapshot hash mismatch")
-        return sidecar
+            raise ValueError("entry snapshot hash mismatch: пересобрать sidecar")
+        return SidecarLoad(sidecar)
     except (OSError, ValueError, ValidationError) as exc:
-        logger.warning("parent context sidecar unavailable for %s: %s", snapshot, exc)
-        return None
+        reason = str(exc)
+        logger.warning(
+            "parent context sidecar unavailable for %s: %s", snapshot, reason
+        )
+        return SidecarLoad(None, reason)
 
 
 def parent_cache_version(max_chars: int) -> str:
-    return repr(("parent-context-v1", max_chars, _identity()))
+    return repr(("parent-context-v2", max_chars, _identity()))
 
 
-def replace_parents(passages: list[dict], max_chars: int = 3000) -> list[dict]:
-    """Replace known children without mutating input; retain the first parent window."""
-    sidecar = _load_sidecar(_identity())
+def replace_parents(
+    passages: list[dict], max_chars: int = 3000, *, stats: ParentStats | None = None
+) -> list[dict]:
+    """Replace known children; optionally report stage counts without mutating input."""
+    stats = stats if stats is not None else ParentStats()
+    loaded = _load_sidecar(_identity())
+    sidecar = loaded.sidecar
     if sidecar is None:
+        stats.children += len(passages)
+        stats.unavailable_reason = loaded.reason
         return passages
     result, seen = [], set()
     for passage in passages:
@@ -107,12 +150,15 @@ def replace_parents(passages: list[dict], max_chars: int = 3000) -> list[dict]:
         cid = passage.get("chunk_id", meta.get("chunk_id"))
         entry = sidecar.entries.get(source, {}).get(str(cid))
         if entry is None:
+            stats.children += 1
             result.append(passage)
             continue
         key = (source, entry.parent_id)
         if key in seen:
+            stats.deduplicated += 1
             continue
         seen.add(key)
+        stats.replaced += 1
         parent = copy.deepcopy(passage)
         parent["text"] = entry.text[: min(max_chars, 3000)]
         parent["metadata"] = {

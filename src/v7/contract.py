@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional, TypedDict
+from typing import List, Literal, NotRequired, Optional, TypedDict
 
 from src.v7.state_types import (
     RetrievalPlan,
@@ -74,6 +74,7 @@ class PackResult(TypedDict):
     final_context: List[dict]
     status: PackStatus
     dropped: int
+    parent_context: NotRequired[dict]
 
 
 class Verdict(TypedDict):

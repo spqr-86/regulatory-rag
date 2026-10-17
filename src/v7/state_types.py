@@ -184,6 +184,7 @@ class RAGState(TypedDict, total=False):
     llm_usage: Annotated[
         List[dict], operator.add
     ]  # token usage per LLM call (roadmap 4a)
+    parent_context_stats: Annotated[List[dict], operator.add]
     sufficient: bool
     # OUTPUT
     final_passages: List[dict]

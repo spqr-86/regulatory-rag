@@ -3,6 +3,7 @@
 import copy
 import json
 import os
+import sqlite3
 
 import pytest
 
@@ -14,7 +15,14 @@ from src.v7.config import V7Config, v7_config
 def sidecar(tmp_path, monkeypatch):
     from src.indexing import parent_context as parents
 
-    (tmp_path / "chroma.sqlite3").write_bytes(b"synthetic snapshot")
+    with sqlite3.connect(tmp_path / "chroma.sqlite3") as con:
+        con.execute(
+            "create table embedding_metadata (id integer, key text, string_value text, int_value integer)"
+        )
+        con.executemany(
+            "insert into embedding_metadata values (1, ?, ?, null)",
+            [("source", "law"), ("chunk_id", "1"), ("chroma:document", "Child text")],
+        )
     monkeypatch.setattr(parents, "active_snapshot", lambda: tmp_path)
     monkeypatch.setattr(v7_config, "PARENT_CONTEXT_ENABLE", True)
     parents._load_sidecar.cache_clear()
@@ -22,7 +30,7 @@ def sidecar(tmp_path, monkeypatch):
     def write(rows=None, **overrides):
         digest = parents.snapshot_hash(tmp_path)
         data = {
-            "version": 1,
+            "version": 2,
             "snapshot_sha256": digest,
             "entries": {
                 "law": {
@@ -132,7 +140,10 @@ def test_cache_separates_flag_sidecar_and_snapshot(sidecar, monkeypatch):
     assert packed(rows, cache=cache)["final_context"][0]["text"] == "Updated window"
     db = path / "chroma.sqlite3"
     stamp = db.stat().st_mtime_ns
-    db.write_bytes(b"different snapshot")
+    with sqlite3.connect(db) as con:
+        con.execute(
+            "update embedding_metadata set string_value='changed text' where key='chroma:document'"
+        )
     os.utime(db, ns=(stamp + 1_000_000_000, stamp + 1_000_000_000))
     assert packed(rows, cache=cache)["final_context"] == rows
 
@@ -168,7 +179,7 @@ def test_config_env_override(monkeypatch):
     assert V7Config(_env_file=None).PARENT_CONTEXT_ENABLE is False
 
 
-def test_sidecar_is_loaded_once(sidecar, monkeypatch):
+def test_logical_hash_is_checked_on_each_pack(sidecar, monkeypatch):
     from src.indexing import parent_context as parents
 
     _, write = sidecar
@@ -183,7 +194,8 @@ def test_sidecar_is_loaded_once(sidecar, monkeypatch):
     monkeypatch.setattr(parents, "snapshot_hash", count)
     packed([passage()])
     packed([passage(2)])
-    assert len(calls) == 1
+    assert len(calls) >= 2
+    assert parents._load_sidecar.cache_info().misses == 1
 
 
 def test_metadata_only_id_source_dedup_and_sanitize(sidecar):
@@ -240,3 +252,147 @@ def test_sidecar_builder_uses_sources_and_omits_unaligned(tmp_path):
     assert set(sidecar.entries["law.md"]) == {"0", "2"}
     assert sidecar.entries["law.md"]["0"].parent_id == "law.md::article:1:0"
     assert sidecar.entries["law.md"]["2"].parent_id == "law.md::article:2:1"
+
+
+def test_logical_hash_and_key_ignore_physical_changes(sidecar):
+    from src.indexing import parent_context as parents
+
+    path, write = sidecar
+    write()
+    digest = parents.snapshot_hash(path)
+    key = pack.candidate_version([passage()], {}, "query")
+    with sqlite3.connect(path / "chroma.sqlite3") as con:
+        con.execute("pragma journal_mode=wal")
+        con.execute("create table unrelated (value text)")
+        con.execute("insert into unrelated values ('client bookkeeping')")
+        con.commit()
+        con.execute("pragma wal_checkpoint(truncate)")
+        con.execute("vacuum")
+    assert parents.snapshot_hash(path) == digest
+    assert pack.candidate_version([passage()], {}, "query") == key
+    assert packed([passage()])["final_context"][0]["metadata"]["parent_id"] == "p1"
+    with sqlite3.connect(path / "chroma.sqlite3") as con:
+        con.execute("insert into embedding_metadata values (2, 'chunk_id', '2', null)")
+    assert parents.snapshot_hash(path) != digest
+    with sqlite3.connect(path / "chroma.sqlite3") as con:
+        con.execute("delete from embedding_metadata where id=2")
+    assert parents.snapshot_hash(path) == digest
+
+
+@pytest.mark.parametrize(
+    "override, reason",
+    [
+        ({"version": 1}, "пересобрать sidecar"),
+        ({"snapshot_sha256": "foreign"}, "fingerprint mismatch"),
+    ],
+)
+def test_failure_reason_in_pack_debug(sidecar, caplog, override, reason):
+    _, write = sidecar
+    write(**override)
+    result = packed([passage()])
+    assert result["final_context"] == [passage()]
+    stats = result["parent_context"]
+    assert stats["replaced"] == 0 and stats["children"] == 1
+    assert reason in stats["unavailable_reason"]
+    assert reason in caplog.text
+
+
+def test_pack_parent_counters(sidecar):
+    _, write = sidecar
+    write([(1, "same", "Parent"), (2, "same", "Parent")])
+    result = packed([passage(1), passage(2), passage(99)])
+    assert result["parent_context"] == {
+        "replaced": 1,
+        "children": 1,
+        "deduplicated": 1,
+        "unavailable_reason": None,
+    }
+
+
+@pytest.mark.integration
+def test_hash_survives_chroma_open_on_snapshot_copy(tmp_path, monkeypatch):
+    """Use only a disposable copy; explicit vectors prevent embedding downloads/calls."""
+    import shutil
+    import socket
+    from pathlib import Path
+
+    import chromadb
+    from chromadb.config import Settings
+
+    from src.indexing import parent_context as parents
+
+    original = Path("chroma_db.snapshots/build-8cs1plb3")
+    if not original.is_dir():
+        pytest.skip("local snapshot is unavailable")
+    snapshot = tmp_path / "snapshot"
+    shutil.copytree(original, snapshot)
+    monkeypatch.setattr(parents, "active_snapshot", lambda: snapshot)
+
+    def offline(*args, **kwargs):
+        raise AssertionError("network forbidden")
+
+    monkeypatch.setattr(socket, "create_connection", offline)
+    digest = parents.snapshot_hash(snapshot)
+    key = parents.parent_cache_version(3000)
+    client = chromadb.PersistentClient(
+        str(snapshot), settings=Settings(anonymized_telemetry=False)
+    )
+    assert parents.snapshot_hash(snapshot) == digest
+    assert parents.parent_cache_version(3000) == key
+    collection = client.create_collection(
+        "parent-binding-test", embedding_function=None
+    )
+    collection.add(
+        ids=["test"],
+        documents=["test text"],
+        metadatas=[{"source": "test", "chunk_id": 1}],
+        embeddings=[[1.0, 0.0, 0.0]],
+    )
+    assert parents.snapshot_hash(snapshot) != digest
+    collection.delete(ids=["test"])
+    assert parents.snapshot_hash(snapshot) == digest
+    loaded = parents._load_sidecar(parents._identity())
+    assert loaded.sidecar is not None, loaded.reason
+    source, entries = next(iter(loaded.sidecar.entries.items()))
+    cid = next(iter(entries))
+    result = parents.replace_parents([passage(int(cid), source)])
+    assert result[0]["metadata"]["parent_id"]
+
+
+@pytest.mark.parametrize("branch", ["simple", "complex"])
+def test_node_debug_reaches_compiled_graph_eval(sidecar, branch):
+    from langgraph.graph import END, START, StateGraph
+
+    from eval.run_v7_eval import record_fields, run_query, summarize_parents
+    from src.v7.nodes.evaluate_complex import evaluate_complex
+    from src.v7.nodes.evaluate_triage import evaluate_triage
+    from src.v7.state_types import RAGState
+
+    _, write = sidecar
+    write()
+    plan = {
+        "threshold": 0.1,
+        "min_passages": 1,
+        "min_keyword_overlap": 0.0,
+        "max_single_doc_ratio": 1.0,
+    }
+
+    def prepare(state):
+        return {
+            "plan": plan,
+            "retrieval_attempts": [
+                {"stage": branch, "passages": [passage()], "attempt_plan": plan}
+            ],
+        }
+
+    builder = StateGraph(RAGState)
+    builder.add_node("prepare", prepare)
+    builder.add_node(
+        "evaluate", evaluate_triage if branch == "simple" else evaluate_complex
+    )
+    builder.add_edge(START, "prepare")
+    builder.add_edge("prepare", "evaluate")
+    builder.add_edge("evaluate", END)
+    row = record_fields(run_query(builder.compile(), "Parent text"))
+    assert row["parent_context_stats"][0]["replaced"] == 1
+    assert summarize_parents([row])["parent_replaced_total"] >= 1
