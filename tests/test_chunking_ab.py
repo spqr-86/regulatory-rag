@@ -3,8 +3,6 @@
 import re
 from pathlib import Path
 
-import pytest
-
 from eval.chunking_ab.chunkers import (
     chunk_paragraphs,
     chunk_structural,

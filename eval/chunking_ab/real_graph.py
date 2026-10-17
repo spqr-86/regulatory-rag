@@ -15,7 +15,6 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -30,7 +29,6 @@ def main() -> int:
 
     from eval.run_retrieval_eval import init_engine
     from src.v7.retrieval import retrieve_context
-    from src.v7 import config as v7config
 
     questions = []
     seen = set()

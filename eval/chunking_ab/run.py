@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import pickle
 import random
 import re
@@ -434,7 +433,7 @@ def render_report(res: dict) -> str:
     for v, d in res["diff_vs_C"].items():
         cells = [f"{d[f'hybrid/{B}'][0]*100:+.1f} [{d[f'hybrid/{B}'][1]*100:+.1f}; {d[f'hybrid/{B}'][2]*100:+.1f}]" for B in BUDGETS]
         L.append(f"| {v} | " + " | ".join(cells) + " |")
-    L += ["", f"## По документам (hybrid, B=8000)", ""]
+    L += ["", "## По документам (hybrid, B=8000)", ""]
     docs = sorted({d for v in res["by_doc"].values() for d in v})
     L += ["| документ | n | " + " | ".join(VARIANTS) + " |", "|---|---|" + "---|" * len(VARIANTS)]
     for d in docs:

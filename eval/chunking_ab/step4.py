@@ -97,7 +97,7 @@ def main() -> int:
     parent_of = {(r["doc"], str(r["chunk_id"])): r["norm_id"] for r in jl("step2_parents.jsonl") if r.get("norm_id")}
     labels = jl("norm_labels.jsonl")
 
-    agg: dict = defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0, 0]))  # group→scheme→[q,qf,qc,nf,nc,nnorms] 
+    agg: dict = defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0, 0]))  # group→scheme→[q,qf,qc,nf,nc,nnorms]
     res = {}
     sizes = defaultdict(lambda: defaultdict(list))
     detail = []
