@@ -22,6 +22,9 @@ Usage:
     .venv/bin/python eval/run_retrieval_eval.py --path simple --out benchmarks/r.json
 """
 
+# ANCHOR: Retrieval passages → ordered child identities for metrics; parent bodies
+# remain one generator passage. Other evaluation helpers preserve retrieval parity.
+
 from __future__ import annotations
 
 import argparse
@@ -89,7 +92,8 @@ def extract_chunk_ids(passages: Iterable[dict]) -> List[str]:
 
     Identity is ``passage_identity`` — the same ``"{source}#{chunk_id}"`` key the
     GT generator wrote, not the bare index-time ``chunk_id`` (a per-source int,
-    which collides across documents).
+    which collides across documents). Parents expand to their absorbed children
+    in encounter order; these are metric identities, not generator slot ranks.
     """
     from src.v7.nlp_core import passage_identity
 
@@ -98,20 +102,25 @@ def extract_chunk_ids(passages: Iterable[dict]) -> List[str]:
     for p in passages or []:
         if not p:
             continue
-        pid = passage_identity(p)
-        if not pid or pid in seen:
-            continue
-        seen.add(pid)
-        ids.append(pid)
+        children = (p.get("metadata") or {}).get("child_chunk_ids")
+        identities = (
+            [passage_identity({**p, "chunk_id": cid}) for cid in children]
+            if children
+            else [passage_identity(p)]
+        )
+        for pid in identities:
+            if pid and pid not in seen:
+                seen.add(pid)
+                ids.append(pid)
     return ids
 
 
 def to_candidates(passages: Iterable[dict]) -> List[dict]:
     """Retrieved passages as labelling candidates: identity, text, source.
 
-    Same order and same deduplication as ``extract_chunk_ids`` — a human
-    labelling one pool while the metric measures another is the failure this
-    shared shape exists to prevent.
+    One candidate per passage body. Parent metric identities may expand to
+    several absorbed children in ``extract_chunk_ids``; labelling keeps the
+    representative identity because there is still only one displayed body.
     """
     from src.v7.nlp_core import passage_identity
 

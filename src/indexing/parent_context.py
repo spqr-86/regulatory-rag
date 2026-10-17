@@ -143,7 +143,7 @@ def replace_parents(
         stats.children += len(passages)
         stats.unavailable_reason = loaded.reason
         return passages
-    result, seen = [], set()
+    result, seen = [], {}
     for passage in passages:
         meta = passage.get("metadata") or {}
         source = meta.get("source") or passage.get("doc_id", "")
@@ -156,17 +156,21 @@ def replace_parents(
         key = (source, entry.parent_id)
         if key in seen:
             stats.deduplicated += 1
+            children = seen[key]["metadata"]["child_chunk_ids"]
+            if cid not in children:
+                children.append(cid)
             continue
-        seen.add(key)
         stats.replaced += 1
         parent = copy.deepcopy(passage)
         parent["text"] = entry.text[: min(max_chars, 3000)]
         parent["metadata"] = {
             **meta,
             "child_chunk_id": cid,
+            "child_chunk_ids": [cid],
             "parent_id": entry.parent_id,
             "child_score": passage.get("score"),
         }
+        seen[key] = parent
         result.append(parent)
     return result
 

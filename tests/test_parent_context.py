@@ -73,6 +73,7 @@ def test_replace_preserves_provenance_and_input(sidecar):
     assert result["metadata"] == {
         **before[0]["metadata"],
         "child_chunk_id": 1,
+        "child_chunk_ids": [1],
         "parent_id": "p1",
         "child_score": 0.7,
     }
@@ -396,3 +397,27 @@ def test_node_debug_reaches_compiled_graph_eval(sidecar, branch):
     row = record_fields(run_query(builder.compile(), "Parent text"))
     assert row["parent_context_stats"][0]["replaced"] == 1
     assert summarize_parents([row])["parent_replaced_total"] >= 1
+
+
+def test_absorbed_child_ids_survive_parent_dedup(sidecar):
+    from eval.run_retrieval_eval import extract_chunk_ids
+
+    _, write = sidecar
+    write([(1, "same", "Parent"), (2, "same", "Parent"), (3, "same", "Parent")])
+    rows = [passage(1), passage(2), passage(3), passage(2), passage(1, "other")]
+    before = copy.deepcopy(rows)
+    context = packed(rows)["final_context"]
+    assert len(context) == 2
+    assert context[0]["metadata"]["child_chunk_ids"] == [1, 2, 3]
+    assert extract_chunk_ids(context) == ["law#1", "law#2", "law#3", "other#1"]
+    assert rows == before
+
+
+def test_off_child_ids_keep_order_and_dedup(sidecar, monkeypatch):
+    from eval.run_retrieval_eval import extract_chunk_ids
+
+    monkeypatch.setattr(v7_config, "PARENT_CONTEXT_ENABLE", False)
+    rows = [passage(3), passage(1), passage(3), passage(1, "other")]
+    context = packed(rows)["final_context"]
+    assert context == rows
+    assert extract_chunk_ids(context) == ["law#3", "law#1", "other#1"]
