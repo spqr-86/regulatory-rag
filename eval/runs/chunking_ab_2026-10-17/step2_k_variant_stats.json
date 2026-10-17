@@ -1,0 +1,25 @@
+{
+  "children": 10137,
+  "median_chars": 266,
+  "max_chars": 450,
+  "unique_texts": 10025,
+  "missing_unique_texts": 9680,
+  "estimated_tokens": 1304090,
+  "estimated_usd": 0.0260818,
+  "price_per_m_tokens_usd": 0.02,
+  "tokenizer": "cl100k_base",
+  "embedding_performed": false,
+  "permission": "нужно разрешение Петра",
+  "word_fallback_children": 3281,
+  "shortened_intro_children": 380,
+  "parents": 1739,
+  "by_doc": {
+    "2464.md": 623,
+    "тк рф.pdf": 4738,
+    "426-ФЗ.pdf": 572,
+    "О пожарной безопасности.pdf": 542,
+    "1479 ппр.pdf": 1588,
+    "782н.pdf": 1208,
+    "776н.pdf": 866
+  }
+}

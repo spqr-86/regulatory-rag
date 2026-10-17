@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
+from src.indexing.parent_context import parent_cache_version, replace_parents
 from src.v7.config import v7_config
 from src.v7.context_format import _chunk_header
 from src.v7.contract import PackResult, PackStatus
@@ -103,6 +104,8 @@ def candidate_version(
         + _SEP
         + (query or "")
     )
+    if v7_config.PARENT_CONTEXT_ENABLE:
+        raw += _SEP + parent_cache_version(v7_config.PARENT_MAX_CHARS)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -172,7 +175,7 @@ def pack_context(
 ) -> PackResult:
     """Упаковать кандидата в контекст, который увидит генератор.
 
-    Порядок (спек §1): expand → sanitize → обрезка MAX_CHUNKS_FOR_LLM →
+    Порядок (спек §1): expand → parent (opt-in) → sanitize → обрезка MAX_CHUNKS_FOR_LLM →
     бюджет токенов. degraded (expander упал) запрещает снимать refs_resolved
     (см. validate_context). Вход не мутируется; кеш отдаёт копию.
     """
@@ -206,6 +209,9 @@ def pack_context(
             logger.warning("pack_context: expansion failed: %s", exc)
             status = "degraded"
             working = copy.deepcopy(passages)
+
+    if v7_config.PARENT_CONTEXT_ENABLE:
+        working = replace_parents(working, v7_config.PARENT_MAX_CHARS)
 
     packed = [{**p, "text": sanitize_for_llm(p.get("text", ""))} for p in working]
 
