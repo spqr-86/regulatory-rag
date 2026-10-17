@@ -64,7 +64,10 @@ def main() -> int:
                 ],
                 "attempt_passages": [
                     [
-                        {"source": (p.get("metadata") or {}).get("source"), "chunk_id": p.get("chunk_id")}
+                        {
+                            "source": (p.get("metadata") or {}).get("source"),
+                            "chunk_id": p.get("chunk_id"),
+                        }
                         for p in (a.get("passages") or [])
                     ]
                     for a in res.attempts
@@ -73,9 +76,12 @@ def main() -> int:
         )
         print(i, len(questions), res.outcome, stages, flush=True)
     meta = {"chroma": os.environ.get("CHROMA_DB_PATH"), "n": len(rows)}
-    path = OUT / ("step4_real_graph_smoke.jsonl" if args.limit else "step4_real_graph.jsonl")
+    path = OUT / (
+        "step4_real_graph_smoke.jsonl" if args.limit else "step4_real_graph.jsonl"
+    )
     path.write_text(
-        "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8"
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
+        encoding="utf-8",
     )
     (OUT / "step4_real_graph_meta.json").write_text(json.dumps(meta), encoding="utf-8")
     return 0

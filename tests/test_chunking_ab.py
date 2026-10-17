@@ -59,9 +59,8 @@ def test_structural_split_repeats_intro_for_every_subitem_chunk():
 
 
 def test_structural_never_cuts_inside_sentence():
-    text = (
-        "Статья 8. Короткая\nТекст.\nСтатья 9. Длинная\n"
-        + " ".join(f"Предложение номер {i} содержит слова." for i in range(80))
+    text = "Статья 8. Короткая\nТекст.\nСтатья 9. Длинная\n" + " ".join(
+        f"Предложение номер {i} содержит слова." for i in range(80)
     )
     chunks = chunk_structural(paragraphs_from_text(text, wrapped=False), "Док", 400)
     assert len(chunks) > 3
@@ -75,7 +74,9 @@ def test_structural_covers_all_paragraphs():
 
 
 def test_item_number_with_backslash_escape_stays_item_number():
-    text = "15. Первый пункт.\n16\\. Внеплановый инструктаж проводится:\nа) раз;\nб) два;"
+    text = (
+        "15. Первый пункт.\n16\\. Внеплановый инструктаж проводится:\nа) раз;\nб) два;"
+    )
     chunks = chunk_structural(paragraphs_from_text(text, wrapped=False), "Док", 1800)
     assert any("п. 16" in c for c in chunks)
     assert not any("п. 6" in c for c in chunks)
@@ -108,7 +109,9 @@ def test_g005_real_2464_item16_every_chunk_has_intro():
 
 
 def test_long_item_number_not_split_from_its_text():
-    text = "43. Коротко.\n44. " + " ".join(f"Предложение {i} содержит слова." for i in range(40))
+    text = "43. Коротко.\n44. " + " ".join(
+        f"Предложение {i} содержит слова." for i in range(40)
+    )
     chunks = chunk_structural(paragraphs_from_text(text, wrapped=False), "Док", 300)
     assert not any(c.split("\n", 1)[1].strip() == "44." for c in chunks if "\n" in c)
     assert any("44. Предложение 0" in c for c in chunks)

@@ -106,7 +106,11 @@ def load_paragraphs() -> dict[str, list[str]]:
     out = {}
     for name, (fname, wrapped) in DOCS.items():
         path = ROOT / "source_docs" / fname
-        text = path.read_text(encoding="utf-8") if fname.endswith(".md") else pdf_text(path)
+        text = (
+            path.read_text(encoding="utf-8")
+            if fname.endswith(".md")
+            else pdf_text(path)
+        )
         out[name] = paragraphs_from_text(text, wrapped=wrapped)
     return out
 
@@ -118,7 +122,9 @@ def strip_heading(text: str, heading: str) -> str:
     return text
 
 
-def build_variants(paras: dict[str, list[str]]) -> dict[str, list[tuple[str, str, str]]]:
+def build_variants(
+    paras: dict[str, list[str]],
+) -> dict[str, list[tuple[str, str, str]]]:
     """variant -> [(doc, text для эмбеддинга, тело без префикса)]."""
     variants: dict[str, list[tuple[str, str, str]]] = {v: [] for v in VARIANTS}
     for src, _, text, heading in read_chunks(CURRENT_DB, set(DOCS)):
@@ -162,7 +168,11 @@ def load_questions() -> tuple[list[dict], dict[str, dict]]:
                     labels.append({"id": rid, "doc": doc, "words": w})
             if labels:
                 questions.append(
-                    {"question": q["question"], "labels": labels, "doc": labels[0]["doc"]}
+                    {
+                        "question": q["question"],
+                        "labels": labels,
+                        "doc": labels[0]["doc"],
+                    }
                 )
     return questions, label_text
 
@@ -173,7 +183,7 @@ def load_questions() -> tuple[list[dict], dict[str, dict]]:
 def chunk_quality(chunks: list[tuple[str, str, str]]) -> dict:
     """Длины — по тексту для эмбеддинга; оборванность и сироты — по телу."""
     lens = [len(t) for _, t, _ in chunks]
-    cut = sum(1 for _, _, b in chunks if b.rstrip()[-1:] not in ".;:!?»)\"…")
+    cut = sum(1 for _, _, b in chunks if b.rstrip()[-1:] not in '.;:!?»)"…')
     sub = re.compile(r"^(?:[а-яё]|\d+)\)\s")
     # сирота: тело начинается с подпункта «а)», то есть вводная осталась в другом чанке
     orphan = sum(1 for _, _, b in chunks if sub.match(b.lstrip()))
@@ -194,11 +204,15 @@ def stem_tokens(text: str) -> list[str]:
     return [w[:5] for w in re.findall(r"[а-яёa-z0-9]+", text.lower()) if len(w) > 1]
 
 
-def embed_all(texts: list[str], cache_path: Path, estimate_only: bool) -> tuple[dict, int, int]:
+def embed_all(
+    texts: list[str], cache_path: Path, estimate_only: bool
+) -> tuple[dict, int, int]:
     import tiktoken
 
     enc = tiktoken.get_encoding("cl100k_base")
-    cache: dict[str, np.ndarray] = pickle.loads(cache_path.read_bytes()) if cache_path.exists() else {}
+    cache: dict[str, np.ndarray] = (
+        pickle.loads(cache_path.read_bytes()) if cache_path.exists() else {}
+    )
     key = lambda t: hashlib.sha256(t.encode("utf-8")).hexdigest()  # noqa: E731
     todo = sorted({t for t in texts if key(t) not in cache}, key=key)
     tokens = sum(len(enc.encode(t, disallowed_special=())) for t in todo)
@@ -217,7 +231,9 @@ def embed_all(texts: list[str], cache_path: Path, estimate_only: bool) -> tuple[
     return cache, len(todo), tokens
 
 
-def rank_lists(texts: list[str], vecs: np.ndarray, qtexts: list[str], qvecs: np.ndarray) -> dict[str, list[list[int]]]:
+def rank_lists(
+    texts: list[str], vecs: np.ndarray, qtexts: list[str], qvecs: np.ndarray
+) -> dict[str, list[list[int]]]:
     from rank_bm25 import BM25Okapi
 
     vn = vecs / np.linalg.norm(vecs, axis=1, keepdims=True)
@@ -245,7 +261,9 @@ def select_budget(order: list[int], lengths: list[int], budget: int) -> list[int
     return chosen
 
 
-def label_cover_sets(cw: list[frozenset[str]], label: frozenset[str]) -> set[frozenset[int]]:
+def label_cover_sets(
+    cw: list[frozenset[str]], label: frozenset[str]
+) -> set[frozenset[int]]:
     """Наборы чанков, покрывающих метку: один чанк ≥60% слов либо два соседних в тексте."""
     frac = {}
     for i, w in enumerate(cw):
@@ -256,7 +274,10 @@ def label_cover_sets(cw: list[frozenset[str]], label: frozenset[str]) -> set[fro
     for i, f in frac.items():
         if f >= COVER_THRESHOLD:
             sets.add(frozenset((i,)))
-        if i + 1 in frac and len((cw[i] | cw[i + 1]) & label) / len(label) >= COVER_THRESHOLD:
+        if (
+            i + 1 in frac
+            and len((cw[i] | cw[i + 1]) & label) / len(label) >= COVER_THRESHOLD
+        ):
             sets.add(frozenset((i, i + 1)))
     return sets
 
@@ -318,7 +339,9 @@ def bootstrap_diff(a: list[bool], b: list[bool], n: int = 10000, seed: int = 7):
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--yes", action="store_true", help="разрешить платные эмбеддинги")
     args = ap.parse_args()
@@ -342,23 +365,34 @@ def main() -> int:
             blob_by_doc[d] += "\n" + b
         norm = lambda x: " ".join(x.split())  # noqa: E731
         blobs = {d: norm(b) for d, b in blob_by_doc.items()}
-        missing = sum(1 for d, ps in paras.items() for p in ps if norm(p)[:60] not in blobs[d])
+        missing = sum(
+            1 for d, ps in paras.items() for p in ps if norm(p)[:60] not in blobs[d]
+        )
         cover_gaps[name] = missing
     print("абзацев без следа в чанках:", cover_gaps)
 
     qtexts = [q["question"] for q in questions]
     all_texts = [t for c in variants.values() for _, t, _ in c] + qtexts
-    cache, n_new, tokens = embed_all(all_texts, OUT / "embed_cache.pkl", estimate_only=args.dry_run)
-    print(f"к эмбеддингу новых текстов: {n_new}, токенов ≈ {tokens:,}, цена ≈ ${tokens / 1e6 * PRICE_PER_M_TOKENS:.3f}")
+    cache, n_new, tokens = embed_all(
+        all_texts, OUT / "embed_cache.pkl", estimate_only=args.dry_run
+    )
+    print(
+        f"к эмбеддингу новых текстов: {n_new}, токенов ≈ {tokens:,}, цена ≈ ${tokens / 1e6 * PRICE_PER_M_TOKENS:.3f}"
+    )
     if args.dry_run:
         # проверка оракула без эмбеддингов
-        ranks = {v: {r: [list(range(len(c)))[:100] for _ in questions] for r in RETRIEVERS} for v, c in variants.items()}
+        ranks = {
+            v: {r: [list(range(len(c)))[:100] for _ in questions] for r in RETRIEVERS}
+            for v, c in variants.items()
+        }
         ev = evaluate(variants, questions, ranks)
         for v in VARIANTS:
             orc = ev[v]["oracle"]
             lab_cov = sum(x for q in orc for x in q) / sum(len(q) for q in orc)
             q_cov = sum(any(q) for q in orc) / len(orc)
-            print(f"оракул {v}: меток покрыто {lab_cov:.1%}, вопросов с покрытой меткой {q_cov:.1%}")
+            print(
+                f"оракул {v}: меток покрыто {lab_cov:.1%}, вопросов с покрытой меткой {q_cov:.1%}"
+            )
         return 0
 
     key = lambda t: hashlib.sha256(t.encode("utf-8")).hexdigest()  # noqa: E731
@@ -370,15 +404,29 @@ def main() -> int:
         ranks[v] = rank_lists(texts, vecs, qtexts, qvecs)
     ev = evaluate(variants, questions, ranks)
 
-    keep = [qi for qi in range(len(questions)) if all(any(ev[v]["oracle"][qi]) for v in VARIANTS)]
+    keep = [
+        qi
+        for qi in range(len(questions))
+        if all(any(ev[v]["oracle"][qi]) for v in VARIANTS)
+    ]
     print(f"вопросов, покрытых во всех вариантах: {len(keep)}/{len(questions)}")
 
-    results = {"n_questions": len(questions), "n_kept": len(keep), "quality": quality,
-               "cover_gaps": cover_gaps, "oracle": {}, "metrics": {}, "diff_vs_C": {}, "by_doc": {}}
+    results = {
+        "n_questions": len(questions),
+        "n_kept": len(keep),
+        "quality": quality,
+        "cover_gaps": cover_gaps,
+        "oracle": {},
+        "metrics": {},
+        "diff_vs_C": {},
+        "by_doc": {},
+    }
     for v in VARIANTS:
         orc = ev[v]["oracle"]
         results["oracle"][v] = {
-            "labels_covered": round(sum(x for q in orc for x in q) / sum(len(q) for q in orc), 3),
+            "labels_covered": round(
+                sum(x for q in orc for x in q) / sum(len(q) for q in orc), 3
+            ),
             "questions_covered": round(sum(any(q) for q in orc) / len(orc), 3),
         }
         results["metrics"][v] = {}
@@ -398,47 +446,95 @@ def main() -> int:
                 a = [ev[v]["per"][r][B][qi][0] for qi in keep]
                 b = [ev["C"]["per"][r][B][qi][0] for qi in keep]
                 d, lo, hi = bootstrap_diff(a, b)
-                results["diff_vs_C"][v][f"{r}/{B}"] = [round(d, 3), round(lo, 3), round(hi, 3)]
+                results["diff_vs_C"][v][f"{r}/{B}"] = [
+                    round(d, 3),
+                    round(lo, 3),
+                    round(hi, 3),
+                ]
     r, B = HEADLINE
     docs_kept = defaultdict(list)
     for qi in keep:
         docs_kept[questions[qi]["doc"]].append(qi)
     for v in VARIANTS:
         results["by_doc"][v] = {
-            d: {"n": len(qis), "hit": round(sum(ev[v]["per"][r][B][qi][0] for qi in qis) / len(qis), 3)}
+            d: {
+                "n": len(qis),
+                "hit": round(
+                    sum(ev[v]["per"][r][B][qi][0] for qi in qis) / len(qis), 3
+                ),
+            }
             for d, qis in docs_kept.items()
         }
-    (OUT / "results.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+    (OUT / "results.json").write_text(
+        json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     (OUT / "report.md").write_text(render_report(results), encoding="utf-8")
     print(f"готово: {OUT}/report.md")
     return 0
 
 
 def render_report(res: dict) -> str:
-    L = [f"# Отчёт A/B нарезок (вопросов в сравнении: {res['n_kept']} из {res['n_questions']})", ""]
-    L += ["## Качество нарезки", "", "| вариант | чанков | медиана | p90 | оборвано посреди предложения, % | подпункт без вводной, % |", "|---|---|---|---|---|---|"]
+    L = [
+        f"# Отчёт A/B нарезок (вопросов в сравнении: {res['n_kept']} из {res['n_questions']})",
+        "",
+    ]
+    L += [
+        "## Качество нарезки",
+        "",
+        "| вариант | чанков | медиана | p90 | оборвано посреди предложения, % | подпункт без вводной, % |",
+        "|---|---|---|---|---|---|",
+    ]
     for v, q in res["quality"].items():
-        L.append(f"| {v} | {q['chunks']} | {q['median_chars']} | {q['p90_chars']} | {q['cut_mid_sentence_pct']} | {q['orphan_subitem_pct']} |")
-    L += ["", f"Абзацев без следа в чанках: {res['cover_gaps']}", "", "## Оракул (доля меток, покрытых хоть одним чанком)", ""]
+        L.append(
+            f"| {v} | {q['chunks']} | {q['median_chars']} | {q['p90_chars']} | {q['cut_mid_sentence_pct']} | {q['orphan_subitem_pct']} |"
+        )
+    L += [
+        "",
+        f"Абзацев без следа в чанках: {res['cover_gaps']}",
+        "",
+        "## Оракул (доля меток, покрытых хоть одним чанком)",
+        "",
+    ]
     L += ["| вариант | меток | вопросов |", "|---|---|---|"]
     for v, o in res["oracle"].items():
         L.append(f"| {v} | {o['labels_covered']:.1%} | {o['questions_covered']:.1%} |")
     for r in RETRIEVERS:
         L += ["", f"## Доля вопросов с покрытой нормой при бюджете контекста — {r}", ""]
-        L += ["| вариант | B=4000 | B=8000 | B=16000 | top5 | top12 | чанков при 8000 |", "|---|---|---|---|---|---|---|"]
+        L += [
+            "| вариант | B=4000 | B=8000 | B=16000 | top5 | top12 | чанков при 8000 |",
+            "|---|---|---|---|---|---|---|",
+        ]
         for v in VARIANTS:
             m = res["metrics"][v][r]
-            L.append(f"| {v} | {m['4000']['hit']:.1%} | {m['8000']['hit']:.1%} | {m['16000']['hit']:.1%} | {m['top5']['hit']:.1%} | {m['top12']['hit']:.1%} | {m['8000']['mean_chunks']} |")
-    L += ["", "## Разница с C (п.п., 95% бутстреп-интервал), hybrid", "", "| вариант | B=4000 | B=8000 | B=16000 |", "|---|---|---|---|"]
+            L.append(
+                f"| {v} | {m['4000']['hit']:.1%} | {m['8000']['hit']:.1%} | {m['16000']['hit']:.1%} | {m['top5']['hit']:.1%} | {m['top12']['hit']:.1%} | {m['8000']['mean_chunks']} |"
+            )
+    L += [
+        "",
+        "## Разница с C (п.п., 95% бутстреп-интервал), hybrid",
+        "",
+        "| вариант | B=4000 | B=8000 | B=16000 |",
+        "|---|---|---|---|",
+    ]
     for v, d in res["diff_vs_C"].items():
-        cells = [f"{d[f'hybrid/{B}'][0]*100:+.1f} [{d[f'hybrid/{B}'][1]*100:+.1f}; {d[f'hybrid/{B}'][2]*100:+.1f}]" for B in BUDGETS]
+        cells = [
+            f"{d[f'hybrid/{B}'][0] * 100:+.1f} [{d[f'hybrid/{B}'][1] * 100:+.1f}; {d[f'hybrid/{B}'][2] * 100:+.1f}]"
+            for B in BUDGETS
+        ]
         L.append(f"| {v} | " + " | ".join(cells) + " |")
     L += ["", "## По документам (hybrid, B=8000)", ""]
     docs = sorted({d for v in res["by_doc"].values() for d in v})
-    L += ["| документ | n | " + " | ".join(VARIANTS) + " |", "|---|---|" + "---|" * len(VARIANTS)]
+    L += [
+        "| документ | n | " + " | ".join(VARIANTS) + " |",
+        "|---|---|" + "---|" * len(VARIANTS),
+    ]
     for d in docs:
         n = res["by_doc"]["C"][d]["n"]
-        L.append(f"| {d} | {n} | " + " | ".join(f"{res['by_doc'][v][d]['hit']:.0%}" for v in VARIANTS) + " |")
+        L.append(
+            f"| {d} | {n} | "
+            + " | ".join(f"{res['by_doc'][v][d]['hit']:.0%}" for v in VARIANTS)
+            + " |"
+        )
     return "\n".join(L) + "\n"
 
 

@@ -105,11 +105,13 @@ def same_sample(questions: list[dict], variants: dict) -> tuple[list[dict], list
 def summarize(rows: list[Outcome]) -> dict:
     evaluable = [r for r in rows if r.found]
     norms = sum(len(r.found) for r in rows)
-    qfound, qcomplete = sum(any(r.found) for r in rows), sum(
-        any(r.complete) for r in rows
+    qfound, qcomplete = (
+        sum(any(r.found) for r in rows),
+        sum(any(r.complete) for r in rows),
     )
-    nfound, ncomplete = sum(sum(r.found) for r in rows), sum(
-        sum(r.complete) for r in rows
+    nfound, ncomplete = (
+        sum(sum(r.found) for r in rows),
+        sum(sum(r.complete) for r in rows),
     )
     return {
         "questions": len(rows),

@@ -13,9 +13,7 @@ ARTICLE_RE = re.compile(r"^Статья\s+(\d+(?:\.\d+)*(?:-\d+)?)\.\s*(.*)$")
 # «16.», «16\.», «2(1).», «3.1.» — номер пункта в начале абзаца
 ITEM_RE = re.compile(r"^(\d+(?:\(\d+\))?(?:\.\d+)*)\\?\.\s+\S")
 SUBITEM_RE = re.compile(r"^(?:[а-яё]|\d+)\)\s")
-HEADING_RE = re.compile(
-    r"^(?:Раздел|РАЗДЕЛ|Глава|ГЛАВА|[IVXLC]+\.)\s+\S.{0,150}$"
-)
+HEADING_RE = re.compile(r"^(?:Раздел|РАЗДЕЛ|Глава|ГЛАВА|[IVXLC]+\.)\s+\S.{0,150}$")
 SENT_SPLIT_RE = re.compile(r"(?<=[.;:!?])\s+(?=[А-ЯЁ«\"(0-9])")
 TERMINAL = ".;:!?"
 BARE_NUMBER_RE = re.compile(r"^\d+(?:\(\d+\))?(?:\.\d+)*\.$")
@@ -186,7 +184,11 @@ def _split_unit_body(unit: Unit, limit: int) -> list[tuple[str, str]]:
             label = ""
             nums = [n for n in buf_nums if n]
             if nums:
-                label = f"часть {nums[0]}" if len(nums) == 1 else f"части {nums[0]}–{nums[-1]}"
+                label = (
+                    f"часть {nums[0]}"
+                    if len(nums) == 1
+                    else f"части {nums[0]}–{nums[-1]}"
+                )
             out.append((label, "\n".join(buf)))
         buf, buf_nums = [], []
 
@@ -194,13 +196,19 @@ def _split_unit_body(unit: Unit, limit: int) -> list[tuple[str, str]]:
         ptext = "\n".join(plines)
         if len(ptext) > limit:
             flush()
-            intro = plines[0] if len(plines) > 1 and SUBITEM_RE.match(plines[1]) else None
+            intro = (
+                plines[0] if len(plines) > 1 and SUBITEM_RE.match(plines[1]) else None
+            )
             if intro:
                 for body in _pack(intro, plines[1:], limit):
-                    out.append((f"часть {num}" if num and unit.kind == "article" else "", body))
+                    out.append(
+                        (f"часть {num}" if num and unit.kind == "article" else "", body)
+                    )
             else:
                 for body in _pack(None, plines, limit):
-                    out.append((f"часть {num}" if num and unit.kind == "article" else "", body))
+                    out.append(
+                        (f"часть {num}" if num and unit.kind == "article" else "", body)
+                    )
             continue
         if buf and len("\n".join(buf)) + 1 + len(ptext) > limit:
             flush()
@@ -243,13 +251,17 @@ def chunk_window(text: str, size: int = 350, stride: int = 300) -> list[str]:
     return out
 
 
-def chunk_paragraphs(paras: list[str], min_chars: int = 200, max_chars: int = 3000) -> list[str]:
+def chunk_paragraphs(
+    paras: list[str], min_chars: int = 200, max_chars: int = 3000
+) -> list[str]:
     out: list[str] = []
     cur = ""
     for p in paras:
         cur = f"{cur}\n{p}".strip() if cur else p
         if len(cur) >= min_chars:
-            out.extend(split_sentences(cur, max_chars) if len(cur) > max_chars else [cur])
+            out.extend(
+                split_sentences(cur, max_chars) if len(cur) > max_chars else [cur]
+            )
             cur = ""
     if cur:
         out.append(cur)

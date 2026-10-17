@@ -95,7 +95,9 @@ def align_document(
         reason = (
             "empty_words"
             if not cw[i]
-            else "below_threshold" if score < threshold else None
+            else "below_threshold"
+            if score < threshold
+            else None
         )
         result.append(
             Alignment(

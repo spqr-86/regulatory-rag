@@ -24,7 +24,11 @@ CAP = 3000
 
 
 def jl(name: str) -> list[dict]:
-    return [json.loads(x) for x in (OUT / name).read_text(encoding="utf-8").splitlines() if x]
+    return [
+        json.loads(x)
+        for x in (OUT / name).read_text(encoding="utf-8").splitlines()
+        if x
+    ]
 
 
 def window(norm: Norm, body: str, cap: int = CAP) -> str:
@@ -49,7 +53,9 @@ def window(norm: Norm, body: str, cap: int = CAP) -> str:
             return "\n".join(norm.paragraphs[lo:hi])
 
 
-def build_b2(passages: list[dict], parent_of: dict, norms: dict[str, Norm]) -> list[tuple[str, str, str | None]]:
+def build_b2(
+    passages: list[dict], parent_of: dict, norms: dict[str, Norm]
+) -> list[tuple[str, str, str | None]]:
     out, seen = [], set()
     for p in passages:
         pid = parent_of.get((p["source"], str(p["chunk_id"])))
@@ -81,7 +87,9 @@ def evaluate(ctx, norm: Norm, parents_known: bool) -> tuple[bool, bool]:
         w = words(text)
         covered |= w
         found |= pid == norm.id or (
-            pid is None and bool(norm.words) and len(w & norm.words) / len(norm.words) >= 0.6
+            pid is None
+            and bool(norm.words)
+            and len(w & norm.words) / len(norm.words) >= 0.6
         )
     complete = bool(norm.words) and len(covered & norm.words) / len(norm.words) >= 0.9
     return found, complete
@@ -91,13 +99,25 @@ def main() -> int:
     graph = {r["question"]: r for r in jl("step4_real_graph.jsonl")}
     norm_rows = {r["id"]: r for r in jl("step1_norms.jsonl")}
     norms = {
-        i: Norm(r["doc"], r["kind"], r["number"], tuple(r["paragraphs"]), int(i.rsplit(":", 1)[1]))
+        i: Norm(
+            r["doc"],
+            r["kind"],
+            r["number"],
+            tuple(r["paragraphs"]),
+            int(i.rsplit(":", 1)[1]),
+        )
         for i, r in norm_rows.items()
     }
-    parent_of = {(r["doc"], str(r["chunk_id"])): r["norm_id"] for r in jl("step2_parents.jsonl") if r.get("norm_id")}
+    parent_of = {
+        (r["doc"], str(r["chunk_id"])): r["norm_id"]
+        for r in jl("step2_parents.jsonl")
+        if r.get("norm_id")
+    }
     labels = jl("norm_labels.jsonl")
 
-    agg: dict = defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0, 0]))  # group→scheme→[q,qf,qc,nf,nc,nnorms]
+    agg: dict = defaultdict(
+        lambda: defaultdict(lambda: [0, 0, 0, 0, 0])
+    )  # group→scheme→[q,qf,qc,nf,nc,nnorms]
     res = {}
     sizes = defaultdict(lambda: defaultdict(list))
     detail = []
@@ -110,7 +130,10 @@ def main() -> int:
         if g["outcome"] != "ready":
             group = f"{group}-{g['outcome']}"
         passages = g["final_context"]
-        a_ctx = [(p["source"], p["text"], parent_of.get((p["source"], str(p["chunk_id"])))) for p in passages]
+        a_ctx = [
+            (p["source"], p["text"], parent_of.get((p["source"], str(p["chunk_id"]))))
+            for p in passages
+        ]
         b2 = build_b2(passages, parent_of, norms)
         a_len = sum(len(c[1]) for c in a_ctx)
         schemes = {"A": a_ctx, "B2": b2, "B2eq": truncate_to(b2, a_len)}
@@ -127,19 +150,43 @@ def main() -> int:
             res.setdefault(group, {}).setdefault("norms", 0)
         res.setdefault(group, {})["norms"] = res[group].get("norms", 0) + len(qnorms)
         res[group]["questions"] = res[group].get("questions", 0) + 1
-        detail.append({"question": lab["question"], "group": group, "norms": [n.id for n in qnorms],
-                       **{s: [evaluate(ctx, n, True) for n in qnorms] for s, ctx in schemes.items()}})
-    lines = ["# Шаг 4 — реальный контекст генератора (граф V7, только поиск), A против B2", ""]
-    lines.append(f"Вопросов с результатом графа: {len(graph)}; индекс: см. step4_real_graph_meta.json.")
+        detail.append(
+            {
+                "question": lab["question"],
+                "group": group,
+                "norms": [n.id for n in qnorms],
+                **{
+                    s: [evaluate(ctx, n, True) for n in qnorms]
+                    for s, ctx in schemes.items()
+                },
+            }
+        )
+    lines = [
+        "# Шаг 4 — реальный контекст генератора (граф V7, только поиск), A против B2",
+        "",
+    ]
+    lines.append(
+        f"Вопросов с результатом графа: {len(graph)}; индекс: см. step4_real_graph_meta.json."
+    )
     for group in sorted(res):
-        lines += ["", f"## Группа {group}: вопросов {res[group]['questions']}, норм {res[group]['norms']}", "",
-                  "| схема | найдена (вопросы) | целиком (вопросы) | найдена (нормы) | целиком (нормы) | средний контекст, знаков |", "|---|---|---|---|---|---|"]
+        lines += [
+            "",
+            f"## Группа {group}: вопросов {res[group]['questions']}, норм {res[group]['norms']}",
+            "",
+            "| схема | найдена (вопросы) | целиком (вопросы) | найдена (нормы) | целиком (нормы) | средний контекст, знаков |",
+            "|---|---|---|---|---|---|",
+        ]
         for s in ("A", "B2", "B2eq"):
             q, qf, qc, nf, nc = agg[group][s]
             mean = sum(sizes[group][s]) / max(len(sizes[group][s]), 1)
-            lines.append(f"| {s} | {qf}/{q} | {qc}/{q} | {nf}/{res[group]['norms']} | {nc}/{res[group]['norms']} | {mean:.0f} |")
+            lines.append(
+                f"| {s} | {qf}/{q} | {qc}/{q} | {nf}/{res[group]['norms']} | {nc}/{res[group]['norms']} | {mean:.0f} |"
+            )
     (OUT / "step4_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    (OUT / "step4_details.jsonl").write_text("\n".join(json.dumps(d, ensure_ascii=False) for d in detail) + "\n", encoding="utf-8")
+    (OUT / "step4_details.jsonl").write_text(
+        "\n".join(json.dumps(d, ensure_ascii=False) for d in detail) + "\n",
+        encoding="utf-8",
+    )
     print("\n".join(lines))
     return 0
 
