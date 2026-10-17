@@ -19,5 +19,5 @@ G005 — complex: B2 не восстановил целевой п.16. G047 — 
 
 Файлы:
 
-- [Отчёт](eval/runs/chunking_ab_2026-10-17/step3_report.md), [маршруты](eval/runs/chunking_ab_2026-10-17/step3_routes.jsonl), [агрегаты](eval/runs/chunking_ab_2026-10-17/step3_results.json), [A@24](eval/runs/chunking_ab_2026-10-17/step3_count_details.jsonl).
-- [routes.py](eval/chunking_ab/routes.py), [step3.py](eval/chunking_ab/step3.py), [тесты](tests/test_chunking_ab_step3.py).
+- `eval/runs/chunking_ab_2026-10-17/step3_report.md`, `eval/runs/chunking_ab_2026-10-17/step3_routes.jsonl`, `eval/runs/chunking_ab_2026-10-17/step3_results.json`, `eval/runs/chunking_ab_2026-10-17/step3_count_details.jsonl`.
+- `eval/chunking_ab/routes.py`, `eval/chunking_ab/step3.py`, `tests/test_chunking_ab_step3.py`.

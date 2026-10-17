@@ -13,5 +13,5 @@
 
 Созданы:
 
-- [norms.py](/home/petr/projects/ai/regulatory-rag/eval/chunking_ab/norms.py), [step1.py](/home/petr/projects/ai/regulatory-rag/eval/chunking_ab/step1.py), [тесты](/home/petr/projects/ai/regulatory-rag/tests/test_chunking_ab_norms.py).
-- В `eval/runs/chunking_ab_2026-10-17/`: [step1_report.md](/home/petr/projects/ai/regulatory-rag/eval/runs/chunking_ab_2026-10-17/step1_report.md), `norm_labels.jsonl`, `norm_labels_disputed.md`, `step1_norms.jsonl`, `step1_parents.jsonl`, `step1_details.jsonl`, `step1_results.json`, `step1_run.log`.
+- `eval/chunking_ab/norms.py`, `eval/chunking_ab/step1.py`, `tests/test_chunking_ab_norms.py`.
+- В `eval/runs/chunking_ab_2026-10-17/`: `eval/runs/chunking_ab_2026-10-17/step1_report.md`, `norm_labels.jsonl`, `norm_labels_disputed.md`, `step1_norms.jsonl`, `step1_parents.jsonl`, `step1_details.jsonl`, `step1_results.json`, `step1_run.log`.

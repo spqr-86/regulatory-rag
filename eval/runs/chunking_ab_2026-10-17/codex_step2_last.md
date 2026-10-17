@@ -22,5 +22,5 @@ K: **10 137 детей**, медиана 266 знаков; 9680 уникаль
 
 Файлы:
 
-- Код: [align.py](/home/petr/projects/ai/regulatory-rag/eval/chunking_ab/align.py), [step2.py](/home/petr/projects/ai/regulatory-rag/eval/chunking_ab/step2.py), [тесты](/home/petr/projects/ai/regulatory-rag/tests/test_chunking_ab_step2.py).
-- [Отчёт](/home/petr/projects/ai/regulatory-rag/eval/runs/chunking_ab_2026-10-17/step2_report.md); рядом: `step2_results.json`, `step2_parents.jsonl`, `step2_details.jsonl`, `step2_losses.jsonl`, `step2_k_children.jsonl`, `step2_k_variant_stats.json`, `step2_run.log`.
+- Код: `eval/chunking_ab/align.py`, `eval/chunking_ab/step2.py`, `tests/test_chunking_ab_step2.py`.
+- `eval/runs/chunking_ab_2026-10-17/step2_report.md`; рядом: `step2_results.json`, `step2_parents.jsonl`, `step2_details.jsonl`, `step2_losses.jsonl`, `step2_k_children.jsonl`, `step2_k_variant_stats.json`, `step2_run.log`.
