@@ -101,7 +101,13 @@ def rejudge(experiment: str) -> None:
     print(f"experiment: {experiment}")
 
 
-def run_experiment(split: str, prefix: str, skip_judge: bool, limit: int | None) -> str:
+def run_experiment(
+    split: str,
+    prefix: str,
+    skip_judge: bool,
+    limit: int | None,
+    cases: list[str] | None = None,
+) -> str:
     """Run the experiment, print the summary and return the experiment name."""
     from dotenv import load_dotenv
     from langsmith import Client
@@ -113,6 +119,8 @@ def run_experiment(split: str, prefix: str, skip_judge: bool, limit: int | None)
     examples = list(
         client.list_examples(dataset_name=DATASET_NAME, splits=[split], limit=limit)
     )
+    if cases:
+        examples = [e for e in examples if e.metadata.get("case_id") in cases]
     evaluators = list(CODE_EVALUATORS)
     if not skip_judge:
         evaluators += judge_evaluators()
@@ -165,13 +173,23 @@ def main() -> None:
         type=int,
         help="first N examples, for a smoke run; OOS come first, use 6+ to reach in-scope",
     )
+    parser.add_argument(
+        "--cases",
+        help="comma-separated case_ids to run, e.g. G001,G005 (applied after --limit)",
+    )
     args = parser.parse_args()
     if args.rejudge:
         rejudge(args.rejudge)
         return
     if not args.prefix:
         parser.error("--prefix is required unless --rejudge is given")
-    run_experiment(args.split, args.prefix, args.skip_judge, args.limit)
+    run_experiment(
+        args.split,
+        args.prefix,
+        args.skip_judge,
+        args.limit,
+        args.cases.split(",") if args.cases else None,
+    )
 
 
 if __name__ == "__main__":

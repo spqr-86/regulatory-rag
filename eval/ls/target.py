@@ -42,6 +42,25 @@ def state_to_outputs(state: dict) -> dict:
         "context": format_generation_context(
             (state.get("final_context") or []) if "final_context" in state else passages
         ),
+        **_parent_summary(state),
+    }
+
+
+def _parent_summary(state: dict) -> dict:
+    """Sum replacement diagnostics over every packing pass (empty unless the flag ran)."""
+    stats = state.get("parent_context_stats") or []
+    if not stats:
+        return {}
+    reasons = sorted(
+        {s["unavailable_reason"] for s in stats if s.get("unavailable_reason")}
+    )
+    return {
+        "parent_replaced": sum(s.get("replaced", 0) for s in stats),
+        "parent_children_kept": sum(s.get("children", 0) for s in stats),
+        "parent_deduplicated": sum(s.get("deduplicated", 0) for s in stats),
+        "parent_truncated": sum(s.get("truncated", 0) for s in stats),
+        "parent_slots_lost": sum(s.get("slots_lost", 0) for s in stats),
+        "parent_unavailable": reasons,
     }
 
 

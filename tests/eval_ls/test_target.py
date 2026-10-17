@@ -137,3 +137,40 @@ def test_target_measures_elapsed_without_extra_graph_calls(monkeypatch):
     assert outputs["reasoning_tokens"] == 8
     runner.assert_called_once()
     assert runner.call_args.args == (graph.compile.return_value, "Вопрос")
+
+
+def test_parent_context_stats_are_summed_into_outputs():
+    state = {
+        "answer": "a",
+        "parent_context_stats": [
+            {
+                "replaced": 3,
+                "children": 1,
+                "deduplicated": 2,
+                "truncated": 2,
+                "slots_lost": 3,
+                "unavailable_reason": None,
+            },
+            {
+                "replaced": 0,
+                "children": 4,
+                "deduplicated": 0,
+                "truncated": 1,
+                "slots_lost": 4,
+                "unavailable_reason": "stale",
+            },
+        ],
+    }
+    o = state_to_outputs(state)
+    assert (
+        o["parent_replaced"],
+        o["parent_children_kept"],
+        o["parent_deduplicated"],
+    ) == (3, 5, 2)
+    assert o["parent_unavailable"] == ["stale"]
+    assert o["parent_truncated"] == 3
+    assert o["parent_slots_lost"] == 7
+
+
+def test_no_parent_keys_when_flag_off():
+    assert "parent_replaced" not in state_to_outputs({"answer": "a"})

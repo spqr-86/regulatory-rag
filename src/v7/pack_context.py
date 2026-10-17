@@ -10,9 +10,14 @@ import hashlib
 import inspect
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Callable, Dict, List, Optional
 
+from src.indexing.parent_context import (
+    ParentStats,
+    parent_cache_version,
+    replace_parents,
+)
 from src.v7.config import v7_config
 from src.v7.context_format import _chunk_header
 from src.v7.contract import PackResult, PackStatus
@@ -103,6 +108,8 @@ def candidate_version(
         + _SEP
         + (query or "")
     )
+    if v7_config.PARENT_CONTEXT_ENABLE:
+        raw += _SEP + parent_cache_version(v7_config.PARENT_MAX_CHARS)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -172,7 +179,7 @@ def pack_context(
 ) -> PackResult:
     """Упаковать кандидата в контекст, который увидит генератор.
 
-    Порядок (спек §1): expand → sanitize → обрезка MAX_CHUNKS_FOR_LLM →
+    Порядок (спек §1): expand → parent (opt-in) → sanitize → обрезка MAX_CHUNKS_FOR_LLM →
     бюджет токенов. degraded (expander упал) запрещает снимать refs_resolved
     (см. validate_context). Вход не мутируется; кеш отдаёт копию.
     """
@@ -207,6 +214,13 @@ def pack_context(
             status = "degraded"
             working = copy.deepcopy(passages)
 
+    parent_stats = None
+    if v7_config.PARENT_CONTEXT_ENABLE:
+        parent_stats = ParentStats()
+        working = replace_parents(
+            working, v7_config.PARENT_MAX_CHARS, stats=parent_stats
+        )
+
     packed = [{**p, "text": sanitize_for_llm(p.get("text", ""))} for p in working]
 
     n_before = len(packed)
@@ -228,6 +242,10 @@ def pack_context(
         "status": status,
         "dropped": n_before - len(kept),
     }
+    if parent_stats is not None:
+        # Empty slots relative to the effective limit, including short inputs.
+        parent_stats.slots_lost = max(0, max_passages - len(kept))
+        result["parent_context"] = asdict(parent_stats)
     if cache is not None:
         cache[key] = copy.deepcopy(result)
     return result
