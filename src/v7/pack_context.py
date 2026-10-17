@@ -243,6 +243,8 @@ def pack_context(
         "dropped": n_before - len(kept),
     }
     if parent_stats is not None:
+        # Empty slots relative to the effective limit, including short inputs.
+        parent_stats.slots_lost = max(0, max_passages - len(kept))
         result["parent_context"] = asdict(parent_stats)
     if cache is not None:
         cache[key] = copy.deepcopy(result)

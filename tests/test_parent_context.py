@@ -306,6 +306,8 @@ def test_pack_parent_counters(sidecar):
         "replaced": 1,
         "children": 1,
         "deduplicated": 1,
+        "truncated": 0,
+        "slots_lost": v7_config.MAX_CHUNKS_FOR_LLM - 2,
         "unavailable_reason": None,
     }
 
@@ -421,3 +423,75 @@ def test_off_child_ids_keep_order_and_dedup(sidecar, monkeypatch):
     context = packed(rows)["final_context"]
     assert context == rows
     assert extract_chunk_ids(context) == ["law#3", "law#1", "other#1"]
+
+
+@pytest.mark.parametrize(
+    "size,cap,expected", [(10, 5, 1), (10, 10, 0), (3000, 3000, 0)]
+)
+def test_parent_truncated_counts_actual_slicing_once(
+    sidecar, monkeypatch, size, cap, expected
+):
+    _, write = sidecar
+    write([(1, "same", "X" * size), (2, "same", "X" * size)])
+    monkeypatch.setattr(v7_config, "PARENT_MAX_CHARS", cap)
+    result = packed([passage(1), passage(2)])
+    assert result["parent_context"]["truncated"] == expected
+    assert len(result["final_context"][0]["text"]) == min(size, cap)
+
+
+def test_parent_sidecar_records_prior_window_truncation(sidecar):
+    from src.indexing import parent_context as parents
+
+    path, write = sidecar
+    write(
+        entries={
+            "law": {
+                "1": {
+                    "parent_id": "same",
+                    "text": "Short window",
+                    "snapshot_sha256": parents.snapshot_hash(path),
+                    "truncated": True,
+                }
+            }
+        }
+    )
+    assert packed([passage()])["parent_context"]["truncated"] == 1
+
+
+@pytest.mark.parametrize("budget,expected", [(1000, 1), (51, 2)])
+def test_parent_slots_lost_after_dedup_and_budget(sidecar, budget, expected):
+    _, write = sidecar
+    write([(1, "same", "Parent"), (2, "same", "Parent")])
+    cache = {}
+    rows = [passage(1), passage(2), passage(99)]
+    limits = pack.PackLimits(max_passages=3, token_budget=budget)
+    first = packed(rows, limits=limits, cache=cache)
+    assert first["parent_context"]["slots_lost"] == expected
+    assert packed(rows, limits=limits, cache=cache) == first
+    first["parent_context"]["slots_lost"] = 999
+    assert (
+        packed(rows, limits=limits, cache=cache)["parent_context"]["slots_lost"]
+        == expected
+    )
+
+
+def test_sidecar_builder_marks_capped_norm(tmp_path):
+    from scripts.build_parent_sidecar import build_sidecar
+
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    sources = tmp_path / "sources"
+    sources.mkdir()
+    text = "Требования охраны труда обязательны. " * 120
+    (sources / "law.md").write_text("Статья 1. Требования\n" + text)
+    with sqlite3.connect(snapshot / "chroma.sqlite3") as con:
+        con.execute(
+            "create table embedding_metadata (id integer, key text, string_value text, int_value integer)"
+        )
+        con.executemany(
+            "insert into embedding_metadata values (1, ?, ?, null)",
+            [("source", "law.md"), ("chunk_id", "1"), ("chroma:document", text[:500])],
+        )
+    entry = build_sidecar(snapshot, sources).entries["law.md"]["1"]
+    assert len(entry.text) <= 3000
+    assert entry.truncated is True

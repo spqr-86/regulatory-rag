@@ -235,7 +235,16 @@ def run_query(
         # which node, how many tokens — not taken on the summary's word.
         "usage": usages,
         **(
-            {"parent_context_stats": state.get("parent_context_stats", [])}
+            {
+                "parent_context_stats": state.get("parent_context_stats", []),
+                "parent_truncated": sum(
+                    s.get("truncated", 0) for s in state.get("parent_context_stats", [])
+                ),
+                "parent_slots_lost": sum(
+                    s.get("slots_lost", 0)
+                    for s in state.get("parent_context_stats", [])
+                ),
+            }
             if v7_config.PARENT_CONTEXT_ENABLE
             else {}
         ),
@@ -261,6 +270,8 @@ _RECORD_FIELDS = (
     "llm_calls",
     "usage",
     "parent_context_stats",
+    "parent_truncated",
+    "parent_slots_lost",
     "prompt_tokens",
     "completion_tokens",
     "reasoning_tokens",
@@ -291,6 +302,8 @@ def summarize_parents(results: list[dict[str, Any]]) -> dict[str, Any]:
         "parent_replaced_total": sum(s.get("replaced", 0) for s in stats),
         "parent_children_total": sum(s.get("children", 0) for s in stats),
         "parent_deduplicated_total": sum(s.get("deduplicated", 0) for s in stats),
+        "parent_truncated_total": sum(s.get("truncated", 0) for s in stats),
+        "parent_slots_lost_total": sum(s.get("slots_lost", 0) for s in stats),
         "parent_unavailable_reasons": reasons,
     }
 

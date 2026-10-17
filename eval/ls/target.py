@@ -58,6 +58,8 @@ def _parent_summary(state: dict) -> dict:
         "parent_replaced": sum(s.get("replaced", 0) for s in stats),
         "parent_children_kept": sum(s.get("children", 0) for s in stats),
         "parent_deduplicated": sum(s.get("deduplicated", 0) for s in stats),
+        "parent_truncated": sum(s.get("truncated", 0) for s in stats),
+        "parent_slots_lost": sum(s.get("slots_lost", 0) for s in stats),
         "parent_unavailable": reasons,
     }
 

@@ -53,6 +53,8 @@ def test_eval_carries_and_sums_parent_debug(monkeypatch):
         "replaced": 2,
         "children": 1,
         "deduplicated": 3,
+        "truncated": 1,
+        "slots_lost": 4,
         "unavailable_reason": None,
     }
     graph = SimpleNamespace(
@@ -60,7 +62,11 @@ def test_eval_carries_and_sums_parent_debug(monkeypatch):
     )
     row = evaluator.record_fields(evaluator.run_query(graph, "q"))
     assert row["parent_context_stats"] == [stats]
+    assert row["parent_truncated"] == 1
+    assert row["parent_slots_lost"] == 4
     total = evaluator.summarize_parents([row, row])
     assert total["parent_replaced_total"] == 4
     assert total["parent_children_total"] == 2
     assert total["parent_deduplicated_total"] == 6
+    assert total["parent_truncated_total"] == 2
+    assert total["parent_slots_lost_total"] == 8

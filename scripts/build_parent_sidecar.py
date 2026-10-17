@@ -83,7 +83,10 @@ def build_sidecar(snapshot: Path, source_docs: Path) -> ParentSidecar:
         entries[source] = {
             str(meta["chunk_id"]): ParentEntry(
                 parent_id=alignment.parent.id,
-                text=parent_window(alignment.parent, meta["chroma:document"]),
+                text=(
+                    window := parent_window(alignment.parent, meta["chroma:document"])
+                ),
+                truncated=len(window) < len(alignment.parent.text),
                 snapshot_sha256=digest,
             )
             for meta, alignment in zip(chunks, aligned)

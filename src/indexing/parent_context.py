@@ -28,6 +28,8 @@ class ParentEntry(BaseModel):
     parent_id: str = Field(min_length=1)
     text: str = Field(min_length=1, max_length=3000)
     snapshot_sha256: str
+    # Old v2 sidecars lack this bit: their precomputed window loss is unknown.
+    truncated: bool = False
 
 
 class ParentSidecar(BaseModel):
@@ -91,10 +93,14 @@ class SidecarLoad:
 
 @dataclass
 class ParentStats:
-    # Counts describe the replacement stage, before pack limits/sanitization.
+    # Replacement counts precede pack limits; slots_lost is set after packing.
+    # truncated counts emitted parent windows, once per source/parent, including
+    # known build-time clipping. Legacy sidecars expose only runtime clipping.
     replaced: int = 0
     children: int = 0
     deduplicated: int = 0
+    truncated: int = 0
+    slots_lost: int = 0
     unavailable_reason: str | None = None
 
 
@@ -162,7 +168,9 @@ def replace_parents(
             continue
         stats.replaced += 1
         parent = copy.deepcopy(passage)
-        parent["text"] = entry.text[: min(max_chars, 3000)]
+        cap = min(max_chars, 3000)
+        stats.truncated += int(entry.truncated or len(entry.text) > cap)
+        parent["text"] = entry.text[:cap]
         parent["metadata"] = {
             **meta,
             "child_chunk_id": cid,
