@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import List
 
+# ANCHOR: shared generator/judge headers preserve indexed legal addresses.
 _SECTION_MAX = 120
 
 
@@ -46,9 +47,26 @@ def _chunk_header(i: int, passage: dict) -> str:
     score = _score_label(passage.get("score", 0.0))
     src = _short_source(passage)
     section = _section_label(passage)
+    fields = [f"Источник: {src}"]
     if section:
-        return f"[{i + 1}] ({score}) [Источник: {src}; Раздел: {section}]"
-    return f"[{i + 1}] ({score}) [Источник: {src}]"
+        fields.append(f"Раздел: {section}")
+    meta = passage.get("metadata") or {}
+    for key, label in (
+        ("article", "Статья"),
+        ("part", "Часть"),
+        ("clause", "Пункт"),
+        ("point", "Пункт"),
+    ):
+        if meta.get(key) is not None and meta[key] != "":
+            value = str(meta[key])
+            if (
+                key == "part"
+                and meta.get("part_end")
+                and str(meta["part_end"]) != value
+            ):
+                value += f"–{meta['part_end']}"
+            fields.append(f"{label}: {value}")
+    return f"[{i + 1}] ({score}) [{'; '.join(fields)}]"
 
 
 def format_generation_context(passages: List[dict]) -> str:

@@ -22,7 +22,7 @@ from utils.logging import logger
 FileLike = Union[str, os.PathLike, io.BufferedIOBase, io.BytesIO, io.StringIO]
 
 # Chunk-cache version changes when normalization or occurrence identity changes.
-PIPELINE_VERSION = "v3.6-glued-article-headings"
+PIPELINE_VERSION = "v3.7-part-range-metadata"
 PARSER_VERSION = "v1-complete-docling"
 CHUNKER_MAX_TOKENS = 400
 CHUNKER_MERGE_PEERS = True
@@ -293,6 +293,7 @@ def annotate_article_parts(chunks: List[Document]) -> None:
         if part is not None:
             ch.metadata["part"] = part
             ch.metadata["part_inherited"] = starts is None
+            ch.metadata["part_end"] = markers[-1] if markers else part
         if markers:
             current[article] = markers[-1]
 

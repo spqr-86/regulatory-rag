@@ -193,6 +193,8 @@ class RAGState(TypedDict, total=False):
     clarify_message: str
     abstain_reason: str
     sufficiency_details: SufficiencyResult
+    generation_failed: bool
+    generation_error: dict
     answer: str  # synthesised LLM answer (set by generate_answer node)
     triage_gap: TriageGap  # structured gap from legacy triage (#13); not filled by V8
     # ─── Терминальный контракт решения (спек 2026-09-09) ─────────────────
