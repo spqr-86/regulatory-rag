@@ -96,7 +96,7 @@ def test_paragraph_variant_merges_short():
 
 
 def test_g005_real_2464_item16_every_chunk_has_intro():
-    md = (ROOT / "source_docs/2464.md").read_text(encoding="utf-8")
+    md = (ROOT / "corpus_refresh/2464.md").read_text(encoding="utf-8")
     paras = paragraphs_from_text(md, wrapped=False)
     chunks = chunk_structural(paras, "Правила 2464", 900)
     item16 = [c for c in chunks if "п. 16" in c.split("\n", 1)[0]]

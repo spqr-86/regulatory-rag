@@ -120,7 +120,15 @@ def test_k_dry_run_counts_only_unique_cache_misses(tmp_path):
     import hashlib
     import pickle
 
+    import pytest
+    import tiktoken
+
     from eval.chunking_ab.step2 import k_stats
+
+    try:
+        tiktoken.get_encoding("cl100k_base")
+    except Exception:  # tokenizer is downloaded on first use; CI has no network
+        pytest.skip("cl100k_base encoding unavailable offline")
 
     p = tmp_path / "cache.pkl"
     p.write_bytes(pickle.dumps({hashlib.sha256(b"known").hexdigest(): [1]}))
