@@ -18,6 +18,9 @@ graph wrapper, issue #17): ``source``, ``latency_ms`` and — when the caller
 already showed it to the user — ``query_id``.
 """
 
+# ANCHOR: turn terminal graph state into one event; generation errors stay failures.
+# Token counters and unknown-usage flags remain in the per-call models payload.
+
 from __future__ import annotations
 
 import json
@@ -96,6 +99,10 @@ def build_event(
     ``None`` and mean it: ``error`` (that is what a successful query looks like)
     and ``run_id`` (a live query belongs to no batch run).
     """
+    if error is None and state.get("generation_failed"):
+        error = "generation_failed: " + str(
+            (state.get("generation_error") or {}).get("error_type", "unknown")
+        )
     usage: List[dict] = list(state.get("llm_usage") or [])
     found = len(state.get("final_passages") or [])
     priced = cost_for_usages(usage)

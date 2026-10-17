@@ -168,6 +168,7 @@ def scorable_in_scope(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         and row.get("answer")
         and row.get("correctness_score") is not None
         and "error" not in row
+        and not row.get("generation_failed")
     ]
 
 
@@ -216,6 +217,13 @@ def run_query(
     priced = cost_for_usages(usages)
 
     return {
+        "generation_failed": state.get("generation_failed", False),
+        "generation_error": state.get("generation_error") or {},
+        "route_decision": state.get("route_decision", ""),
+        "route_reason": state.get("route_reason", ""),
+        "abstain_reason": state.get("abstain_reason", ""),
+        "technical_failure": state.get("technical_failure", False),
+        "usage_unknown": any(u.get("usage_unknown") for u in usages),
         "answer": answer,
         "context": context,
         "path": path,
@@ -235,6 +243,13 @@ def run_query(
 
 
 _RECORD_FIELDS = (
+    "generation_failed",
+    "generation_error",
+    "route_decision",
+    "route_reason",
+    "abstain_reason",
+    "technical_failure",
+    "usage_unknown",
     "elapsed_sec",
     "retrieval_attempts",
     "llm_calls",
@@ -254,7 +269,7 @@ def record_fields(run_result: dict[str, Any]) -> dict[str, Any]:
     One list for both record shapes (with and without judge), so a field added
     to run_query cannot silently miss the summary again.
     """
-    return {key: run_result[key] for key in _RECORD_FIELDS}
+    return {key: run_result[key] for key in _RECORD_FIELDS if key in run_result}
 
 
 def summarize_cost(results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -282,6 +297,10 @@ def summarize_cost(results: list[dict[str, Any]]) -> dict[str, Any]:
         }
 
     summary = _block(results)
+    summary["usage_unknown_queries"] = sum(
+        bool(r.get("usage_unknown")) for r in results
+    )
+    summary["cost_incomplete"] = bool(summary["usage_unknown_queries"])
 
     by_path: dict[str, Any] = {}
     for path in sorted({r.get("path", "unknown") for r in results}):
@@ -315,7 +334,11 @@ def oos_rejection_rate(results: list[dict[str, Any]]) -> float:
     oos = [r for r in results if r.get("oos_type") == "out_of_scope" and "answer" in r]
     if not oos:
         return 0.0
-    return sum(1 for r in oos if is_oos_rejection(r["answer"])) / len(oos)
+    return sum(
+        1
+        for r in oos
+        if not r.get("generation_failed") and is_oos_rejection(r["answer"])
+    ) / len(oos)
 
 
 def evaluate_correctness(
@@ -402,33 +425,52 @@ def run(
         print(f"[{i}/{len(dataset)}] {case_id}: {question[:70]}...")
 
         # Run graph
+        started = time.perf_counter()
         try:
             run_result = run_query(
                 graph, question, writer=telemetry_writer, run_id=run_id
             )
         except Exception as e:
             print(f"  ERROR running graph: {e}")
-            results.append({"case_id": case_id, "question": question, "error": str(e)})
+            results.append(
+                {
+                    "case_id": case_id,
+                    "question": question,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "elapsed_sec": round(time.perf_counter() - started, 2),
+                    "path": "unknown",
+                    "route_reason": "graph_error",
+                    "usage_unknown": True,
+                    "oos_type": oos_type,
+                    "reference_status": reference_status,
+                }
+            )
             continue
 
         answer = run_result["answer"]
         context = run_result["context"]
         path = run_result["path"]
 
-        if not answer:
+        if not answer or run_result.get("generation_failed"):
             print(f"  WARNING: empty answer (path={path})")
             results.append(
                 {
                     "case_id": case_id,
                     "question": question,
                     "ground_truth": ground_truth,
-                    "answer": "",
+                    "answer": answer,
                     "path": path,
+                    **record_fields(run_result),
                     "oos_type": oos_type,
                     "reference_status": reference_status,
                     "legal_as_of": item["legal_as_of"],
                     "corpus_support": item["corpus_support"],
-                    "error": "empty answer",
+                    "error": (
+                        "generation_failed"
+                        if run_result.get("generation_failed")
+                        else "empty answer"
+                    ),
                 }
             )
             continue
@@ -512,27 +554,40 @@ def run(
         )
 
     # Aggregate
-    valid = [r for r in results if "error" not in r and r.get("answer")]
+    valid = [
+        r
+        for r in results
+        if "error" not in r and not r.get("generation_failed") and r.get("answer")
+    ]
     n = len(valid)
 
-    if n == 0:
-        print("\nNo valid results to aggregate.")
-        return
-
-    avg_elapsed = sum(r.get("elapsed_sec", 0) for r in valid) / n
-    complex_rate = sum(1 for r in valid if r.get("path") == "complex") / n
+    measured = [r for r in results if "elapsed_sec" in r]
+    avg_elapsed = (
+        sum(r["elapsed_sec"] for r in measured) / len(measured) if measured else 0.0
+    )
+    complex_rate = (
+        sum(r.get("path") == "complex" for r in measured) / len(measured)
+        if measured
+        else 0.0
+    )
     abstain_count = sum(
         1
-        for r in valid
-        if not r.get("answer") or r.get("answer", "").startswith("Не могу")
+        for r in results
+        if r.get("route_decision") == "abstain" or r.get("abstain_reason")
     )
 
-    cost_summary = summarize_cost(valid)
+    cost_summary = summarize_cost(measured)
 
     aggregate: dict[str, Any] = {
         "complex_path_rate": round(complex_rate, 3),
         "mean_elapsed_sec": round(avg_elapsed, 2),
         "answered": n,
+        "failed": sum(
+            bool(r.get("generation_failed"))
+            or ("error" in r and r.get("error") != "empty answer")
+            for r in results
+        ),
+        "usage_unknown": sum(bool(r.get("usage_unknown")) for r in measured),
         "abstained": abstain_count,
         "cost": cost_summary,
     }
@@ -543,8 +598,10 @@ def run(
         n_in_scope = len(in_scope)
         scored = [r for r in valid if r.get("correctness_score") is not None]
 
-        avg_faith = sum(r.get("faithfulness_score", 0) for r in valid) / n
-        avg_rel = sum(r.get("answer_relevance_score", 0) for r in valid) / n
+        avg_faith = sum(r.get("faithfulness_score", 0) for r in valid) / n if n else 0.0
+        avg_rel = (
+            sum(r.get("answer_relevance_score", 0) for r in valid) / n if n else 0.0
+        )
         avg_correct = (
             sum(r["correctness_score"] for r in scored) / len(scored)
             if scored
@@ -570,12 +627,14 @@ def run(
             {
                 "faithfulness": round(avg_faith, 3),
                 "answer_relevance": round(avg_rel, 3),
-                "correctness_mean": round(avg_correct, 2)
-                if avg_correct is not None
-                else None,
-                "correctness_inscope": round(avg_correct_inscope, 2)
-                if avg_correct_inscope is not None
-                else None,
+                "correctness_mean": (
+                    round(avg_correct, 2) if avg_correct is not None else None
+                ),
+                "correctness_inscope": (
+                    round(avg_correct_inscope, 2)
+                    if avg_correct_inscope is not None
+                    else None
+                ),
                 "correctness_scored": n_in_scope,
                 "correctness_in_scope_total": sum(
                     1 for r in valid if not r.get("oos_type")

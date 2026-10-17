@@ -1,7 +1,7 @@
 """V7 node: evaluate_complex — перебор кандидатов через общий конвейер.
 
 Каждый кандидат проходит enrich → pack → validate, побеждает первый,
-для которого accept() истинно.
+для которого строгий accept() истинен; иначе выбирается лучший допустимый.
 """
 
 from __future__ import annotations
@@ -152,8 +152,8 @@ def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
     rejected: List[RejectedCandidate] = []
     technical = any(a.get("retrieval_error") for a in attempts)
 
-    for i, cand in enumerate(candidates):
-        is_last = i == len(candidates) - 1
+    admissible = []
+    for cand in candidates:
         packed = _prepare(cand, cache, dependencies, state.get("filters"))
         if packed["status"] == "degraded":
             technical = True
@@ -175,11 +175,10 @@ def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
         )
 
         if accept(
-            packed["final_context"],
-            verdict,
-            on_complex=True,
-            is_last_candidate=is_last,
+            packed["final_context"], verdict, on_complex=True, is_last_candidate=True
         ):
+            admissible.append((cand, packed, verdict))
+        if accept(packed["final_context"], verdict):
             reason = _ORIGIN_REASON.get(cand["origin"], "complex_sufficient")
             if verdict["obligations_unmet"] == [OBL_REFS]:
                 reason = "refs_best_effort"
@@ -207,6 +206,35 @@ def evaluate_complex(state: RAGState, *, dependencies=None) -> RAGState:
                 "passages": len(packed["final_context"]),
                 "pack_status": packed["status"],
             }
+        )
+
+    # Strict acceptance has priority across the entire queue. Only after it
+    # fails choose the strongest admissible context, with stable queue ties.
+    if admissible:
+        cand, packed, verdict = max(
+            admissible,
+            key=lambda item: (
+                item[2]["top_score"],
+                len(item[1]["final_context"]),
+            ),
+        )
+        reason = (
+            "refs_best_effort"
+            if verdict["obligations_unmet"] == [OBL_REFS]
+            else "enumeration_best_effort"
+        )
+        return cast(
+            RAGState,
+            terminal_update(
+                route="generate",
+                reason=reason,
+                final_context=packed["final_context"],
+                candidate_context=cand["passages"],
+                verdict=verdict,
+                required=required,
+                technical_failure=technical,
+                rejected=[r for r in rejected if r["origin"] != cand["origin"]],
+            ),
         )
 
     empty_verdict = validate_context([], query, active_q, plan, required)

@@ -3,9 +3,8 @@
 Strategy:
 - Noise (chitchat): deterministic regex patterns for Russian/English greetings,
   farewells, meta-questions about the bot. Fast, no LLM.
-- Domain: everything else passes through to router + retrieval pipeline.
-  OOS queries (non-safety-domain) are handled downstream via keyword overlap
-  checks and abstain — they naturally return 0-keyword-overlap and are rejected.
+- Explicit out-of-scope requests are refused before embeddings/retrieval.
+- Other requests pass the optional corpus-centroid gate and retrieval validation.
 """
 
 from __future__ import annotations
@@ -15,6 +14,31 @@ import re
 from src.v7.config import v7_config
 from src.v7.domain_gate import is_in_domain
 from src.v7.state_types import NextAfterIntent, RAGState
+
+# ANCHOR: deterministic product-scope rejection precedes embeddings/retrieval.
+# Narrow command/topic patterns avoid rejecting ordinary worker-rights questions.
+_SCOPE_RE = re.compile(
+    r"^\s*(?:расскажи|придумай|напиши)\s+(?:\w+\s+){0,3}(?:анекдот\w*|шутк[уиа]\b|шуточ\w*|стих(?:и|ов|отворени\w*)?\b)"
+    r"|^\s*игнорируй\s+(?:свои\s+|все\s+)?инструкци"
+    r"|(?:раздел[а-я]*\s+наследств\w*\s+(?:имуществ|между)|наследств[а-я]*\s+между\s+родственник)"
+    r"|^\s*(?:ignore\s+(?:all\s+|your\s+)?instructions)",
+    re.IGNORECASE,
+)
+_REFUSAL = (
+    "Не могу выполнить этот запрос. Я помогаю с нормативными вопросами "
+    "охраны труда и пожарной безопасности. Уточните вопрос в этих пределах."
+)
+
+
+def _refusal(reason: str) -> RAGState:
+    return {
+        "intent": "noise",
+        "answer": _REFUSAL,
+        "route_decision": "abstain",
+        "route_reason": reason,
+        "abstain_reason": reason,
+    }
+
 
 # ── Chitchat / noise patterns ──────────────────────────────────────────────
 # Order matters: more specific patterns first.
@@ -83,8 +107,10 @@ def intent_gate(state: RAGState) -> RAGState:
        Only active when DOMAIN_GATE_THRESHOLD > 0.
     """
     q = (state.get("query") or "").strip()
+    if _SCOPE_RE.search(q):
+        return _refusal("out_of_scope_request")
     if _is_noise(q):
-        return {"intent": "noise"}
+        return _refusal("noise")
 
     threshold = v7_config.DOMAIN_GATE_THRESHOLD
     # Short/ambiguous queries (< 3 tokens) bypass the domain gate and go to the router,
@@ -96,7 +122,7 @@ def intent_gate(state: RAGState) -> RAGState:
         embedding_model = get_embedding_model()
         query_embedding = embedding_model.embed_query(q)
         if not is_in_domain(query_embedding, threshold):
-            return {"intent": "noise"}
+            return _refusal("domain_gate")
 
     return {"intent": "domain"}
 

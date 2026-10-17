@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
 from src.v7.config import v7_config
+from src.v7.context_format import _chunk_header
 from src.v7.contract import PackResult, PackStatus
 from src.v7.gap import build_gap
 from src.v7.hard_gates import sanitize_for_llm
@@ -75,7 +76,7 @@ def candidate_version(
     от порядка списка: инвариант «expander один раз на версию» иначе непроверяем.
     """
     ids = sorted(
-        f"{passage_identity(p)}#{hashlib.sha256((p.get('text') or '').encode('utf-8')).hexdigest()[:16]}"
+        f"{passage_identity(p)}#{hashlib.sha256(json.dumps([p.get('text') or '', p.get('metadata') or {}], sort_keys=True, default=str).encode('utf-8')).hexdigest()[:16]}"
         for p in passages
     )
     plan_snapshot = json.dumps(plan or {}, sort_keys=True, default=str)
@@ -112,7 +113,9 @@ def approx_tokens(text: str) -> int:
 
 def passage_cost(p: dict) -> int:
     """Стоимость пассажа в промпте: текст плюс заголовок, который допишет bridge."""
-    return approx_tokens(p.get("text", "")) + HEADER_TOKENS_ALLOWANCE
+    return approx_tokens(p.get("text", "")) + max(
+        HEADER_TOKENS_ALLOWANCE, approx_tokens(_chunk_header(0, p)) + 1
+    )
 
 
 def _passage_source(p: dict) -> str:
