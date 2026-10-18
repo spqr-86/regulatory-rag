@@ -95,3 +95,54 @@ def test_judge_rows_passes_exact_inputs_and_keeps_comment(tmp_path):
             "comment": "supported",
         }
     ]
+
+
+def test_judge_rows_keeps_raw_judge_reply(tmp_path):
+    _write_batch(tmp_path / "b", [_row("GB001")], [_label("GB001", 0)])
+
+    def evaluator(inputs, outputs, reference_outputs):
+        return {"key": "groundedness", "score": None, "comment": "x", "raw": "{}"}
+
+    [result] = judge_rows(load_rows([tmp_path / "b"]), evaluator)
+    assert result["raw"] == "{}"
+
+
+def test_groundedness_evaluator_returns_raw_reply_on_format_error():
+    from langchain_core.messages import AIMessage
+
+    from eval.ls.groundedness import make_groundedness_evaluator
+
+    class FakeLLM:
+        def invoke(self, messages):
+            return AIMessage(content='{"checks": "broken"}')
+
+    evaluator = make_groundedness_evaluator(FakeLLM(), keep_raw=True)
+    result = evaluator(
+        {"question": "вопрос"},
+        {"answer": "ответ", "context": "контекст"},
+        {"oos_type": ""},
+    )
+    assert result["score"] is None
+    assert result["comment"].startswith("judge_format_error")
+    assert result["raw"] == '{"checks": "broken"}'
+    plain = make_groundedness_evaluator(FakeLLM())(
+        {"question": "вопрос"},
+        {"answer": "ответ", "context": "контекст"},
+        {"oos_type": ""},
+    )
+    assert "raw" not in plain
+
+
+def test_select_rows_keeps_requested_ids_and_rejects_unknown(tmp_path):
+    from eval.ls.align_groundedness import select_rows
+
+    _write_batch(
+        tmp_path / "b",
+        [_row("GB001"), _row("GB002")],
+        [_label("GB001", 0), _label("GB002", 1)],
+    )
+    rows = load_rows([tmp_path / "b"])
+    assert [r["review_id"] for r in select_rows(rows, ["GB002"])] == ["GB002"]
+    assert select_rows(rows, None) == rows
+    with pytest.raises(ValueError, match="GB404"):
+        select_rows(rows, ["GB404"])

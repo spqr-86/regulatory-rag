@@ -3,11 +3,14 @@
 CLI:
     python -m eval.ls.align_groundedness <batch_dir>...
     python -m eval.ls.align_groundedness <batch_dir>... --paid --model <id> --out v.jsonl
+    python -m eval.ls.align_groundedness <batch_dir>... --only GR02 GB06 [--paid ...]
 
 Without --paid only loads and checks the batches (free). With --paid calls the
 groundedness judge once per row, writes verdicts to --out and prints agreement
-with human_groundedness via eval.ls.align. --model must equal the configured
-JUDGE_MODEL_NAME: a worktree without .env would silently fall back to defaults.
+with human_groundedness via eval.ls.align. Each verdict keeps the raw judge
+reply ("raw") so a contract failure can be replayed offline. --model must equal
+the configured JUDGE_MODEL_NAME: a worktree without .env would silently fall
+back to defaults.
 """
 
 # ANCHOR: batch.jsonl + human_labels.jsonl → groundedness judge → (human, judge) agreement.
@@ -64,6 +67,16 @@ def load_rows(batch_dirs: list[Path]) -> list[dict]:
     return rows
 
 
+def select_rows(rows: list[dict], review_ids: list[str] | None) -> list[dict]:
+    """Rows with the given review_ids (all when None); unknown ids are an error."""
+    if review_ids is None:
+        return rows
+    unknown = set(review_ids) - {r["review_id"] for r in rows}
+    if unknown:
+        raise ValueError(f"unknown review_id: {', '.join(sorted(unknown))}")
+    return [r for r in rows if r["review_id"] in review_ids]
+
+
 def judge_rows(rows: list[dict], evaluator) -> list[dict]:
     results = []
     for row in rows:
@@ -76,6 +89,7 @@ def judge_rows(rows: list[dict], evaluator) -> list[dict]:
                 "judge": verdict["score"],
                 "comment": verdict["comment"],
             }
+            | ({"raw": verdict["raw"]} if "raw" in verdict else {})
         )
     return results
 
@@ -95,7 +109,7 @@ def _evaluator(expected_model: str):
     # Bounded transport as in eval.ls.run: no paid retries.
     llm.root_client = llm.root_client.with_options(max_retries=0, timeout=300)
     llm.client = llm.root_client.chat.completions
-    return make_groundedness_evaluator(llm)
+    return make_groundedness_evaluator(llm, keep_raw=True)
 
 
 def main() -> None:
@@ -104,9 +118,10 @@ def main() -> None:
     parser.add_argument("--paid", action="store_true", help="call the judge model")
     parser.add_argument("--model", help="expected JUDGE_MODEL_NAME (with --paid)")
     parser.add_argument("--out", type=Path, help="judge verdicts JSONL (with --paid)")
+    parser.add_argument("--only", nargs="+", help="judge only these review_ids")
     args = parser.parse_args()
 
-    rows = load_rows(args.batch_dirs)
+    rows = select_rows(load_rows(args.batch_dirs), args.only)
     chars = sum(
         len(r["inputs"]["question"])
         + len(r["outputs"]["answer"])

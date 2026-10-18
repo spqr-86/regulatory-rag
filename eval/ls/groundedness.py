@@ -65,7 +65,8 @@ def parse_groundedness(raw: str, answer: str, context: str) -> dict:
     return {"score": score, "checks": [check.model_dump() for check in verdict.checks]}
 
 
-def make_groundedness_evaluator(llm):
+def make_groundedness_evaluator(llm, keep_raw: bool = False):
+    """keep_raw adds the judge reply text as "raw" for offline debugging."""
     from langchain_core.prompts import ChatPromptTemplate
 
     template = ChatPromptTemplate.from_template(
@@ -89,12 +90,12 @@ def make_groundedness_evaluator(llm):
             context=outputs["context"],
         )
         reply = llm.invoke(template.format_messages(**variables.model_dump()))
+        raw = _reply_text(reply)
+        extra = {"raw": raw} if keep_raw else {}
         try:
-            verdict = parse_groundedness(
-                _reply_text(reply), variables.answer, variables.context
-            )
+            verdict = parse_groundedness(raw, variables.answer, variables.context)
         except JudgeFormatError as exc:
-            return _result("groundedness", None, f"judge_format_error: {exc}")
+            return _result("groundedness", None, f"judge_format_error: {exc}") | extra
         problems = [
             f"{c['status']}: {c['answer_quote']} — {c['reason']}"
             for c in verdict["checks"]
@@ -105,6 +106,6 @@ def make_groundedness_evaluator(llm):
             verdict["score"],
             "; ".join(problems)
             or ("supported" if verdict["checks"] else "needs_review: no_checks"),
-        )
+        ) | extra
 
     return groundedness
