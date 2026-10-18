@@ -28,6 +28,7 @@ from eval.judges.citations import (
     judge_citations,
 )
 from eval.ls.evaluators import _result, _target_failed
+from eval.ls.policy import is_oos
 
 PROMPT_PATH = (
     Path(__file__).resolve().parent.parent / "prompts" / "judge_correctness.md"
@@ -191,7 +192,7 @@ def make_correctness_evaluator(llm) -> Callable:
     def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> list[dict]:
         if _target_failed(outputs):
             return _both_none("target_error")
-        if reference_outputs.get("oos_type"):
+        if is_oos(reference_outputs):
             # The right answer is a refusal; oos_handled scores it.
             return _both_none("oos")
         forbidden_claims = (reference_outputs.get("forbidden_claims") or "").strip()
@@ -249,7 +250,7 @@ def make_citations_evaluator(llm) -> Callable:
     def citations(inputs: dict, outputs: dict, reference_outputs: dict) -> list[dict]:
         if _target_failed(outputs):
             return skipped("target_error")
-        if reference_outputs.get("oos_type"):
+        if is_oos(reference_outputs):
             return skipped("oos")
         answer = (outputs.get("answer") or "").strip()
         if not answer:

@@ -23,6 +23,8 @@ import json
 import uuid
 from pathlib import Path
 
+from eval.ls.policy import case_type, is_oos
+
 DATASET_NAME = "regrag-golden"
 SPLIT_VERIFIED = "verified"
 DEFAULT_CSV = Path("tests/dataset.csv")
@@ -54,6 +56,9 @@ def build_examples(
     csv_sha256 = hashlib.sha256(raw).hexdigest()
     rows = list(csv.DictReader(io.StringIO(raw.decode("utf-8"), newline="")))
     verified_rows = [row for row in rows if row["reference_status"] == status]
+    ids = [row["case_id"] for row in verified_rows]
+    if any(not cid.strip() for cid in ids) or len(ids) != len(set(ids)):
+        raise ValueError("Missing or duplicate case_id")
 
     # question → relevant chunk ids. Joined by question text: the labels file has no
     # case_id. Older label rows carry a single "chunk_id" instead of the list.
@@ -71,17 +76,19 @@ def build_examples(
         question = row["question"].strip()
         oos_type = row["oos_type"]
 
-        if oos_type:
+        if is_oos(row):
             # Out of scope: the right answer is a refusal, nothing to retrieve.
             chunk_ids = []
         else:
             # Fail loudly: [] would look like OOS and drop out of retrieval_hit.
-            if question not in labels:
+            if question not in labels and case_type(row) != "false_premise":
                 raise ValueError(
                     f"{row['case_id']}: no retrieval labels for question "
                     f"{question!r} in {labels_path}"
                 )
-            chunk_ids = labels[question]
+            # Legacy false-premise cases were excluded from retrieval labels.
+            # Missing labels are explicit unscored coverage until reviewed.
+            chunk_ids = labels.get(question, [])
 
         examples.append(
             {
@@ -105,6 +112,11 @@ def build_examples(
                     "oos_type": oos_type,
                     "corpus_support": row["corpus_support"],
                     "csv_sha256": csv_sha256,
+                    "labels_sha256": hashlib.sha256(
+                        Path(labels_path).read_bytes()
+                    ).hexdigest(),
+                    "case_type": case_type(row),
+                    "retrieval_labelled": bool(chunk_ids),
                     # Copy of the split: stale/prune only look within their own split.
                     "split": split,
                 },

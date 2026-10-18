@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 
+from eval.ls.policy import is_oos
 from eval.metrics import compute_inversion_detected
 
 # Same as run_v7_eval._REFUSAL_RE plus "неверно" (false premise refuted).
@@ -25,7 +26,12 @@ def _result(key: str, score: int | None, comment: str) -> dict:
 def _target_failed(outputs: dict) -> bool:
     # LangSmith still calls evaluators when the target raised, with outputs={}.
     # state_to_outputs always sets "answer", so its absence means a failed run.
-    return "answer" not in outputs
+    return bool(
+        "answer" not in outputs
+        or outputs.get("generation_failed")
+        or outputs.get("technical_failure")
+        or outputs.get("target_error")
+    )
 
 
 def doc_number(chunk_id: str) -> str:
@@ -42,9 +48,11 @@ def retrieval_hit(outputs: dict, reference_outputs: dict) -> dict:
     """1 if any relevant chunk was retrieved; comment holds the first hit rank (from 1)."""
     if _target_failed(outputs):
         return _result("retrieval_hit", None, "target_error")
-    if reference_outputs.get("oos_type"):
+    if is_oos(reference_outputs):
         return _result("retrieval_hit", None, "oos")
     relevant = set(reference_outputs.get("relevant_chunk_ids") or [])
+    if not relevant:
+        return _result("retrieval_hit", None, "no_labels")
     for rank, chunk_id in enumerate(outputs.get("chunk_ids") or [], start=1):
         if chunk_id in relevant:
             return _result("retrieval_hit", 1, f"rank={rank}")
@@ -55,10 +63,12 @@ def doc_cited(outputs: dict, reference_outputs: dict) -> dict:
     """1 if the answer names the number of any relevant document, case-insensitive."""
     if _target_failed(outputs):
         return _result("doc_cited", None, "target_error")
-    if reference_outputs.get("oos_type"):
+    if is_oos(reference_outputs):
         return _result("doc_cited", None, "oos")
     answer = (outputs.get("answer") or "").lower()
     relevant = reference_outputs.get("relevant_chunk_ids") or []
+    if not relevant:
+        return _result("doc_cited", None, "no_labels")
     # sorted: a stable comment when several documents are cited
     for doc in sorted({doc_number(chunk_id) for chunk_id in relevant}):
         # (?<!\d)/(?!\d): number must not be part of another number ("2464" not in "24640")
@@ -86,7 +96,9 @@ def oos_handled(outputs: dict, reference_outputs: dict) -> dict:
     """1 if an OOS question was refused: abstain route, empty answer or refusal text."""
     if _target_failed(outputs):
         return _result("oos_handled", None, "target_error")
-    if not reference_outputs.get("oos_type"):
+    if reference_outputs.get("oos_type") == "false_premise":
+        return _result("oos_handled", None, "false_premise_scored_by_correctness")
+    if not is_oos(reference_outputs):
         return _result("oos_handled", None, "in_scope")
     if outputs.get("route_decision") == "abstain":
         return _result("oos_handled", 1, "abstain")
