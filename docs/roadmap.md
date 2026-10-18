@@ -17,6 +17,9 @@ retrieval-only runtime) и #57 (сквозной scope и общий retrieval c
 `needs_context/applicability_unclear`, contract 1/1 без нарушений. Отчёт:
 [`department-scoped-service-pr4-wiring.md`](./evaluation/experiments/department-scoped-service-pr4-wiring.md).
 
+**План закрытия (18.10.2026):** [`design/2026-10-18-rag-completion-plan.md`](./design/2026-10-18-rag-completion-plan.md) —
+calibration groundedness → метки false-premise → merge → baseline единого eval → родитель по правилу.
+
 Единственное место, где собран маршрут проекта. До этого файла он был размазан по трём
 источникам: конспект курса и аудит покрытия (вне репо, `~/career/learning/courses/llm-zoomcamp/`),
 спек текущего инкремента (`archive/spec-retrieval-eval.html`), состояние сессий
