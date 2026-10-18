@@ -27,10 +27,27 @@ def state_to_outputs(state: dict) -> dict:
     passages = state.get("final_passages") or []
     usages = state.get("llm_usage") or []
     priced = cost_for_usages(usages)
+    unknown_usage = any(u.get("usage_unknown") for u in usages)
+    attempts = state.get("retrieval_attempts") or []
     sources = (p.get("metadata", {}).get("source") for p in passages)
     return {
         "answer": state.get("answer") or "",
         "route_decision": state.get("route_decision"),
+        "route_reason": state.get("route_reason"),
+        "abstain_reason": state.get("abstain_reason"),
+        "generation_failed": bool(state.get("generation_failed")),
+        "generation_error": state.get("generation_error") or {},
+        "technical_failure": bool(state.get("technical_failure")),
+        "path": (
+            "complex"
+            if any(a.get("stage") == "complex" for a in attempts)
+            else "simple"
+        ),
+        "retrieval_attempts": attempts,
+        "usage": usages,
+        "usage_unknown": unknown_usage,
+        "cost_incomplete": unknown_usage or bool(priced["unpriced_models"]),
+        "prompt_tokens": sum(u.get("prompt_tokens", 0) for u in usages),
         "chunk_ids": extract_chunk_ids(passages),
         # dict.fromkeys: unique sources in order of first appearance
         "sources": list(dict.fromkeys(s for s in sources if s)),
@@ -64,7 +81,7 @@ def _parent_summary(state: dict) -> dict:
     }
 
 
-def make_target() -> Callable[[dict], dict]:
+def make_target(run_id: str | None = None, checkpoint=None) -> Callable[[dict], dict]:
     """Build the v7 graph once and return a target: {"question"} -> outputs.
 
     Heavy imports are local so that importing this module (unit tests of
@@ -82,15 +99,38 @@ def make_target() -> Callable[[dict], dict]:
     writer = default_writer()
     # One id per experiment ties its telemetry rows together.
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_id = f"eval-{stamp}-{uuid.uuid4().hex[:4]}"
+    run_id = run_id or f"eval-{stamp}-{uuid.uuid4().hex[:4]}"
 
     def target(inputs: dict) -> dict:
         start = time.perf_counter()
-        state, _query_id = run_query(
-            graph, inputs["question"], source="eval", writer=writer, run_id=run_id
-        )
+        query_id = str(uuid.uuid4())
+        try:
+            state, query_id = run_query(
+                graph,
+                inputs["question"],
+                source="eval",
+                writer=writer,
+                run_id=run_id,
+                query_id=query_id,
+            )
+        except Exception as exc:
+            if checkpoint:
+                checkpoint(
+                    {
+                        "query_id": query_id,
+                        "run_id": run_id,
+                        "inputs": inputs,
+                        "target_error": type(exc).__name__,
+                        "elapsed_sec": time.perf_counter() - start,
+                    }
+                )
+            raise
         outputs = state_to_outputs(state)
+        outputs["query_id"] = query_id
+        outputs["run_id"] = run_id
         outputs["elapsed_sec"] = time.perf_counter() - start
+        if checkpoint:
+            checkpoint({"inputs": inputs, "outputs": outputs})
         return outputs
 
     return target

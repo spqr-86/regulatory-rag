@@ -1,0 +1,105 @@
+"""Evidence-checked groundedness evaluator over the generator's exact context."""
+
+# ANCHOR: answer/context → validated claim checks → 1/0/None; no reference answer.
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from eval.judges.citations import JudgeFormatError, _normalize
+from eval.ls.evaluators import _result, _target_failed
+from eval.ls.judge import _reply_text
+from eval.ls.policy import is_oos
+
+PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts/judge_groundedness.md"
+
+
+class Variables(BaseModel):
+    question: str
+    answer: str
+    context: str
+
+
+class Check(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    answer_quote: str = Field(min_length=1)
+    context_quote: str | None
+    status: Literal["supported", "unsupported", "unverifiable"]
+    reason: str = Field(min_length=1)
+
+
+class Verdict(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    checks: list[Check]
+
+
+def parse_groundedness(raw: str, answer: str, context: str) -> dict:
+    try:
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.partition("\n")[2].removesuffix("```")
+        verdict = Verdict.model_validate(json.loads(raw))
+    except (ValueError, TypeError, AttributeError, ValidationError) as exc:
+        raise JudgeFormatError("Invalid groundedness JSON contract") from exc
+    for check in verdict.checks:
+        if not check.answer_quote.strip() or _normalize(
+            check.answer_quote
+        ) not in _normalize(answer):
+            raise JudgeFormatError("answer_quote must appear in answer")
+        if check.context_quote is not None:
+            if not check.context_quote.strip() or _normalize(
+                check.context_quote
+            ) not in _normalize(context):
+                raise JudgeFormatError("context_quote must appear in generator context")
+        if check.status == "supported" and not check.context_quote:
+            raise JudgeFormatError("supported requires context_quote")
+    statuses = {check.status for check in verdict.checks}
+    score = (
+        0 if "unsupported" in statuses else (1 if statuses == {"supported"} else None)
+    )
+    return {"score": score, "checks": [check.model_dump() for check in verdict.checks]}
+
+
+def make_groundedness_evaluator(llm):
+    from langchain_core.prompts import ChatPromptTemplate
+
+    template = ChatPromptTemplate.from_template(PROMPT_PATH.read_text(encoding="utf-8"))
+
+    def groundedness(inputs, outputs, reference_outputs):
+        if _target_failed(outputs):
+            return _result("groundedness", None, "target_error")
+        if is_oos(reference_outputs):
+            return _result("groundedness", None, "oos")
+        if not (outputs.get("answer") or "").strip():
+            return _result("groundedness", None, "empty_answer")
+        if not (outputs.get("context") or "").strip():
+            return _result("groundedness", None, "no_context")
+        variables = Variables(
+            question=inputs["question"],
+            answer=outputs["answer"],
+            context=outputs["context"],
+        )
+        reply = llm.invoke(template.format_messages(**variables.model_dump()))
+        try:
+            verdict = parse_groundedness(
+                _reply_text(reply), variables.answer, variables.context
+            )
+        except JudgeFormatError as exc:
+            return _result("groundedness", None, f"judge_format_error: {exc}")
+        problems = [
+            f"{c['status']}: {c['answer_quote']} — {c['reason']}"
+            for c in verdict["checks"]
+            if c["status"] != "supported"
+        ]
+        return _result(
+            "groundedness",
+            verdict["score"],
+            "; ".join(problems)
+            or ("supported" if verdict["checks"] else "needs_review: no_checks"),
+        )
+
+    return groundedness
