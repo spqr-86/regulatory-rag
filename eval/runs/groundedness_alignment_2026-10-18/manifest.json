@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "status": "prepared_awaiting_human_review",
+  "purpose": "groundedness calibration on saved real generator outputs",
+  "source_export": {
+    "path": "eval/runs/parent_context_verified_2026-10-17_on3/on3.json",
+    "sha256": "78674a6b3bc5d10e4dafdb9d842766f60e26d2e81f8d6771ff23973b3ffd71f7",
+    "experiment_name": "v8-parent-full-on3-0bb8da21",
+    "experiment_id": "b8e967d7-5cfa-4486-9dd0-91f6258efc2e",
+    "dataset_version": "2026-10-17T18:34:35.480208+00:00",
+    "index_snapshot": "build-8cs1plb3"
+  },
+  "selection": {
+    "case_ids": [
+      "G043",
+      "G006",
+      "G044",
+      "G046",
+      "G002",
+      "G020",
+      "G028",
+      "G001",
+      "G027",
+      "G005",
+      "G019",
+      "G052"
+    ],
+    "rows": 12,
+    "unique_cases": 12,
+    "regular": 9,
+    "false_premise": 3,
+    "method": "Purposive development sample: simple answers, false-premise corrections, extra facts and known judge disagreements/omissions. All from the same saved on3 experiment; no new generation.",
+    "limitations": [
+      "Not held out or representative; no population accuracy claim.",
+      "All selected rows have nonempty context; no target-error, OOS or missing-context coverage.",
+      "Existing judge feedback and reference answers deliberately excluded from reviewer packet.",
+      "Human labels remain unset; assistant preparation is not independent human review.",
+      "Historical snapshot is build-8cs1plb3; this does not establish quality of the active build-j7ceu4r4."
+    ]
+  },
+  "batch_sha256": "9e55e2fc73eef4daeaf5df718ce4724459d2498bab90d9ed5fd501aa2753b53b",
+  "policy_csv_sha256": "e60790d6ecc320667d54574662236f34598f99344ee4d4a87cbebd987210a61c",
+  "groundedness_prompt_sha256": "a8c35c53acf17fd391f74a98985a48f3111950f8447db4d733f3cf35ef063aa3",
+  "paid_calls": 0,
+  "external_writes": 0,
+  "human_labelled": 0,
+  "judge_scored": 0
+}

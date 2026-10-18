@@ -35,6 +35,23 @@ Next: manually align groundedness on saved real answers, review labels for the n
 false-premise cases, and only then request a paid baseline with a cost estimate. LangSmith
 dataset updates, push, merge, publication and production restarts were not performed.
 
+### Groundedness calibration preparation (18.10, continuation)
+
+Prepared `eval/runs/groundedness_alignment_2026-10-18/`: twelve saved real on3
+answers, exact unabridged generator contexts, source run/example IDs, content hashes,
+readable review cards and an empty human-label template. The current case policy
+selects nine regular and three false-premise cases; G052 remains regular. The manifest
+records these counts. Old judge feedback and reference answers are excluded
+from the reviewer packet. No new generation, judge calls or external writes.
+
+Human labels: **0/12**; new judge assessments: **0/12**. Review starts with GR01/G043.
+This is a purposive development sample on historical `build-8cs1plb3`, including
+known judge disagreements and incomplete answers; it is not held out, has no
+established pass/fail balance and does not validate the active index or the judge.
+Freeze human labels before the separately authorized judge run. Inspect false
+passes/failures and unresolved coverage; another fresh batch is needed after any
+prompt adjustment. Retrieval labels for the nine false-premise cases remain pending.
+
 ## Objective
 
 Use the existing `eval/ls/` pipeline as the single normative evaluation path for generic
