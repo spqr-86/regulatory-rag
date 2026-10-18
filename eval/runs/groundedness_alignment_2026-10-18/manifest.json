@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "prepared_awaiting_human_review",
+  "status": "human_labelled_frozen_awaiting_judge",
   "purpose": "groundedness calibration on saved real generator outputs",
   "source_export": {
     "path": "eval/runs/parent_context_verified_2026-10-17_on3/on3.json",
@@ -43,6 +43,7 @@
   "groundedness_prompt_sha256": "a8c35c53acf17fd391f74a98985a48f3111950f8447db4d733f3cf35ef063aa3",
   "paid_calls": 0,
   "external_writes": 0,
-  "human_labelled": 0,
-  "judge_scored": 0
+  "human_labelled": 12,
+  "judge_scored": 0,
+  "human_label_notes": "2026-10-18: 12/12 = 1. GR01-03, GR12 reviewed by Petr on assistant-proposed checks; GR04-11 blanket-approved unseen (reviewer field marks this). No 0 labels: batch cannot measure judge false passes; needs a supplementary batch with expected 0 before judge run."
 }
