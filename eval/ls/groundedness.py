@@ -1,6 +1,6 @@
 """Evidence-checked groundedness evaluator over the generator's exact context."""
 
-# ANCHOR: answer/context → validated claim checks → 1/0/None; no reference answer.
+# ANCHOR: answer/context → validated claim checks → 1/0 (None: no checks); no reference.
 
 from __future__ import annotations
 
@@ -67,9 +67,9 @@ def parse_groundedness(raw: str, answer: str, context: str) -> dict:
         if check.status == "supported" and not check.context_quote:
             raise JudgeFormatError("supported requires context_quote")
     statuses = {check.status for check in verdict.checks}
-    score = (
-        0 if "unsupported" in statuses else (1 if statuses == {"supported"} else None)
-    )
+    # unverifiable = the context gives no support, so the answer is not grounded
+    # in it (Petr, 2026-10-18); no checks at all stays unscored.
+    score = (1 if statuses == {"supported"} else 0) if statuses else None
     return {"score": score, "checks": [check.model_dump() for check in verdict.checks]}
 
 

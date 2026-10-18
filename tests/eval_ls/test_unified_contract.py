@@ -69,19 +69,17 @@ def test_unlabelled_false_premise_is_not_a_retrieval_miss():
     assert result["score"] is None and result["comment"] == "no_labels"
 
 
-def test_real_false_premises_report_missing_retrieval_labels():
+def test_real_false_premises_are_retrieval_labelled():
     examples = build_examples(
         ROOT / "tests/dataset.csv",
         ROOT / "eval/runs/gt_label_j7ceu4r4_2026-10-18/golden_retrieval_labeled.jsonl",
     )
     by_id = {e["metadata"]["case_id"]: e for e in examples}
-    # G071 awaits Petr's decision (eval/runs/false_premise_labels_2026-10-18/).
-    assert by_id["G071"]["outputs"]["relevant_chunk_ids"] == []
-    assert by_id["G071"]["metadata"]["retrieval_labelled"] is False
-    assert by_id["G071"]["metadata"]["case_type"] == "false_premise"
-    assert by_id["G071"]["metadata"]["labels_sha256"]
     assert by_id["G043"]["outputs"]["relevant_chunk_ids"] == ["2464.md#209"]
     assert by_id["G043"]["metadata"]["retrieval_labelled"] is True
+    assert by_id["G043"]["metadata"]["case_type"] == "false_premise"
+    assert by_id["G043"]["metadata"]["labels_sha256"]
+    assert by_id["G071"]["metadata"]["retrieval_labelled"] is True
 
 
 def test_false_premise_preserves_supplied_labels(tmp_path):
@@ -158,7 +156,10 @@ def test_groundedness_validates_evidence_and_distinguishes_unknown():
     payload["checks"][0]["context_quote"] = "Выдуманная цитата."
     with pytest.raises(ValueError, match="context_quote"):
         parse_groundedness(json.dumps(payload), answer, context)
+    # No support in the generator context means the claim is not grounded.
     payload["checks"][0].update(context_quote=None, status="unverifiable")
+    assert parse_groundedness(json.dumps(payload), answer, context)["score"] == 0
+    payload["checks"] = []
     assert parse_groundedness(json.dumps(payload), answer, context)["score"] is None
 
 
