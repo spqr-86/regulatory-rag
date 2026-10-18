@@ -146,3 +146,55 @@ def test_select_rows_keeps_requested_ids_and_rejects_unknown(tmp_path):
     assert select_rows(rows, None) == rows
     with pytest.raises(ValueError, match="GB404"):
         select_rows(rows, ["GB404"])
+
+
+def test_truncated_judge_reply_is_unscored_and_keeps_raw():
+    from langchain_core.messages import AIMessage
+
+    from eval.ls.groundedness import make_groundedness_evaluator
+
+    class FakeLLM:
+        def invoke(self, messages):
+            return AIMessage(
+                content='{"checks": [', response_metadata={"finish_reason": "length"}
+            )
+
+    result = make_groundedness_evaluator(FakeLLM(), keep_raw=True)(
+        {"question": "вопрос"},
+        {"answer": "ответ", "context": "контекст"},
+        {"oos_type": ""},
+    )
+    assert result["score"] is None
+    assert "truncated" in result["comment"]
+    assert result["raw"] == '{"checks": ['
+
+
+def test_judge_rows_saves_each_verdict_before_a_failure(tmp_path):
+    _write_batch(
+        tmp_path / "b",
+        [_row("GB001"), _row("GB002")],
+        [_label("GB001", 0), _label("GB002", 1)],
+    )
+    calls = []
+
+    def evaluator(inputs, outputs, reference_outputs):
+        calls.append(1)
+        if len(calls) == 2:
+            raise TimeoutError("judge timeout")
+        return {"key": "groundedness", "score": 0, "comment": "x"}
+
+    saved = []
+    with pytest.raises(TimeoutError):
+        judge_rows(load_rows([tmp_path / "b"]), evaluator, on_result=saved.append)
+    assert [r["review_id"] for r in saved] == ["GB001"]
+
+
+def test_acceptance_requires_every_row_scored():
+    from eval.ls.align_groundedness import acceptance
+
+    scored = [{"review_id": f"R{i}", "human": 1, "judge": 1} for i in range(11)]
+    unscored = [{"review_id": f"U{i}", "human": 1, "judge": None} for i in range(8)]
+    assert acceptance(scored)["accepted"] is True
+    result = acceptance(scored + unscored)
+    assert result["accepted"] is False
+    assert result["skipped"] == 8

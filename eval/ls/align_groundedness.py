@@ -77,21 +77,38 @@ def select_rows(rows: list[dict], review_ids: list[str] | None) -> list[dict]:
     return [r for r in rows if r["review_id"] in review_ids]
 
 
-def judge_rows(rows: list[dict], evaluator) -> list[dict]:
+def judge_rows(rows: list[dict], evaluator, on_result=None) -> list[dict]:
+    """on_result receives each verdict as soon as it is paid for."""
     results = []
     for row in rows:
         verdict = evaluator(row["inputs"], row["outputs"], row["reference"])
-        results.append(
-            {
-                "review_id": row["review_id"],
-                "case_id": row["case_id"],
-                "human": row["human"],
-                "judge": verdict["score"],
-                "comment": verdict["comment"],
-            }
-            | ({"raw": verdict["raw"]} if "raw" in verdict else {})
-        )
+        result = {
+            "review_id": row["review_id"],
+            "case_id": row["case_id"],
+            "human": row["human"],
+            "judge": verdict["score"],
+            "comment": verdict["comment"],
+        } | ({"raw": verdict["raw"]} if "raw" in verdict else {})
+        if on_result is not None:
+            on_result(result)
+        results.append(result)
     return results
+
+
+def acceptance(results: list[dict]) -> dict:
+    """Accepted only when every row is scored and agreement meets the target."""
+    pairs, skipped, disagreements = split_rows(
+        [(r["review_id"], r["human"], r["judge"]) for r in results]
+    )
+    a = agreement(pairs) if pairs else None
+    return {
+        "accepted": skipped == 0
+        and a is not None
+        and a["agreement"] >= TARGET_AGREEMENT,
+        "skipped": skipped,
+        "agreement": a,
+        "disagreements": disagreements,
+    }
 
 
 def _evaluator(expected_model: str):
@@ -138,22 +155,25 @@ def main() -> None:
     from dotenv import load_dotenv
 
     load_dotenv()
-    results = judge_rows(rows, _evaluator(args.model))
-    args.out.write_text(
-        "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in results),
-        encoding="utf-8",
-    )
-    pairs, skipped, disagreements = split_rows(
-        [(r["review_id"], r["human"], r["judge"]) for r in results]
-    )
-    print(f"labelled pairs: {len(pairs)}  skipped (judge abstained): {skipped}")
-    if pairs:
-        a = agreement(pairs)
-        verdict = "OK" if a["agreement"] >= TARGET_AGREEMENT else "BELOW TARGET"
+    # Open before the first paid call and flush per verdict: a failure mid-batch
+    # keeps what was already paid for.
+    with args.out.open("w", encoding="utf-8") as out:
+
+        def save(result: dict) -> None:
+            out.write(json.dumps(result, ensure_ascii=False) + "\n")
+            out.flush()
+
+        results = judge_rows(rows, _evaluator(args.model), on_result=save)
+    verdict = acceptance(results)
+    a = verdict["agreement"]
+    print(f"rows: {len(results)}  unscored (judge abstained): {verdict['skipped']}")
+    if a:
         print(
-            f"agreement: {a['agreement']:.2f} ({a['tp'] + a['tn']}/{a['n']}) {verdict}"
+            f"agreement on scored: {a['agreement']:.2f} ({a['tp'] + a['tn']}/{a['n']})"
             f"  tp={a['tp']} tn={a['tn']} fp={a['fp']} fn={a['fn']}"
         )
+    print("calibration: " + ("OK" if verdict["accepted"] else "NOT ACCEPTED"))
+    disagreements = verdict["disagreements"]
     print(f"fp (judge missed unsupported): {', '.join(disagreements['fp']) or '-'}")
     print(f"fn (judge rejected grounded): {', '.join(disagreements['fn']) or '-'}")
 

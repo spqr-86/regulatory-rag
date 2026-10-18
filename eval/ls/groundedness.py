@@ -90,10 +90,11 @@ def make_groundedness_evaluator(llm, keep_raw: bool = False):
             context=outputs["context"],
         )
         reply = llm.invoke(template.format_messages(**variables.model_dump()))
-        raw = _reply_text(reply)
-        extra = {"raw": raw} if keep_raw else {}
+        extra = {"raw": getattr(reply, "content", None)} if keep_raw else {}
         try:
-            verdict = parse_groundedness(raw, variables.answer, variables.context)
+            verdict = parse_groundedness(
+                _reply_text(reply), variables.answer, variables.context
+            )
         except JudgeFormatError as exc:
             return _result("groundedness", None, f"judge_format_error: {exc}") | extra
         problems = [
@@ -101,11 +102,14 @@ def make_groundedness_evaluator(llm, keep_raw: bool = False):
             for c in verdict["checks"]
             if c["status"] != "supported"
         ]
-        return _result(
-            "groundedness",
-            verdict["score"],
-            "; ".join(problems)
-            or ("supported" if verdict["checks"] else "needs_review: no_checks"),
-        ) | extra
+        return (
+            _result(
+                "groundedness",
+                verdict["score"],
+                "; ".join(problems)
+                or ("supported" if verdict["checks"] else "needs_review: no_checks"),
+            )
+            | extra
+        )
 
     return groundedness
