@@ -27,6 +27,8 @@ PRICE_PER_1M = {
     # discount $0.12/$0.48, most common undiscounted base $0.30/$1.20). Peak hours
     # (01:00-04:00, 06:00-10:00 UTC weekdays) double this rate; not modeled here.
     "deepseek/deepseek-v4.1-flash": {"input": 0.15, "output": 0.60},
+    # OpenRouter listing checked 18.10.2026 (groundedness judge); recheck before cost claims.
+    "deepseek/deepseek-v4-pro": {"input": 0.209, "output": 0.418},
 }
 
 
