@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "prepared_awaiting_human_review",
+  "status": "human_labelled_frozen_awaiting_judge",
   "purpose": "groundedness calibration: expected-unsupported rows by context ablation of saved real answers",
   "source_export": {
     "path": "eval/runs/parent_context_verified_2026-10-17_on3/on3.json",
@@ -49,6 +49,7 @@
   "groundedness_prompt_sha256": "a8c35c53acf17fd391f74a98985a48f3111950f8447db4d733f3cf35ef063aa3",
   "paid_calls": 0,
   "external_writes": 0,
-  "human_labelled": 0,
-  "judge_scored": 0
+  "human_labelled": 7,
+  "judge_scored": 0,
+  "human_label_notes": "2026-10-18: 7/7 = 0, matches expected_groundedness. Petr approved assistant-proposed checks (TG 43720). Together with batch 1 (12/12 = 1) gives 12 positive / 7 negative rows for judge alignment."
 }
