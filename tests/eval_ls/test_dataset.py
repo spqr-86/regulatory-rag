@@ -110,7 +110,7 @@ def test_supplementary_facts_pass_through(tmp_path, files):
 
 
 def test_csv_without_supplementary_column_gives_empty(files):
-    # tests/dataset.csv has no ground_truth_extra column.
+    # Legacy CSV fixtures without the optional column remain supported.
     assert build_examples(*files)[0]["outputs"]["ground_truth_extra"] == ""
 
 

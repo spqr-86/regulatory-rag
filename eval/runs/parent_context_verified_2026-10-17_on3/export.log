@@ -1,0 +1,29 @@
+/home/petr/projects/ai/regulatory-rag/eval/runs/parent_context_verified_2026-10-17_on3/export.py:23: DeprecationWarning: list_runs() is deprecated and will be removed after Jan 31, 2027. Use client.runs.query() instead. See https://docs.langchain.com/langsmith/smithdb-sdk-migration#runs-query for the migration guide.
+  runs = list(client.list_runs(project_id=project.id, is_root=True))
+G027 8 error False
+G038 8 error False
+G022 8 error False
+G052 8 error False
+G010 8 error False
+G008 8 error False
+G005 8 error False
+G009 8 error False
+G019 8 error False
+G013 8 error False
+G017 8 error False
+G028 8 error False
+G015 8 error False
+G040 8 error False
+G037 8 error False
+G002 8 error False
+G006 8 error False
+G043 8 error False
+G041 8 error False
+G001 8 error False
+G039 8 error False
+G044 8 error False
+G046 8 error False
+G020 8 error False
+G036 8 error False
+G035 8 error False
+exported v8-parent-full-on3-0bb8da21 26

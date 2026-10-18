@@ -1,0 +1,441 @@
+2026-10-17 23:48:54 [info     ] llm_factory.openrouter_request max_tokens=None model=deepseek/deepseek-v4-pro reasoning={'effort': 'low'} thinking_budget=None
+2026-10-17 23:48:55 [info     ] llm_factory.openrouter_request max_tokens=None model=deepseek/deepseek-v4.1-flash reasoning={'effort': 'low'} thinking_budget=None
+2026-10-17 23:48:56 [info     ] Chroma DB loaded: 8921 documents
+2026-10-17 23:48:56 [info     ] llm_factory.openrouter_request max_tokens=None model=deepseek/deepseek-v4.1-flash reasoning={'effort': 'low'} thinking_budget=4096
+2026-10-17 23:48:56 [info     ] llm_factory.openrouter_request max_tokens=None model=deepseek/deepseek-v4.1-flash reasoning={'effort': 'low'} thinking_budget=4096
+2026-10-17 23:48:56 [info     ] llm_factory.openrouter_request max_tokens=None model=deepseek/deepseek-v4.1-flash reasoning={'enabled': False} thinking_budget=0
+2026-10-17 23:48:56 [info     ] v7 LLM generator and expander built successfully
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+2026-10-17 23:48:56 [info     ] v7 visual proof built successfully
+View the evaluation results for experiment: 'v8-parent-full-on3-0bb8da21' at:
+https://smith.langchain.com/o/4b0b81bc-b390-4bf0-b83f-c31da8d846bf/datasets/f1eceb8d-2e19-496c-948a-f7360d7507d0/compare?selectedSessions=b8e967d7-5cfa-4486-9dd0-91f6258efc2e
+
+
+0it [00:00, ?it/s]2026-10-17 23:49:27 [info     ] Domain gate: centroid computed from 8921 docs, dim=1536
+2026-10-17 23:49:27 [debug    ] domain gate                    cosine_sim=0.1157 threshold=0.25
+2026-10-17 23:49:27 [debug    ] domain gate                    cosine_sim=0.1214 threshold=0.25
+1it [00:02,  2.55s/it]2026-10-17 23:49:28 [debug    ] domain gate                    cosine_sim=0.3539 threshold=0.25
+2026-10-17 23:49:28 [info     ] prompt_manager.rendered        hash=120ede2b inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:49:30 [info     ] vector_search.timing           search_s=0.453 top_k=12
+2026-10-17 23:49:30 [info     ] vector_search.timing           search_s=0.378 top_k=12
+2026-10-17 23:49:31 [info     ] vector_search.timing           search_s=0.414 top_k=12
+2026-10-17 23:49:31 [info     ] vector_search.timing           search_s=0.445 top_k=12
+2026-10-17 23:49:32 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:49:32 [debug    ] cross_ref.mech2_added          count=25
+2026-10-17 23:49:32 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:49:32 [info     ] cross_ref.timing               added=50 mech1_s=0.269 mech2_s=0.019 mech3_s=0.0 mech4_s=0.075 sources_fetched=4 total_s=0.363
+2026-10-17 23:49:32 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:49:33 [info     ] vector_search.timing           search_s=0.461 top_k=60
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s][ALoading weights: 100%|██████████| 201/201 [00:00<00:00, 8711.77it/s]
+2026-10-17 23:49:48 [info     ] rerank.timing                  candidates=100 predict_s=4.497 top_k=60
+2026-10-17 23:49:49 [debug    ] cross_ref.mech1_added          count=11
+2026-10-17 23:49:49 [debug    ] cross_ref.mech2_added          count=21
+2026-10-17 23:49:49 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:49:49 [info     ] cross_ref.timing               added=42 mech1_s=0.245 mech2_s=0.022 mech3_s=0.0 mech4_s=0.032 sources_fetched=3 total_s=0.299
+2026-10-17 23:49:49 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:49:49 [info     ] evaluate_complex.candidate     origin=merged pack_status=ok packed=23 unmet=['refs_resolved']
+2026-10-17 23:49:50 [debug    ] cross_ref.mech1_added          count=7
+2026-10-17 23:49:50 [debug    ] cross_ref.mech2_added          count=3
+2026-10-17 23:49:50 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:49:50 [info     ] cross_ref.timing               added=20 mech1_s=0.232 mech2_s=0.018 mech3_s=0.0 mech4_s=0.002 sources_fetched=2 total_s=0.251
+2026-10-17 23:49:50 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:49:50 [info     ] evaluate_complex.candidate     origin=last_attempt pack_status=ok packed=28 unmet=['refs_resolved']
+2026-10-17 23:49:51 [info     ] evaluate_complex.candidate     origin=fallback_snapshot pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:49:51 [info     ] prompt_manager.rendered        hash=87c9482f inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:49:56 [info     ] generate.timing.llm            answer_chars=1728 completion_tokens=1828 llm_s=5.225 provider=Together reasoning_tokens=1262
+2026-10-17 23:49:57 [debug    ] domain gate                    cosine_sim=0.4806 threshold=0.25
+2026-10-17 23:49:57 [info     ] prompt_manager.rendered        hash=e2496b36 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:49:58 [info     ] vector_search.timing           search_s=0.414 top_k=12
+2026-10-17 23:49:59 [info     ] vector_search.timing           search_s=0.459 top_k=12
+2026-10-17 23:49:59 [info     ] vector_search.timing           search_s=0.391 top_k=12
+2026-10-17 23:49:59 [info     ] vector_search.timing           search_s=0.369 top_k=12
+2026-10-17 23:50:00 [debug    ] cross_ref.mech1_added          count=13
+2026-10-17 23:50:00 [debug    ] cross_ref.mech2_added          count=16
+2026-10-17 23:50:00 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:50:00 [info     ] cross_ref.timing               added=38 mech1_s=0.303 mech2_s=0.024 mech3_s=0.0 mech4_s=0.036 sources_fetched=4 total_s=0.364
+2026-10-17 23:50:00 [debug    ] cross_ref.mech4_added          count=9
+2026-10-17 23:50:01 [info     ] vector_search.timing           search_s=0.451 top_k=60
+2026-10-17 23:50:06 [info     ] rerank.timing                  candidates=100 predict_s=4.859 top_k=60
+2026-10-17 23:50:07 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:50:07 [debug    ] cross_ref.mech2_added          count=21
+2026-10-17 23:50:07 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:50:07 [info     ] cross_ref.timing               added=46 mech1_s=0.31 mech2_s=0.025 mech3_s=0.0 mech4_s=0.131 sources_fetched=6 total_s=0.465
+2026-10-17 23:50:07 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:50:07 [info     ] evaluate_complex.candidate     origin=merged pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:50:08 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:50:08 [debug    ] cross_ref.mech2_added          count=5
+2026-10-17 23:50:08 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:50:08 [info     ] cross_ref.timing               added=30 mech1_s=0.35 mech2_s=0.03 mech3_s=0.0 mech4_s=0.085 sources_fetched=4 total_s=0.464
+2026-10-17 23:50:08 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:50:09 [info     ] evaluate_complex.candidate     origin=last_attempt pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:50:09 [info     ] evaluate_complex.candidate     origin=fallback_snapshot pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:50:09 [info     ] prompt_manager.rendered        hash=7b7f98b7 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:50:16 [info     ] generate.timing.llm            answer_chars=1099 completion_tokens=647 llm_s=6.664 provider=Together reasoning_tokens=323
+2026-10-17 23:50:16 [debug    ] domain gate                    cosine_sim=0.2799 threshold=0.25
+2026-10-17 23:50:16 [info     ] prompt_manager.rendered        hash=23c25296 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:50:18 [info     ] vector_search.timing           search_s=0.487 top_k=12
+2026-10-17 23:50:18 [info     ] vector_search.timing           search_s=0.384 top_k=12
+2026-10-17 23:50:19 [info     ] vector_search.timing           search_s=0.398 top_k=12
+2026-10-17 23:50:19 [info     ] vector_search.timing           search_s=0.395 top_k=12
+2026-10-17 23:50:20 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:50:20 [debug    ] cross_ref.mech2_added          count=19
+2026-10-17 23:50:20 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:50:20 [info     ] cross_ref.timing               added=44 mech1_s=0.249 mech2_s=0.035 mech3_s=0.0 mech4_s=0.06 sources_fetched=4 total_s=0.344
+2026-10-17 23:50:20 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:50:20 [info     ] prompt_manager.rendered        hash=d68541c9 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:50:28 [info     ] generate.timing.llm            answer_chars=623 completion_tokens=589 llm_s=7.545 provider=Together reasoning_tokens=381
+2026-10-17 23:50:28 [debug    ] domain gate                    cosine_sim=0.1026 threshold=0.25
+2026-10-17 23:50:29 [debug    ] domain gate                    cosine_sim=0.498 threshold=0.25
+2026-10-17 23:50:29 [info     ] prompt_manager.rendered        hash=34525111 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:50:30 [info     ] vector_search.timing           search_s=0.424 top_k=12
+2026-10-17 23:50:31 [info     ] vector_search.timing           search_s=0.432 top_k=12
+2026-10-17 23:50:31 [info     ] vector_search.timing           search_s=0.369 top_k=12
+2026-10-17 23:50:31 [info     ] vector_search.timing           search_s=0.38 top_k=12
+2026-10-17 23:50:32 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:50:32 [debug    ] cross_ref.mech2_added          count=15
+2026-10-17 23:50:32 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:50:32 [info     ] cross_ref.timing               added=32 mech1_s=0.035 mech2_s=0.052 mech3_s=0.0 mech4_s=0.199 sources_fetched=2 total_s=0.286
+2026-10-17 23:50:32 [debug    ] cross_ref.mech4_added          count=2
+2026-10-17 23:50:33 [info     ] vector_search.timing           search_s=0.423 top_k=60
+2026-10-17 23:50:36 [info     ] rerank.timing                  candidates=100 predict_s=3.219 top_k=60
+2026-10-17 23:50:36 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:50:37 [debug    ] cross_ref.mech2_added          count=20
+2026-10-17 23:50:37 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:50:37 [info     ] cross_ref.timing               added=38 mech1_s=0.035 mech2_s=0.044 mech3_s=0.0 mech4_s=0.207 sources_fetched=2 total_s=0.285
+2026-10-17 23:50:37 [debug    ] cross_ref.mech4_added          count=3
+2026-10-17 23:50:37 [info     ] evaluate_complex.candidate     origin=merged pack_status=ok packed=30 unmet=[]
+2026-10-17 23:50:37 [info     ] prompt_manager.rendered        hash=dd06e197 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:50:45 [info     ] generate.timing.llm            answer_chars=2122 completion_tokens=2876 llm_s=8.032 provider=Together reasoning_tokens=2273
+2026-10-17 23:50:46 [debug    ] domain gate                    cosine_sim=0.2499 threshold=0.25
+2026-10-17 23:50:46 [debug    ] domain gate                    cosine_sim=0.4926 threshold=0.25
+2026-10-17 23:50:46 [info     ] prompt_manager.rendered        hash=9cc7b235 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:50:47 [info     ] vector_search.timing           search_s=0.379 top_k=12
+2026-10-17 23:50:48 [info     ] vector_search.timing           search_s=0.395 top_k=12
+2026-10-17 23:50:48 [info     ] vector_search.timing           search_s=0.369 top_k=12
+2026-10-17 23:50:48 [info     ] vector_search.timing           search_s=0.436 top_k=12
+2026-10-17 23:50:49 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:50:49 [debug    ] cross_ref.mech2_added          count=19
+2026-10-17 23:50:49 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:50:49 [info     ] cross_ref.timing               added=44 mech1_s=0.249 mech2_s=0.029 mech3_s=0.0 mech4_s=0.034 sources_fetched=3 total_s=0.311
+2026-10-17 23:50:49 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:50:50 [info     ] vector_search.timing           search_s=0.381 top_k=60
+2026-10-17 23:50:54 [info     ] rerank.timing                  candidates=91 predict_s=3.755 top_k=60
+2026-10-17 23:50:54 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:50:54 [debug    ] cross_ref.mech2_added          count=24
+2026-10-17 23:50:54 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:50:55 [info     ] cross_ref.timing               added=49 mech1_s=0.276 mech2_s=0.03 mech3_s=0.0 mech4_s=0.096 sources_fetched=5 total_s=0.403
+2026-10-17 23:50:55 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:50:55 [info     ] evaluate_complex.candidate     origin=merged pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:50:56 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:50:56 [debug    ] cross_ref.mech2_added          count=6
+2026-10-17 23:50:56 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:50:56 [info     ] cross_ref.timing               added=31 mech1_s=0.256 mech2_s=0.029 mech3_s=0.0 mech4_s=0.098 sources_fetched=5 total_s=0.383
+2026-10-17 23:50:56 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:50:56 [info     ] evaluate_complex.candidate     origin=last_attempt pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:50:57 [info     ] evaluate_complex.candidate     origin=fallback_snapshot pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:50:57 [info     ] prompt_manager.rendered        hash=a28a512c inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:50:59 [info     ] generate.timing.llm            answer_chars=670 completion_tokens=604 llm_s=1.971 provider=Together reasoning_tokens=400
+2026-10-17 23:50:59 [debug    ] domain gate                    cosine_sim=0.4491 threshold=0.25
+2026-10-17 23:50:59 [info     ] prompt_manager.rendered        hash=b252cd51 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:51:01 [info     ] vector_search.timing           search_s=0.616 top_k=12
+2026-10-17 23:51:02 [info     ] vector_search.timing           search_s=0.473 top_k=12
+2026-10-17 23:51:02 [info     ] vector_search.timing           search_s=0.382 top_k=12
+2026-10-17 23:51:02 [info     ] vector_search.timing           search_s=0.397 top_k=12
+2026-10-17 23:51:03 [debug    ] cross_ref.mech1_added          count=5
+2026-10-17 23:51:03 [debug    ] cross_ref.mech2_added          count=8
+2026-10-17 23:51:03 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:03 [info     ] cross_ref.timing               added=15 mech1_s=0.035 mech2_s=0.018 mech3_s=0.0 mech4_s=0.069 sources_fetched=3 total_s=0.122
+2026-10-17 23:51:03 [debug    ] cross_ref.mech4_added          count=2
+2026-10-17 23:51:03 [info     ] prompt_manager.rendered        hash=33842ddf inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:51:05 [info     ] generate.timing.llm            answer_chars=687 completion_tokens=574 llm_s=1.757 provider=Together reasoning_tokens=356
+2026-10-17 23:51:05 [debug    ] domain gate                    cosine_sim=0.5379 threshold=0.25
+2026-10-17 23:51:05 [info     ] prompt_manager.rendered        hash=d2014883 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:51:06 [info     ] vector_search.timing           search_s=0.401 top_k=12
+2026-10-17 23:51:07 [info     ] vector_search.timing           search_s=0.364 top_k=12
+2026-10-17 23:51:07 [info     ] vector_search.timing           search_s=0.369 top_k=12
+2026-10-17 23:51:08 [info     ] vector_search.timing           search_s=0.36 top_k=12
+2026-10-17 23:51:08 [debug    ] cross_ref.mech1_added          count=10
+2026-10-17 23:51:08 [debug    ] cross_ref.mech2_added          count=22
+2026-10-17 23:51:08 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:08 [info     ] cross_ref.timing               added=34 mech1_s=0.018 mech2_s=0.019 mech3_s=0.0 mech4_s=0.063 sources_fetched=3 total_s=0.1
+2026-10-17 23:51:08 [debug    ] cross_ref.mech4_added          count=2
+2026-10-17 23:51:08 [info     ] prompt_manager.rendered        hash=a43a63f0 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:51:12 [info     ] generate.timing.llm            answer_chars=1193 completion_tokens=1419 llm_s=3.321 provider=Together reasoning_tokens=1013
+2026-10-17 23:51:12 [debug    ] domain gate                    cosine_sim=0.536 threshold=0.25
+2026-10-17 23:51:12 [info     ] prompt_manager.rendered        hash=53187c14 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:51:13 [info     ] vector_search.timing           search_s=0.42 top_k=12
+2026-10-17 23:51:14 [info     ] vector_search.timing           search_s=0.415 top_k=12
+2026-10-17 23:51:14 [info     ] vector_search.timing           search_s=0.409 top_k=12
+2026-10-17 23:51:15 [info     ] vector_search.timing           search_s=0.401 top_k=12
+2026-10-17 23:51:15 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:51:15 [debug    ] cross_ref.mech2_added          count=22
+2026-10-17 23:51:15 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:15 [info     ] cross_ref.timing               added=46 mech1_s=0.287 mech2_s=0.028 mech3_s=0.0 mech4_s=0.033 sources_fetched=4 total_s=0.349
+2026-10-17 23:51:15 [debug    ] cross_ref.mech4_added          count=9
+2026-10-17 23:51:16 [info     ] vector_search.timing           search_s=0.389 top_k=60
+2026-10-17 23:51:19 [info     ] rerank.timing                  candidates=100 predict_s=2.988 top_k=60
+2026-10-17 23:51:20 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:51:20 [debug    ] cross_ref.mech2_added          count=24
+2026-10-17 23:51:20 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:20 [info     ] cross_ref.timing               added=49 mech1_s=0.316 mech2_s=0.029 mech3_s=0.0 mech4_s=0.045 sources_fetched=4 total_s=0.39
+2026-10-17 23:51:20 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:51:20 [info     ] evaluate_complex.candidate     origin=merged pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:51:21 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:51:21 [debug    ] cross_ref.mech2_added          count=10
+2026-10-17 23:51:21 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:21 [info     ] cross_ref.timing               added=35 mech1_s=0.28 mech2_s=0.034 mech3_s=0.0 mech4_s=0.079 sources_fetched=4 total_s=0.393
+2026-10-17 23:51:21 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:51:21 [info     ] evaluate_complex.candidate     origin=last_attempt pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:51:22 [info     ] evaluate_complex.candidate     origin=fallback_snapshot pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:51:22 [info     ] prompt_manager.rendered        hash=f9c09d91 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:51:24 [info     ] generate.timing.llm            answer_chars=824 completion_tokens=676 llm_s=2.022 provider=Together reasoning_tokens=432
+2026-10-17 23:51:24 [debug    ] domain gate                    cosine_sim=0.6321 threshold=0.25
+2026-10-17 23:51:24 [info     ] prompt_manager.rendered        hash=d816e1d3 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:51:28 [info     ] vector_search.timing           search_s=0.405 top_k=12
+2026-10-17 23:51:29 [info     ] vector_search.timing           search_s=0.464 top_k=12
+2026-10-17 23:51:29 [info     ] vector_search.timing           search_s=0.404 top_k=12
+2026-10-17 23:51:29 [info     ] vector_search.timing           search_s=0.417 top_k=12
+2026-10-17 23:51:30 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:51:30 [debug    ] cross_ref.mech2_added          count=24
+2026-10-17 23:51:30 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:30 [info     ] cross_ref.timing               added=49 mech1_s=0.04 mech2_s=0.036 mech3_s=0.0 mech4_s=0.041 sources_fetched=2 total_s=0.118
+2026-10-17 23:51:30 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:51:31 [info     ] prompt_manager.rendered        hash=fe6af0d8 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:51:36 [info     ] generate.timing.llm            answer_chars=1215 completion_tokens=1763 llm_s=4.982 provider=Together reasoning_tokens=1259
+2026-10-17 23:51:36 [debug    ] domain gate                    cosine_sim=0.4773 threshold=0.25
+2026-10-17 23:51:36 [info     ] prompt_manager.rendered        hash=d64296d8 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:51:37 [info     ] vector_search.timing           search_s=0.528 top_k=12
+2026-10-17 23:51:38 [info     ] vector_search.timing           search_s=0.387 top_k=12
+2026-10-17 23:51:38 [info     ] vector_search.timing           search_s=0.415 top_k=12
+2026-10-17 23:51:38 [info     ] vector_search.timing           search_s=0.404 top_k=12
+2026-10-17 23:51:39 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:51:39 [debug    ] cross_ref.mech2_added          count=25
+2026-10-17 23:51:39 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:39 [info     ] cross_ref.timing               added=50 mech1_s=0.231 mech2_s=0.014 mech3_s=0.0 mech4_s=0.154 sources_fetched=5 total_s=0.399
+2026-10-17 23:51:39 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:51:40 [info     ] vector_search.timing           search_s=0.447 top_k=60
+2026-10-17 23:51:43 [info     ] rerank.timing                  candidates=100 predict_s=2.979 top_k=60
+2026-10-17 23:51:44 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:51:44 [debug    ] cross_ref.mech2_added          count=28
+2026-10-17 23:51:44 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:44 [info     ] cross_ref.timing               added=53 mech1_s=0.234 mech2_s=0.016 mech3_s=0.0 mech4_s=0.135 sources_fetched=5 total_s=0.386
+2026-10-17 23:51:44 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:51:45 [info     ] evaluate_complex.candidate     origin=merged pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:51:46 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:51:46 [debug    ] cross_ref.mech2_added          count=20
+2026-10-17 23:51:46 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:46 [info     ] cross_ref.timing               added=45 mech1_s=0.231 mech2_s=0.015 mech3_s=0.0 mech4_s=0.092 sources_fetched=3 total_s=0.339
+2026-10-17 23:51:46 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:51:47 [info     ] evaluate_complex.candidate     origin=last_attempt pack_status=ok packed=30 unmet=[]
+2026-10-17 23:51:47 [info     ] prompt_manager.rendered        hash=557e48c6 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:51:49 [info     ] generate.timing.llm            answer_chars=781 completion_tokens=556 llm_s=1.773 provider=Together reasoning_tokens=308
+2026-10-17 23:51:49 [debug    ] domain gate                    cosine_sim=0.419 threshold=0.25
+2026-10-17 23:51:49 [info     ] prompt_manager.rendered        hash=af77c358 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:51:51 [info     ] vector_search.timing           search_s=0.437 top_k=12
+2026-10-17 23:51:51 [info     ] vector_search.timing           search_s=0.409 top_k=12
+2026-10-17 23:51:52 [info     ] vector_search.timing           search_s=0.381 top_k=12
+2026-10-17 23:51:52 [info     ] vector_search.timing           search_s=0.509 top_k=12
+2026-10-17 23:51:53 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:51:53 [debug    ] cross_ref.mech2_added          count=19
+2026-10-17 23:51:53 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:53 [info     ] cross_ref.timing               added=40 mech1_s=0.237 mech2_s=0.023 mech3_s=0.0 mech4_s=0.041 sources_fetched=2 total_s=0.301
+2026-10-17 23:51:53 [debug    ] cross_ref.mech4_added          count=6
+2026-10-17 23:51:54 [info     ] vector_search.timing           search_s=0.37 top_k=60
+2026-10-17 23:51:58 [info     ] rerank.timing                  candidates=100 predict_s=4.248 top_k=60
+2026-10-17 23:51:59 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:51:59 [debug    ] cross_ref.mech2_added          count=23
+2026-10-17 23:51:59 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:51:59 [info     ] cross_ref.timing               added=48 mech1_s=0.31 mech2_s=0.021 mech3_s=0.0 mech4_s=0.034 sources_fetched=5 total_s=0.366
+2026-10-17 23:51:59 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:51:59 [info     ] evaluate_complex.candidate     origin=merged pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:52:00 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:52:00 [debug    ] cross_ref.mech2_added          count=6
+2026-10-17 23:52:00 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:52:00 [info     ] cross_ref.timing               added=31 mech1_s=0.114 mech2_s=0.024 mech3_s=0.0 mech4_s=0.232 sources_fetched=5 total_s=0.37
+2026-10-17 23:52:00 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:52:01 [info     ] evaluate_complex.candidate     origin=last_attempt pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:52:01 [info     ] evaluate_complex.candidate     origin=fallback_snapshot pack_status=ok packed=27 unmet=['refs_resolved']
+2026-10-17 23:52:01 [info     ] prompt_manager.rendered        hash=978f4f5f inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:52:03 [info     ] generate.timing.llm            answer_chars=714 completion_tokens=548 llm_s=1.697 provider=Together reasoning_tokens=330
+2026-10-17 23:52:03 [debug    ] domain gate                    cosine_sim=0.3983 threshold=0.25
+2026-10-17 23:52:03 [info     ] prompt_manager.rendered        hash=745da46e inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:52:05 [info     ] vector_search.timing           search_s=0.42 top_k=12
+2026-10-17 23:52:05 [info     ] vector_search.timing           search_s=0.45 top_k=12
+2026-10-17 23:52:06 [info     ] vector_search.timing           search_s=0.376 top_k=12
+2026-10-17 23:52:06 [info     ] vector_search.timing           search_s=0.375 top_k=12
+2026-10-17 23:52:06 [debug    ] cross_ref.mech1_added          count=3
+2026-10-17 23:52:06 [debug    ] cross_ref.mech2_added          count=16
+2026-10-17 23:52:06 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:52:06 [info     ] cross_ref.timing               added=29 mech1_s=0.025 mech2_s=0.024 mech3_s=0.0 mech4_s=0.085 sources_fetched=3 total_s=0.134
+2026-10-17 23:52:06 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:52:07 [info     ] prompt_manager.rendered        hash=35436292 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:52:10 [info     ] generate.timing.llm            answer_chars=776 completion_tokens=790 llm_s=2.847 provider=Together reasoning_tokens=555
+3it [02:45, 60.96s/it]2026-10-17 23:52:10 [debug    ] domain gate                    cosine_sim=0.3895 threshold=0.25
+2026-10-17 23:52:10 [info     ] prompt_manager.rendered        hash=78c5798e inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:52:21 [info     ] vector_search.timing           search_s=1.953 top_k=12
+2026-10-17 23:52:21 [info     ] vector_search.timing           search_s=0.561 top_k=12
+2026-10-17 23:52:22 [info     ] vector_search.timing           search_s=0.44 top_k=12
+2026-10-17 23:52:22 [info     ] vector_search.timing           search_s=0.456 top_k=12
+2026-10-17 23:52:23 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:52:23 [debug    ] cross_ref.mech2_added          count=23
+2026-10-17 23:52:23 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:52:23 [info     ] cross_ref.timing               added=44 mech1_s=0.032 mech2_s=0.054 mech3_s=0.0 mech4_s=0.067 sources_fetched=3 total_s=0.153
+2026-10-17 23:52:23 [debug    ] cross_ref.mech4_added          count=6
+2026-10-17 23:52:23 [info     ] prompt_manager.rendered        hash=8d503f65 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:52:25 [info     ] generate.timing.llm            answer_chars=696 completion_tokens=529 llm_s=1.765 provider=Together reasoning_tokens=334
+2026-10-17 23:52:25 [debug    ] domain gate                    cosine_sim=0.5361 threshold=0.25
+2026-10-17 23:52:25 [info     ] prompt_manager.rendered        hash=210647d4 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:52:31 [info     ] vector_search.timing           search_s=1.189 top_k=12
+2026-10-17 23:52:31 [info     ] vector_search.timing           search_s=0.469 top_k=12
+2026-10-17 23:52:32 [info     ] vector_search.timing           search_s=0.463 top_k=12
+2026-10-17 23:52:32 [info     ] vector_search.timing           search_s=0.469 top_k=12
+2026-10-17 23:52:32 [debug    ] cross_ref.mech1_added          count=10
+2026-10-17 23:52:32 [debug    ] cross_ref.mech2_added          count=11
+2026-10-17 23:52:32 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:52:32 [info     ] cross_ref.timing               added=21 mech1_s=0.032 mech2_s=0.015 mech3_s=0.0 mech4_s=0.028 sources_fetched=2 total_s=0.075
+2026-10-17 23:52:32 [debug    ] cross_ref.mech4_added          count=0
+2026-10-17 23:52:33 [info     ] vector_search.timing           search_s=0.511 top_k=60
+2026-10-17 23:52:37 [info     ] rerank.timing                  candidates=100 predict_s=3.233 top_k=60
+2026-10-17 23:52:37 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:52:37 [debug    ] cross_ref.mech2_added          count=16
+2026-10-17 23:52:37 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:52:37 [info     ] cross_ref.timing               added=37 mech1_s=0.055 mech2_s=0.015 mech3_s=0.0 mech4_s=0.062 sources_fetched=4 total_s=0.133
+2026-10-17 23:52:37 [debug    ] cross_ref.mech4_added          count=6
+2026-10-17 23:52:38 [info     ] evaluate_complex.candidate     origin=merged pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:52:38 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:52:38 [debug    ] cross_ref.mech2_added          count=2
+2026-10-17 23:52:38 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:52:38 [info     ] cross_ref.timing               added=27 mech1_s=0.056 mech2_s=0.015 mech3_s=0.0 mech4_s=0.257 sources_fetched=5 total_s=0.329
+2026-10-17 23:52:38 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:52:39 [info     ] evaluate_complex.candidate     origin=last_attempt pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:52:39 [info     ] evaluate_complex.candidate     origin=fallback_snapshot pack_status=ok packed=27 unmet=['enumeration_complete']
+2026-10-17 23:52:39 [info     ] prompt_manager.rendered        hash=91983a08 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:52:46 [info     ] generate.timing.llm            answer_chars=2616 completion_tokens=2624 llm_s=7.353 provider=Together reasoning_tokens=1943
+2026-10-17 23:52:47 [debug    ] domain gate                    cosine_sim=0.4284 threshold=0.25
+2026-10-17 23:52:47 [info     ] prompt_manager.rendered        hash=0c254d31 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:52:48 [info     ] vector_search.timing           search_s=0.392 top_k=12
+2026-10-17 23:52:49 [info     ] vector_search.timing           search_s=0.427 top_k=12
+2026-10-17 23:52:49 [info     ] vector_search.timing           search_s=0.456 top_k=12
+2026-10-17 23:52:50 [info     ] vector_search.timing           search_s=0.414 top_k=12
+2026-10-17 23:52:50 [debug    ] cross_ref.mech1_added          count=10
+2026-10-17 23:52:50 [debug    ] cross_ref.mech2_added          count=9
+2026-10-17 23:52:50 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:52:50 [info     ] cross_ref.timing               added=20 mech1_s=0.04 mech2_s=0.032 mech3_s=0.0 mech4_s=0.03 sources_fetched=2 total_s=0.102
+2026-10-17 23:52:50 [debug    ] cross_ref.mech4_added          count=1
+2026-10-17 23:52:51 [info     ] vector_search.timing           search_s=0.352 top_k=60
+2026-10-17 23:52:54 [info     ] rerank.timing                  candidates=90 predict_s=3.758 top_k=60
+2026-10-17 23:52:55 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:52:55 [debug    ] cross_ref.mech2_added          count=20
+2026-10-17 23:52:55 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:52:55 [info     ] cross_ref.timing               added=37 mech1_s=0.037 mech2_s=0.032 mech3_s=0.0 mech4_s=0.071 sources_fetched=3 total_s=0.14
+2026-10-17 23:52:55 [debug    ] cross_ref.mech4_added          count=2
+2026-10-17 23:52:55 [info     ] evaluate_complex.candidate     origin=merged pack_status=ok packed=29 unmet=['refs_resolved']
+2026-10-17 23:52:56 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:52:56 [debug    ] cross_ref.mech2_added          count=8
+2026-10-17 23:52:56 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:52:56 [info     ] cross_ref.timing               added=24 mech1_s=0.035 mech2_s=0.032 mech3_s=0.0 mech4_s=0.072 sources_fetched=3 total_s=0.139
+2026-10-17 23:52:56 [debug    ] cross_ref.mech4_added          count=1
+2026-10-17 23:52:56 [info     ] evaluate_complex.candidate     origin=last_attempt pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:52:57 [info     ] evaluate_complex.candidate     origin=fallback_snapshot pack_status=ok packed=24 unmet=['refs_resolved']
+2026-10-17 23:52:57 [info     ] prompt_manager.rendered        hash=8b1251b0 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:52:58 [info     ] generate.timing.llm            answer_chars=845 completion_tokens=565 llm_s=1.884 provider=Together reasoning_tokens=343
+2026-10-17 23:52:59 [debug    ] domain gate                    cosine_sim=0.3771 threshold=0.25
+2026-10-17 23:52:59 [info     ] prompt_manager.rendered        hash=0add04d3 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:53:01 [info     ] vector_search.timing           search_s=0.488 top_k=12
+2026-10-17 23:53:01 [info     ] vector_search.timing           search_s=0.564 top_k=12
+2026-10-17 23:53:02 [info     ] vector_search.timing           search_s=0.473 top_k=12
+2026-10-17 23:53:02 [info     ] vector_search.timing           search_s=0.461 top_k=12
+2026-10-17 23:53:02 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:53:02 [debug    ] cross_ref.mech2_added          count=18
+2026-10-17 23:53:02 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:53:03 [info     ] cross_ref.timing               added=43 mech1_s=0.036 mech2_s=0.044 mech3_s=0.0 mech4_s=0.202 sources_fetched=2 total_s=0.281
+2026-10-17 23:53:03 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:53:03 [info     ] prompt_manager.rendered        hash=5e7c6839 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:53:05 [info     ] generate.timing.llm            answer_chars=629 completion_tokens=400 llm_s=1.883 provider=Together reasoning_tokens=186
+2026-10-17 23:53:05 [debug    ] domain gate                    cosine_sim=0.5388 threshold=0.25
+2026-10-17 23:53:05 [info     ] prompt_manager.rendered        hash=65cc46b8 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:53:07 [info     ] vector_search.timing           search_s=0.428 top_k=12
+2026-10-17 23:53:08 [info     ] vector_search.timing           search_s=0.669 top_k=12
+2026-10-17 23:53:08 [info     ] vector_search.timing           search_s=0.413 top_k=12
+2026-10-17 23:53:09 [info     ] vector_search.timing           search_s=0.494 top_k=12
+2026-10-17 23:53:09 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:53:09 [debug    ] cross_ref.mech2_added          count=14
+2026-10-17 23:53:09 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:53:09 [info     ] cross_ref.timing               added=30 mech1_s=0.022 mech2_s=0.048 mech3_s=0.0 mech4_s=0.075 sources_fetched=3 total_s=0.146
+2026-10-17 23:53:09 [debug    ] cross_ref.mech4_added          count=1
+2026-10-17 23:53:10 [info     ] prompt_manager.rendered        hash=49eec409 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:53:14 [info     ] generate.timing.llm            answer_chars=1353 completion_tokens=1481 llm_s=3.696 provider=Together reasoning_tokens=1073
+2026-10-17 23:53:14 [debug    ] domain gate                    cosine_sim=0.5494 threshold=0.25
+2026-10-17 23:53:14 [info     ] prompt_manager.rendered        hash=358c1407 inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:53:16 [info     ] vector_search.timing           search_s=0.48 top_k=12
+2026-10-17 23:53:17 [info     ] vector_search.timing           search_s=0.588 top_k=12
+2026-10-17 23:53:17 [info     ] vector_search.timing           search_s=0.403 top_k=12
+2026-10-17 23:53:18 [info     ] vector_search.timing           search_s=0.406 top_k=12
+2026-10-17 23:53:18 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:53:18 [debug    ] cross_ref.mech2_added          count=24
+2026-10-17 23:53:18 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:53:18 [info     ] cross_ref.timing               added=44 mech1_s=0.022 mech2_s=0.023 mech3_s=0.0 mech4_s=0.151 sources_fetched=6 total_s=0.197
+2026-10-17 23:53:18 [debug    ] cross_ref.mech4_added          count=5
+2026-10-17 23:53:19 [info     ] vector_search.timing           search_s=0.457 top_k=60
+2026-10-17 23:53:27 [info     ] rerank.timing                  candidates=100 predict_s=7.4 top_k=60
+2026-10-17 23:53:27 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:53:27 [debug    ] cross_ref.mech2_added          count=22
+2026-10-17 23:53:27 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:53:28 [info     ] cross_ref.timing               added=47 mech1_s=0.027 mech2_s=0.018 mech3_s=0.0 mech4_s=0.188 sources_fetched=6 total_s=0.233
+2026-10-17 23:53:28 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:53:29 [info     ] evaluate_complex.candidate     origin=merged pack_status=ok packed=29 unmet=['refs_resolved']
+2026-10-17 23:53:29 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:53:29 [debug    ] cross_ref.mech2_added          count=12
+2026-10-17 23:53:29 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:53:29 [info     ] cross_ref.timing               added=37 mech1_s=0.024 mech2_s=0.019 mech3_s=0.0 mech4_s=0.046 sources_fetched=2 total_s=0.089
+2026-10-17 23:53:29 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:53:30 [info     ] evaluate_complex.candidate     origin=last_attempt pack_status=ok packed=30 unmet=['refs_resolved']
+2026-10-17 23:53:31 [info     ] evaluate_complex.candidate     origin=fallback_snapshot pack_status=ok packed=27 unmet=['refs_resolved']
+2026-10-17 23:53:31 [info     ] prompt_manager.rendered        hash=764ff336 inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:53:33 [info     ] generate.timing.llm            answer_chars=1290 completion_tokens=829 llm_s=2.48 provider=Together reasoning_tokens=464
+2026-10-17 23:53:34 [debug    ] domain gate                    cosine_sim=0.5458 threshold=0.25
+2026-10-17 23:53:34 [info     ] prompt_manager.rendered        hash=c91a20af inputs=['query', 'n'] prompt_id=query_expand version=v1
+2026-10-17 23:53:38 [info     ] vector_search.timing           search_s=0.455 top_k=12
+2026-10-17 23:53:39 [info     ] vector_search.timing           search_s=0.476 top_k=12
+2026-10-17 23:53:39 [info     ] vector_search.timing           search_s=0.432 top_k=12
+2026-10-17 23:53:40 [info     ] vector_search.timing           search_s=0.449 top_k=12
+2026-10-17 23:53:40 [debug    ] cross_ref.mech1_added          count=15
+2026-10-17 23:53:40 [debug    ] cross_ref.mech2_added          count=17
+2026-10-17 23:53:40 [debug    ] cross_ref.mech3_added          count=0
+2026-10-17 23:53:40 [info     ] cross_ref.timing               added=42 mech1_s=0.063 mech2_s=0.021 mech3_s=0.0 mech4_s=0.001 sources_fetched=2 total_s=0.086
+2026-10-17 23:53:40 [debug    ] cross_ref.mech4_added          count=10
+2026-10-17 23:53:41 [info     ] prompt_manager.rendered        hash=9ad082dc inputs=['query', 'context', 'passages_count'] prompt_id=generate_answer version=v8
+2026-10-17 23:53:51 [info     ] generate.timing.llm            answer_chars=6396 completion_tokens=4426 llm_s=9.996 provider=Together reasoning_tokens=2526
+7it [07:08, 64.18s/it]10it [08:01, 44.59s/it]11it [09:05, 47.85s/it]14it [10:27, 39.34s/it]15it [11:16, 41.00s/it]16it [12:11, 43.65s/it]17it [13:26, 50.35s/it]18it [15:12, 63.49s/it]19it [16:22, 65.12s/it]20it [20:11, 108.19s/it]21it [21:33, 100.97s/it]22it [23:20, 102.89s/it]23it [26:33, 128.58s/it]24it [28:58, 133.37s/it]26it [32:09, 116.20s/it]26it [32:09, 74.21s/it] 
+{
+  "oos_handled": 1.0,
+  "retrieval_hit": 1.0,
+  "doc_cited": 1.0,
+  "correctness": 0.7333333333333333,
+  "forbidden_claim": 1.0,
+  "citations": 1.0,
+  "citations_complete": 0.6428571428571429,
+  "mrr": 0.7541666666666667,
+  "n": {
+    "oos_handled": 10,
+    "retrieval_hit": 16,
+    "doc_cited": 16,
+    "correctness": 15,
+    "forbidden_claim": 8,
+    "citations": 14,
+    "citations_complete": 14
+  }
+}
+{
+  "cost": {
+    "total_usd": 0.051888449999999996,
+    "mean_usd": 0.0019957096153846153,
+    "n": 26,
+    "unpriced_models": []
+  }
+}
+errors: 0 []
+experiment: v8-parent-full-on3-0bb8da21
+url: https://smith.langchain.com/o/4b0b81bc-b390-4bf0-b83f-c31da8d846bf/datasets/f1eceb8d-2e19-496c-948a-f7360d7507d0/compare?selectedSessions=b8e967d7-5cfa-4486-9dd0-91f6258efc2e

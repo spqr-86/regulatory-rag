@@ -1,9 +1,13 @@
 """Offline contract tests for parent replacement before context validation."""
 
+# ANCHOR: snapshot-bound replacement, window deduplication and packing budgets;
+# recorded article 14 windows reproduce loss of the dangerous-conditions class.
+
 import copy
 import json
 import os
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -82,7 +86,7 @@ def test_replace_preserves_provenance_and_input(sidecar):
 
 def test_dedup_order_unknown_and_source_boundary(sidecar):
     _, write = sidecar
-    write([(1, "p1", "First window"), (2, "p1", "Other window"), (3, "p3", "Third")])
+    write([(1, "p1", "First window"), (2, "p1", "First window"), (3, "p3", "Third")])
     rows = [passage(3), passage(1), passage(99), passage(2), passage(1, "other")]
     result = packed(rows)["final_context"]
     assert [p["text"] for p in result] == [
@@ -92,6 +96,41 @@ def test_dedup_order_unknown_and_source_boundary(sidecar):
         "Child text",
     ]
     assert result[2:] == rows[2:3] + rows[4:]
+
+
+@pytest.mark.parametrize("order", [(153, 169), (169, 153)])
+def test_distinct_article_windows_preserve_classification(sidecar, order):
+    from eval.run_retrieval_eval import extract_chunk_ids
+
+    _, write = sidecar
+    recorded = json.loads(
+        (Path(__file__).parent / "fixtures/parent_article14_windows.json").read_text()
+    )
+    entries = recorded["entries"]
+    write([(int(cid), e["parent_id"], e["text"]) for cid, e in entries.items()])
+    rows = [passage(cid) for cid in (*order, order[0])]
+    before = copy.deepcopy(rows)
+    result = packed(rows, limits=pack.PackLimits(3, 2000))
+    context = result["final_context"]
+    assert [p["text"] for p in context] == [entries[str(cid)]["text"] for cid in order]
+    assert "Опасными условиями труда (4 класс)" in "\n".join(p["text"] for p in context)
+    assert extract_chunk_ids(context) == [f"law#{cid}" for cid in order]
+    assert result["parent_context"]["replaced"] == 2
+    assert result["parent_context"]["deduplicated"] == 1
+    assert result["dropped"] == 0
+    assert rows == before
+
+
+def test_distinct_windows_still_respect_pack_budget(sidecar):
+    _, write = sidecar
+    write([(1, "same", "First window"), (2, "same", "Different window")])
+    rows = [passage(1), passage(2)]
+    budget = pack.passage_cost({**rows[0], "text": "First window"})
+    result = packed(rows, limits=pack.PackLimits(3, budget))
+    assert [p["text"] for p in result["final_context"]] == ["First window"]
+    assert result["parent_context"]["replaced"] == 2
+    assert result["parent_context"]["deduplicated"] == 0
+    assert result["dropped"] == 1
 
 
 def test_disabled_is_byte_identical_and_lazy(sidecar, monkeypatch):
