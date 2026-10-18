@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "status": "prepared_awaiting_human_review",
+  "purpose": "groundedness calibration: expected-unsupported rows by context ablation of saved real answers",
+  "source_export": {
+    "path": "eval/runs/parent_context_verified_2026-10-17_on3/on3.json",
+    "sha256": "78674a6b3bc5d10e4dafdb9d842766f60e26d2e81f8d6771ff23973b3ffd71f7",
+    "experiment_name": "v8-parent-full-on3-0bb8da21",
+    "experiment_id": "b8e967d7-5cfa-4486-9dd0-91f6258efc2e",
+    "dataset_version": "2026-10-17T18:34:35.480208+00:00",
+    "index_snapshot": "build-8cs1plb3"
+  },
+  "selection": {
+    "case_ids": [
+      "G008",
+      "G009",
+      "G010",
+      "G013",
+      "G015",
+      "G017",
+      "G022"
+    ],
+    "rows": 7,
+    "unique_cases": 7,
+    "regular": 7,
+    "false_premise": 0,
+    "method": "All on3 regular cases outside batch 1 with one clear key claim. Answers unchanged; every context fragment containing a key-claim needle removed (build.py), rest renumbered. Petr chose this option (TG 43710, 2026-10-18) after the screen found no natural unsupported answer among saved exports with context.",
+    "why_not_natural": "Old faithfulness runs (2026-09-23) saved no generator context; on3/on2/off answers showed no numbers or quotes absent from context; swapping contexts between runs kept the key facts.",
+    "limitations": [
+      "Counterfactual: answer and context are mismatched by construction; measures detection of missing support, not natural hallucination rate.",
+      "Answer [Фрагмент N] citations refer to original numbering and may point at unrelated fragments.",
+      "Ablation targets verbatim/numeric support; paraphrased unsupported extra facts are not covered.",
+      "Same experiment and cases style as batch 1; not held out or representative.",
+      "Historical snapshot build-8cs1plb3."
+    ]
+  },
+  "expected_groundedness": {
+    "GB01": 0,
+    "GB02": 0,
+    "GB03": 0,
+    "GB04": 0,
+    "GB05": 0,
+    "GB06": 0,
+    "GB07": 0
+  },
+  "batch_sha256": "f2800fec8a27f31e89b9d2f942449229a25a8fc27aac14610f614216a680dfb1",
+  "build_script_sha256": "dd8dd68562ea93f7820694af62f60c930680ad43d9e712a72407c2af0532daf3",
+  "policy_csv_sha256": "e60790d6ecc320667d54574662236f34598f99344ee4d4a87cbebd987210a61c",
+  "groundedness_prompt_sha256": "a8c35c53acf17fd391f74a98985a48f3111950f8447db4d733f3cf35ef063aa3",
+  "paid_calls": 0,
+  "external_writes": 0,
+  "human_labelled": 0,
+  "judge_scored": 0
+}
