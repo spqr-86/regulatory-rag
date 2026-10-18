@@ -280,3 +280,21 @@ def test_paid_run_refuses_labels_from_another_snapshot(tmp_path, monkeypatch):
     shutil.copy(ROOT / DEFAULT_LABELS, old)
     with pytest.raises(ValueError, match="labels_manifest"):
         run.run_experiment(cases=["G001"], labels_path=old)
+
+
+def test_groundedness_quote_ignores_markdown_bold_in_answer():
+    from eval.ls.groundedness import parse_groundedness
+
+    answer = "Срок составляет **«не менее 16 часов»** [Фрагмент 1]."
+    context = "продолжительностью не менее 16 часов"
+    payload = {
+        "checks": [
+            {
+                "answer_quote": "Срок составляет «не менее 16 часов»",
+                "context_quote": "не менее 16 часов",
+                "status": "supported",
+                "reason": "same number",
+            }
+        ]
+    }
+    assert parse_groundedness(json.dumps(payload), answer, context)["score"] == 1

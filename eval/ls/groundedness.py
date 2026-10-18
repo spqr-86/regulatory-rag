@@ -38,6 +38,12 @@ class Verdict(BaseModel):
     checks: list[Check]
 
 
+def _quote_text(text: str) -> str:
+    # The judge quotes answers without Markdown bold ("**"); "__" stays, it is a
+    # blank-to-fill in normative forms.
+    return _normalize(text.replace("**", ""))
+
+
 def parse_groundedness(raw: str, answer: str, context: str) -> dict:
     try:
         raw = raw.strip()
@@ -47,9 +53,9 @@ def parse_groundedness(raw: str, answer: str, context: str) -> dict:
     except (ValueError, TypeError, AttributeError, ValidationError) as exc:
         raise JudgeFormatError("Invalid groundedness JSON contract") from exc
     for check in verdict.checks:
-        if not check.answer_quote.strip() or _normalize(
+        if not check.answer_quote.strip() or _quote_text(
             check.answer_quote
-        ) not in _normalize(answer):
+        ) not in _quote_text(answer):
             raise JudgeFormatError("answer_quote must appear in answer")
         if check.context_quote is not None:
             if not check.context_quote.strip() or _normalize(
