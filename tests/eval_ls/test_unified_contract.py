@@ -299,3 +299,72 @@ def test_groundedness_quote_ignores_markdown_bold_in_answer():
         ]
     }
     assert parse_groundedness(json.dumps(payload), answer, context)["score"] == 1
+
+
+GROUNDED_CONTEXT = (
+    "У работодателя создаются комиссии по проверке знания требований охраны труда "
+    "работников в составе не менее 3 человек. Продолжительность стажировки "
+    "устанавливается работодателем исходя из ее содержания."
+)
+
+
+def _context_check(quote: str) -> str:
+    return json.dumps(
+        {
+            "checks": [
+                {
+                    "answer_quote": "Не менее 3 человек",
+                    "context_quote": quote,
+                    "status": "supported",
+                    "reason": "r",
+                }
+            ]
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        # deepseek-v4-pro drops letters while copying Cyrillic (run3: GR01, GR02).
+        "у работодателя созаются комиссии по проверке знания требований охраны труда",
+        "Продолжительность стажировки устанавлвается работодателем",
+        # ... and swaps "и" for the Ukrainian homoglyph "і" (run3: GR12).
+        "Продолжітельность стажіровкі устанавлівается работодателем",
+        # An ellipsis joins pieces of the quoted text in order.
+        "комиссии по проверке знания ... не менее 3 человек",
+    ],
+)
+def test_groundedness_quote_tolerates_judge_copy_noise(quote):
+    from eval.ls.groundedness import parse_groundedness
+
+    answer = "Не менее 3 человек [Фрагмент 1]."
+    assert parse_groundedness(_context_check(quote), answer, GROUNDED_CONTEXT)["score"] == 1
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        # One edit, but a different number or polarity is a fabricated quote.
+        "охраны труда работников в составе не менее 5 человек",
+        "Продолжительность стажировки не устанавливается работодателем",
+        "У работодателя не создаются комиссии по проверке знания требований",
+        "Продолжительность стажировки устанавливается инспекцией труда",
+        "не менее 3 человек ... комиссии по проверке знания",
+    ],
+)
+def test_groundedness_quote_rejects_changed_meaning(quote):
+    from eval.ls.groundedness import parse_groundedness
+
+    answer = "Не менее 3 человек [Фрагмент 1]."
+    with pytest.raises(ValueError, match="context_quote"):
+        parse_groundedness(_context_check(quote), answer, GROUNDED_CONTEXT)
+
+
+def test_groundedness_answer_quote_skips_fragment_markers():
+    from eval.ls.groundedness import parse_groundedness
+
+    answer = "1. Оптимальные (1 класс) [Фрагмент 1, 426-ФЗ ст.14 ч.2].\n2. Допустимые (2 класс)"
+    payload = json.loads(_context_check("не менее 3 человек"))
+    payload["checks"][0]["answer_quote"] = "1. Оптимальные (1 класс). 2. Допустимые (2 класс)"
+    assert parse_groundedness(json.dumps(payload), answer, GROUNDED_CONTEXT)["score"] == 1

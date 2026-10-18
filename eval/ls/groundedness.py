@@ -1,11 +1,14 @@
 """Evidence-checked groundedness evaluator over the generator's exact context."""
 
 # ANCHOR: answer/context → validated claim checks → 1/0 (None: no checks); no reference.
+# Quotes match fuzzily: QUOTE_ERROR_RATE edits per "..." piece, numbers and
+# negations exact.
 
 from __future__ import annotations
 
 import importlib.resources
 import json
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -19,6 +22,16 @@ from eval.ls.policy import is_oos
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts/judge_groundedness.md"
 # One check per claim with verbatim quotes: a long list answer overflowed 16000.
 MAX_TOKENS = 32000
+# deepseek-v4-pro drops letters copying Cyrillic (run3: "созаются", "результы"
+# = 2 edits in 58 chars); 0.05 made 17/19 run3 replies valid, 0.03 — 16.
+QUOTE_ERROR_RATE = 0.05
+
+_FRAGMENT_MARKER = re.compile(r"\[Фрагмент[^\]]*\]")
+_ELLIPSIS = re.compile(r"\.{3,}|…")
+# The judge writes the Ukrainian "і" for "и" (run3 GR12: 134 times in one reply).
+_HOMOGLYPHS = str.maketrans({"і": "и", "ё": "е"})
+# One edit away yet a different claim: such tokens must match exactly.
+_EXACT_TOKENS = re.compile(r"\d+|(?<!\w)(?:не|ни|нет|без)(?!\w)")
 
 
 class Variables(BaseModel):
@@ -41,9 +54,72 @@ class Verdict(BaseModel):
 
 
 def _quote_text(text: str) -> str:
-    # The judge quotes answers without Markdown bold ("**"); "__" stays, it is a
-    # blank-to-fill in normative forms.
-    return _normalize(text.replace("**", ""))
+    # The judge quotes answers without Markdown bold ("**") and inline fragment
+    # markers; "__" stays, it is a blank-to-fill in normative forms.
+    text = _FRAGMENT_MARKER.sub("", text.replace("**", ""))
+    return _normalize(text).translate(_HOMOGLYPHS)
+
+
+def _closest_end(pattern: str, text: str) -> tuple[int, int]:
+    """Fewest edits turning pattern into some substring of text, and its end.
+
+    Myers' bit-parallel approximate matching, O(len(text)) big-int steps.
+    """
+    masks: dict[str, int] = {}
+    for i, char in enumerate(pattern):
+        masks[char] = masks.get(char, 0) | 1 << i
+    full, top = (1 << len(pattern)) - 1, 1 << (len(pattern) - 1)
+    pv, mv, distance = full, 0, len(pattern)
+    best = (distance, 0)
+    for j, char in enumerate(text):
+        eq = masks.get(char, 0)
+        xv = eq | mv
+        xh = (((eq & pv) + pv) ^ pv) | eq
+        ph = mv | (~(xh | pv) & full)
+        mh = pv & xh
+        if ph & top:
+            distance += 1
+        elif mh & top:
+            distance -= 1
+        ph = (ph << 1) & full
+        mh = (mh << 1) & full
+        pv = mh | (~(xv | ph) & full)
+        mv = ph & xv
+        if distance < best[0]:
+            best = (distance, j + 1)
+    return best
+
+
+def _piece_end(piece: str, text: str) -> int | None:
+    """End of piece's match in text, or None when it is not there."""
+    if piece in text:
+        return text.index(piece) + len(piece)
+    budget = int(len(piece) * QUOTE_ERROR_RATE)
+    distance, end = _closest_end(piece, text)
+    if distance > budget:
+        return None
+    # The window may overhang the match by the budget, so the quote's exact
+    # tokens must be a run inside the window's.
+    window = _EXACT_TOKENS.findall(text[max(0, end - len(piece) - budget) : end + 1])
+    tokens = _EXACT_TOKENS.findall(piece)
+    if any(
+        window[i : i + len(tokens)] == tokens
+        for i in range(len(window) - len(tokens) + 1)
+    ):
+        return end
+    return None
+
+
+def _quote_found(quote: str, text: str) -> bool:
+    """Each "..."-separated piece of quote appears in text, in order."""
+    text = _quote_text(text)
+    pieces = [p for p in map(_quote_text, _ELLIPSIS.split(quote)) if p]
+    for piece in pieces:
+        end = _piece_end(piece, text)
+        if end is None:
+            return False
+        text = text[end:]
+    return bool(pieces)
 
 
 def parse_groundedness(raw: str, answer: str, context: str) -> dict:
@@ -55,15 +131,12 @@ def parse_groundedness(raw: str, answer: str, context: str) -> dict:
     except (ValueError, TypeError, AttributeError, ValidationError) as exc:
         raise JudgeFormatError("Invalid groundedness JSON contract") from exc
     for check in verdict.checks:
-        if not check.answer_quote.strip() or _quote_text(
-            check.answer_quote
-        ) not in _quote_text(answer):
+        if not _quote_found(check.answer_quote, answer):
             raise JudgeFormatError("answer_quote must appear in answer")
-        if check.context_quote is not None:
-            if not check.context_quote.strip() or _normalize(
-                check.context_quote
-            ) not in _normalize(context):
-                raise JudgeFormatError("context_quote must appear in generator context")
+        if check.context_quote is not None and not _quote_found(
+            check.context_quote, context
+        ):
+            raise JudgeFormatError("context_quote must appear in generator context")
         if check.status == "supported" and not check.context_quote:
             raise JudgeFormatError("supported requires context_quote")
     statuses = {check.status for check in verdict.checks}
