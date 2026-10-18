@@ -28,7 +28,7 @@ SPLIT_VERIFIED = "verified"
 DEFAULT_CSV = Path("tests/dataset.csv")
 # Labels remapped to chunk ids of the active snapshot; eval/data/ still holds old-db ids.
 DEFAULT_LABELS = Path(
-    "eval/runs/gt_remap_build-8cs1plb3_2026-10-16/golden_retrieval_labeled.jsonl"
+    "eval/runs/gt_remap_build-j7ceu4r4_2026-10-18/golden_retrieval_labeled.jsonl"
 )
 
 
