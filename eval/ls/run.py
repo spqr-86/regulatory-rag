@@ -26,6 +26,7 @@ from eval.ls.dataset import (
     labels_index_snapshot,
 )
 from eval.ls.evaluators import CODE_EVALUATORS, summarize
+from eval.ls.groundedness import MAX_TOKENS as GROUNDEDNESS_MAX_TOKENS
 from eval.ls.groundedness import make_groundedness_evaluator
 from eval.ls.judge import make_citations_evaluator, make_correctness_evaluator
 from eval.ls.manifest import make_manifest
@@ -59,8 +60,8 @@ def judge_evaluators() -> list:
     from config.settings import settings
     from src.infra.llm_factory import get_citation_judge_llm, get_judge_llm
 
-    def general():
-        llm = get_judge_llm(max_tokens=16000, temperature=0.0)
+    def general(max_tokens=16000):
+        llm = get_judge_llm(max_tokens=max_tokens, temperature=0.0)
         # Same bounded transport policy as the project's citation judge.
         llm.root_client = llm.root_client.with_options(max_retries=0, timeout=300)
         llm.client = llm.root_client.chat.completions
@@ -74,7 +75,7 @@ def judge_evaluators() -> list:
                 settings.CITATION_JUDGE_MODEL_NAME,
             )
         ),
-        make_groundedness_evaluator(general()),
+        make_groundedness_evaluator(general(GROUNDEDNESS_MAX_TOKENS)),
     ]
 
 

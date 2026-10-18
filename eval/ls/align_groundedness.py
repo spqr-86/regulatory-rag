@@ -113,7 +113,7 @@ def acceptance(results: list[dict]) -> dict:
 
 def _evaluator(expected_model: str):
     from config.settings import settings
-    from eval.ls.groundedness import make_groundedness_evaluator
+    from eval.ls.groundedness import MAX_TOKENS, make_groundedness_evaluator
     from src.infra.llm_factory import get_judge_llm
 
     if settings.JUDGE_MODEL_NAME != expected_model:
@@ -122,7 +122,7 @@ def _evaluator(expected_model: str):
             f"{expected_model!r}: run where .env is loaded"
         )
     print(f"judge: {settings.JUDGE_LLM_PROVIDER} {settings.JUDGE_MODEL_NAME}")
-    llm = get_judge_llm(max_tokens=16000, temperature=0.0)
+    llm = get_judge_llm(max_tokens=MAX_TOKENS, temperature=0.0)
     # Bounded transport as in eval.ls.run: no paid retries.
     llm.root_client = llm.root_client.with_options(max_retries=0, timeout=300)
     llm.client = llm.root_client.chat.completions

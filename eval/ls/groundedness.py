@@ -17,6 +17,8 @@ from eval.ls.judge import _reply_text
 from eval.ls.policy import is_oos
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts/judge_groundedness.md"
+# One check per claim with verbatim quotes: a long list answer overflowed 16000.
+MAX_TOKENS = 32000
 
 
 class Variables(BaseModel):
