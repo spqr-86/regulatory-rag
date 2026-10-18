@@ -11,9 +11,9 @@ the new artifact format are in [reference/evaluation](../reference/evaluation.md
 source .venv/bin/activate
 
 python -m eval.ls.run --dry-run --output-dir /tmp/regrag-plan  # local files only
-python -m eval.ls.run --prefix unified --output-dir eval/runs/my-run  # paid
-python -m eval.ls.run --prefix smoke --cases G001,G005 --limit 1   # paid; select before limit
-python -m eval.ls.run --prefix pipeline --skip-judge             # paid RAG, no judges
+python -m eval.ls.run --paid --prefix unified --output-dir eval/runs/my-run  # paid
+python -m eval.ls.run --paid --prefix smoke --cases G001,G005 --limit 1   # paid; select before limit
+python -m eval.ls.run --paid --prefix pipeline --skip-judge             # paid RAG, no judges
 ```
 
 Run from the worktree root. `--dry-run` constructs no LangSmith client, model or vector
@@ -46,8 +46,8 @@ Automatic resumption is outside this release.
 **Rejudge (paid judges, no RAG or telemetry queries):**
 
 ```bash
-python -m eval.ls.run --rejudge EXPERIMENT --output-dir eval/runs/rejudge-original
-python -m eval.ls.run --rejudge EXPERIMENT --current-references --output-dir eval/runs/rejudge-updated
+python -m eval.ls.run --paid --rejudge EXPERIMENT --output-dir eval/runs/rejudge-original
+python -m eval.ls.run --paid --rejudge EXPERIMENT --current-references --output-dir eval/runs/rejudge-updated
 ```
 
 Default references come from the experiment's original `dataset_version`. The explicit

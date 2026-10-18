@@ -1,4 +1,4 @@
-"""Unified LangSmith executor. Only --dry-run is free of provider/network calls."""
+"""Unified LangSmith executor. Only --dry-run is free; model calls need --paid."""
 
 # ANCHOR: verified cases → one SDK evaluation → durable checkpoints; rejudge uses
 # stored runs and stable UUIDs, preserving original or explicitly updated references.
@@ -528,6 +528,9 @@ def main(argv=None):
     parser.add_argument("--prefix", default="unified")
     parser.add_argument("--skip-judge", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--paid", action="store_true", help="required for any run that calls models"
+    )
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--cases", help="comma-separated IDs, applied before --limit")
@@ -541,6 +544,8 @@ def main(argv=None):
         help="explicitly use current references, joined by UUID",
     )
     args = parser.parse_args(argv)
+    if args.paid == args.dry_run:
+        parser.error("choose exactly one of --dry-run (free) or --paid")
     if args.rejudge:
         if args.dry_run:
             parser.error(

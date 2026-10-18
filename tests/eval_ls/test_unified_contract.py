@@ -228,3 +228,26 @@ def test_legacy_run_delegates_without_loading_a_second_graph(monkeypatch):
     )
     legacy.run(limit=2, skip_judge=True)
     assert len(seen) == 1 and seen[0][1]["limit"] == 2
+
+
+@pytest.mark.parametrize("argv", [[], ["--prefix", "x"], ["--rejudge", "exp"]])
+def test_cli_refuses_paid_run_without_explicit_flag(argv, monkeypatch):
+    import eval.ls.run as run
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("paid path reached")
+
+    monkeypatch.setattr(run, "run_experiment", forbidden)
+    monkeypatch.setattr(run, "rejudge", forbidden)
+    with pytest.raises(SystemExit):
+        run.main(argv)
+
+
+def test_cli_paid_flag_reaches_run(monkeypatch):
+    import eval.ls.run as run
+
+    seen = []
+    monkeypatch.setattr(run, "run_experiment", lambda *a, **k: seen.append(k))
+    run.main(["--paid", "--prefix", "x"])
+    run.main(["--dry-run"])
+    assert [k["dry_run"] for k in seen] == [False, True]
