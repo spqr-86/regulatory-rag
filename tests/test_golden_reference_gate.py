@@ -75,7 +75,8 @@ def test_only_verified_in_scope_answers_are_scorable() -> None:
 
 def test_known_false_legal_claims_are_not_in_the_revised_key() -> None:
     rows = {row["case_id"]: row for row in load_dataset(DATASET_PATH)}
-    assert len(rows) == 56
+    # G001–G056 always load; expert candidates join only once verified.
+    assert {f"G{n:03d}" for n in range(1, 57)} <= rows.keys()
     assert "не реже одного раза в год" not in rows["G011"]["ground_truth"]
     assert "256 часов минимум" not in rows["G025"]["ground_truth"]
     assert "более 5%" not in rows["G029"]["ground_truth"]
