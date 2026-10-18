@@ -75,10 +75,13 @@ def test_real_false_premises_report_missing_retrieval_labels():
         ROOT / "eval/runs/gt_label_j7ceu4r4_2026-10-18/golden_retrieval_labeled.jsonl",
     )
     by_id = {e["metadata"]["case_id"]: e for e in examples}
-    assert by_id["G043"]["outputs"]["relevant_chunk_ids"] == []
-    assert by_id["G043"]["metadata"]["retrieval_labelled"] is False
-    assert by_id["G043"]["metadata"]["case_type"] == "false_premise"
-    assert by_id["G043"]["metadata"]["labels_sha256"]
+    # G071 awaits Petr's decision (eval/runs/false_premise_labels_2026-10-18/).
+    assert by_id["G071"]["outputs"]["relevant_chunk_ids"] == []
+    assert by_id["G071"]["metadata"]["retrieval_labelled"] is False
+    assert by_id["G071"]["metadata"]["case_type"] == "false_premise"
+    assert by_id["G071"]["metadata"]["labels_sha256"]
+    assert by_id["G043"]["outputs"]["relevant_chunk_ids"] == ["2464.md#209"]
+    assert by_id["G043"]["metadata"]["retrieval_labelled"] is True
 
 
 def test_false_premise_preserves_supplied_labels(tmp_path):
