@@ -156,8 +156,10 @@ def test_panels_only_read_columns_the_migration_creates(queries):
         "cast",
         "float8",
         "limit",
+        "in",
     }
     for sql in queries:
+        sql = re.sub(r"\$\{\w+:sqlstring\}", "'fixture'", sql)
         body = re.sub(r"\$__\w+\([^)]*\)", " ", sql)
         body = re.sub(r"'[^']*'", " ", body)
         words = {
@@ -165,3 +167,47 @@ def test_panels_only_read_columns_the_migration_creates(queries):
         }
         unknown = words - known - reserved
         assert not unknown, f"{sql}\nunknown identifiers: {sorted(unknown)}"
+
+
+def test_default_sources_exclude_eval_and_run_selector_includes_null(dashboard):
+    variables = {v["name"]: v for v in dashboard["templating"]["list"]}
+    assert set(variables["source"]["current"]["value"]) == {"ui", "api", "mcp"}
+    assert variables["run_id"]["includeAll"] is False
+    assert variables["run_id"]["current"]["value"] == ["__all__"]
+    assert "'__all__' AS __value" in variables["run_id"]["query"]
+
+
+@pytest.mark.parametrize(
+    "source,run_id,expected",
+    [
+        ("ui", "__all__", 1),
+        ("eval", "__all__", 2),
+        ("eval", "batch-a", 1),
+        ("ui", "batch-a", 0),
+    ],
+)
+def test_filters_select_rows_including_feedback_and_live_nulls(
+    queries, source, run_id, expected
+):
+    # Execute each exact filter expression from the provisioned SQL. SQLite shares
+    # the IN/OR/COALESCE semantics used here; live PostgreSQL panels remain a manual check.
+    import sqlite3
+
+    db = sqlite3.connect(":memory:")
+    db.executescript(
+        "CREATE TABLE queries(source TEXT, run_id TEXT); INSERT INTO queries VALUES ('ui', NULL), ('eval', 'batch-a'), ('eval', 'batch-b');"
+    )
+    try:
+        for sql in queries:
+            alias = "q." if "JOIN queries q" in sql else ""
+            predicate = f"{alias}source IN (${{source:sqlstring}}) AND ('__all__' IN (${{run_id:sqlstring}}) OR COALESCE({alias}run_id, '__live__') IN (${{run_id:sqlstring}}))"
+            assert predicate in sql
+            rendered = predicate.replace(
+                "${source:sqlstring}", "'" + source + "'"
+            ).replace("${run_id:sqlstring}", "'" + run_id + "'")
+            actual = db.execute(
+                "SELECT count(*) FROM queries q WHERE " + rendered
+            ).fetchone()[0]
+            assert actual == expected
+    finally:
+        db.close()

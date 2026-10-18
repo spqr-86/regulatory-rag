@@ -12,12 +12,81 @@
   "timepicker": {
     "refresh_intervals": ["30s", "1m", "5m", "15m", "1h"]
   },
+  "templating": {
+    "list": [
+      {
+        "name": "source",
+        "label": "Источник",
+        "type": "custom",
+        "query": "ui,api,mcp,eval",
+        "multi": true,
+        "includeAll": false,
+        "current": {
+          "text": [
+            "ui",
+            "api",
+            "mcp"
+          ],
+          "value": [
+            "ui",
+            "api",
+            "mcp"
+          ]
+        },
+        "options": [
+          {
+            "text": "ui",
+            "value": "ui",
+            "selected": true
+          },
+          {
+            "text": "api",
+            "value": "api",
+            "selected": true
+          },
+          {
+            "text": "mcp",
+            "value": "mcp",
+            "selected": true
+          },
+          {
+            "text": "eval",
+            "value": "eval",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "run_id",
+        "label": "Запуск",
+        "type": "query",
+        "datasource": {
+          "type": "postgres",
+          "uid": "regrag-postgres"
+        },
+        "multi": true,
+        "includeAll": false,
+        "refresh": 2,
+        "sort": 0,
+        "current": {
+          "text": [
+            "Все запуски"
+          ],
+          "value": [
+            "__all__"
+          ]
+        },
+        "query": "SELECT 'Все запуски' AS __text, '__all__' AS __value UNION ALL SELECT 'Live (NULL run_id)', '__live__' UNION ALL SELECT DISTINCT run_id AS __text, run_id AS __value FROM queries WHERE run_id IS NOT NULL AND source IN (${source:sqlstring}) AND $__timeFilter(ts) ORDER BY 1",
+        "options": []
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "Итого цена за период",
-      "description": "Сумма cost_usd по всем строкам в выбранном периоде, включая eval-прогоны.",
+      "description": "Сумма стоимости RAG по выбранным источникам и запускам. По умолчанию ui/api/mcp; eval включается явно. Стоимость судей — в LangSmith.",
       "datasource": { "type": "postgres", "uid": "regrag-postgres" },
       "gridPos": { "h": 4, "w": 12, "x": 0, "y": 0 },
       "fieldConfig": {
@@ -37,7 +106,7 @@
           "datasource": { "type": "postgres", "uid": "regrag-postgres" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT sum(cost_usd) AS \"итого\"\nFROM queries\nWHERE $__timeFilter(ts)"
+          "rawSql": "SELECT sum(cost_usd) AS \"итого\"\nFROM queries\nWHERE $__timeFilter(ts)\n  AND source IN (${source:sqlstring}) AND ('__all__' IN (${run_id:sqlstring}) OR COALESCE(run_id, '__live__') IN (${run_id:sqlstring}))"
         }
       ]
     },
@@ -80,7 +149,7 @@
           "datasource": { "type": "postgres", "uid": "regrag-postgres" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT CAST(100.0 * count(*) FILTER (WHERE f.verdict = -1) / NULLIF(count(*), 0) AS float8) AS \"доля\"\nFROM feedback f\nJOIN queries q USING (query_id)\nWHERE $__timeFilter(q.ts)"
+          "rawSql": "SELECT CAST(100.0 * count(*) FILTER (WHERE f.verdict = -1) / NULLIF(count(*), 0) AS float8) AS \"доля\"\nFROM feedback f\nJOIN queries q USING (query_id)\nWHERE $__timeFilter(q.ts)\n  AND q.source IN (${source:sqlstring}) AND ('__all__' IN (${run_id:sqlstring}) OR COALESCE(q.run_id, '__live__') IN (${run_id:sqlstring}))"
         }
       ]
     },
@@ -117,7 +186,7 @@
           "datasource": { "type": "postgres", "uid": "regrag-postgres" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  date_trunc('day', ts) AS time,\n  source AS metric,\n  count(*) AS value\nFROM queries\nWHERE $__timeFilter(ts)\nGROUP BY 1, 2\nORDER BY 1"
+          "rawSql": "SELECT\n  date_trunc('day', ts) AS time,\n  source AS metric,\n  count(*) AS value\nFROM queries\nWHERE $__timeFilter(ts)\n  AND source IN (${source:sqlstring}) AND ('__all__' IN (${run_id:sqlstring}) OR COALESCE(run_id, '__live__') IN (${run_id:sqlstring}))\nGROUP BY 1, 2\nORDER BY 1"
         }
       ]
     },
@@ -145,7 +214,7 @@
           "datasource": { "type": "postgres", "uid": "regrag-postgres" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  path AS metric,\n  count(*) AS value\nFROM queries\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 2 DESC"
+          "rawSql": "SELECT\n  path AS metric,\n  count(*) AS value\nFROM queries\nWHERE $__timeFilter(ts)\n  AND source IN (${source:sqlstring}) AND ('__all__' IN (${run_id:sqlstring}) OR COALESCE(run_id, '__live__') IN (${run_id:sqlstring}))\nGROUP BY 1\nORDER BY 2 DESC"
         }
       ]
     },
@@ -182,7 +251,7 @@
           "datasource": { "type": "postgres", "uid": "regrag-postgres" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  date_trunc('day', ts) AS time,\n  CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY cost_usd) AS float8) AS \"p50\",\n  CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY cost_usd) AS float8) AS \"p95\"\nFROM queries\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 1"
+          "rawSql": "SELECT\n  date_trunc('day', ts) AS time,\n  CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY cost_usd) AS float8) AS \"p50\",\n  CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY cost_usd) AS float8) AS \"p95\"\nFROM queries\nWHERE $__timeFilter(ts)\n  AND source IN (${source:sqlstring}) AND ('__all__' IN (${run_id:sqlstring}) OR COALESCE(run_id, '__live__') IN (${run_id:sqlstring}))\nGROUP BY 1\nORDER BY 1"
         }
       ]
     },
@@ -219,7 +288,7 @@
           "datasource": { "type": "postgres", "uid": "regrag-postgres" },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  date_trunc('day', ts) AS time,\n  CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS float8) AS \"p50\",\n  CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS float8) AS \"p95\"\nFROM queries\nWHERE $__timeFilter(ts)\nGROUP BY 1\nORDER BY 1"
+          "rawSql": "SELECT\n  date_trunc('day', ts) AS time,\n  CAST(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS float8) AS \"p50\",\n  CAST(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS float8) AS \"p95\"\nFROM queries\nWHERE $__timeFilter(ts)\n  AND source IN (${source:sqlstring}) AND ('__all__' IN (${run_id:sqlstring}) OR COALESCE(run_id, '__live__') IN (${run_id:sqlstring}))\nGROUP BY 1\nORDER BY 1"
         }
       ]
     },
@@ -260,7 +329,7 @@
           "datasource": { "type": "postgres", "uid": "regrag-postgres" },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  f.ts AS \"когда\",\n  q.question AS \"вопрос\",\n  q.path AS \"маршрут\",\n  q.cost_usd AS \"цена\",\n  f.comment AS \"комментарий\",\n  q.query_id AS \"query_id\"\nFROM feedback f\nJOIN queries q USING (query_id)\nWHERE f.verdict = -1 AND $__timeFilter(q.ts)\nORDER BY f.ts DESC\nLIMIT 50"
+          "rawSql": "SELECT\n  f.ts AS \"когда\",\n  q.question AS \"вопрос\",\n  q.path AS \"маршрут\",\n  q.cost_usd AS \"цена\",\n  f.comment AS \"комментарий\",\n  q.query_id AS \"query_id\"\nFROM feedback f\nJOIN queries q USING (query_id)\nWHERE f.verdict = -1 AND $__timeFilter(q.ts)\n  AND q.source IN (${source:sqlstring}) AND ('__all__' IN (${run_id:sqlstring}) OR COALESCE(q.run_id, '__live__') IN (${run_id:sqlstring}))\nORDER BY f.ts DESC\nLIMIT 50"
         }
       ]
     }

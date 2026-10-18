@@ -93,19 +93,18 @@ def forbidden(outputs: dict, reference_outputs: dict) -> dict:
 
 
 def oos_handled(outputs: dict, reference_outputs: dict) -> dict:
-    """1 if an OOS question was refused: abstain route, empty answer or refusal text."""
+    """1 if an OOS question was explicitly refused; an empty answer is unresolved."""
     if _target_failed(outputs):
         return _result("oos_handled", None, "target_error")
     if reference_outputs.get("oos_type") == "false_premise":
         return _result("oos_handled", None, "false_premise_scored_by_correctness")
     if not is_oos(reference_outputs):
         return _result("oos_handled", None, "in_scope")
-    if outputs.get("route_decision") == "abstain":
-        return _result("oos_handled", 1, "abstain")
     answer = (outputs.get("answer") or "").strip()
     if not answer:
-        # Domain gate refused before the graph: empty answer, no route.
-        return _result("oos_handled", 1, "empty")
+        return _result("oos_handled", None, "empty_answer")
+    if outputs.get("route_decision") == "abstain":
+        return _result("oos_handled", 1, "abstain")
     if _REFUSAL_RE.search(answer.lower()[:_REFUSAL_WINDOW]):
         return _result("oos_handled", 1, "refusal")
     return _result("oos_handled", 0, "answered")

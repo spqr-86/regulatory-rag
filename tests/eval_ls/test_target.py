@@ -47,6 +47,17 @@ def test_domain_gate_state_without_route():
         "reasoning_tokens": 0,
         "unpriced_models": [],
         "context": "",
+        "route_reason": None,
+        "abstain_reason": None,
+        "generation_failed": False,
+        "generation_error": {},
+        "technical_failure": False,
+        "path": "simple",
+        "retrieval_attempts": [],
+        "usage": [],
+        "usage_unknown": False,
+        "cost_incomplete": False,
+        "prompt_tokens": 0,
     }
 
 

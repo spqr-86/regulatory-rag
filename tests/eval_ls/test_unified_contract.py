@@ -69,16 +69,44 @@ def test_unlabelled_false_premise_is_not_a_retrieval_miss():
     assert result["score"] is None and result["comment"] == "no_labels"
 
 
-def test_reviewed_false_premises_keep_existing_retrieval_labels():
+def test_real_false_premises_report_missing_retrieval_labels():
     examples = build_examples(
         ROOT / "tests/dataset.csv",
         ROOT / "eval/runs/gt_label_j7ceu4r4_2026-10-18/golden_retrieval_labeled.jsonl",
     )
     by_id = {e["metadata"]["case_id"]: e for e in examples}
-    assert len(examples) == 82
-    assert by_id["G043"]["outputs"]["relevant_chunk_ids"]
+    assert by_id["G043"]["outputs"]["relevant_chunk_ids"] == []
+    assert by_id["G043"]["metadata"]["retrieval_labelled"] is False
     assert by_id["G043"]["metadata"]["case_type"] == "false_premise"
     assert by_id["G043"]["metadata"]["labels_sha256"]
+
+
+def test_false_premise_preserves_supplied_labels(tmp_path):
+    import csv
+
+    rows = list(csv.DictReader((ROOT / "tests/dataset.csv").open()))
+    row = next(r for r in rows if r["case_id"] == "G043")
+    csv_path = tmp_path / "cases.csv"
+    with csv_path.open("w") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(row))
+        writer.writeheader()
+        writer.writerow(row)
+    labels = tmp_path / "labels.jsonl"
+    labels.write_text(
+        json.dumps({"question": row["question"], "relevant_chunk_ids": ["fixture#1"]})
+    )
+    assert build_examples(csv_path, labels)[0]["outputs"]["relevant_chunk_ids"] == [
+        "fixture#1"
+    ]
+
+
+def test_summary_percentiles_use_percent_units():
+    from eval.ls.artifacts import summarize_records
+
+    rows = [{"outputs": {"answer": "ok", "elapsed_sec": x}} for x in range(1, 101)]
+    summary = summarize_records(rows, assigned=100)
+    assert summary["latency_sec"]["p50"] == pytest.approx(50.5)
+    assert summary["latency_sec"]["p95"] == pytest.approx(95.05)
 
 
 def test_target_retains_accounting_and_failure_details():
@@ -170,6 +198,16 @@ def test_checkpoint_survives_interruption_and_refuses_overwrite(tmp_path):
         Artifacts(tmp_path / "run", {"run_id": "second"})
 
 
+def test_artifacts_refuse_orphaned_existing_results(tmp_path):
+    from eval.ls.artifacts import Artifacts
+
+    original = '{"case_id":"old"}\n'
+    (tmp_path / "results.jsonl").write_text(original)
+    with pytest.raises(FileExistsError):
+        Artifacts(tmp_path, {"run_id": "new"})
+    assert (tmp_path / "results.jsonl").read_text() == original
+
+
 def test_legacy_run_delegates_without_loading_a_second_graph(monkeypatch):
     import eval.ls.run as unified
     import eval.run_v7_eval as legacy
@@ -183,6 +221,7 @@ def test_legacy_run_delegates_without_loading_a_second_graph(monkeypatch):
         legacy,
         "get_vector_store_backend",
         lambda **kw: pytest.fail("Legacy run must delegate before building a graph"),
+        raising=False,
     )
     legacy.run(limit=2, skip_judge=True)
     assert len(seen) == 1 and seen[0][1]["limit"] == 2

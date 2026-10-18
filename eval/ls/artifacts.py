@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections import Counter
 from pathlib import Path
 
 from eval.pricing import cost_for_usages, percentile
@@ -16,7 +17,6 @@ NOT_APPLICABLE = {
     "false_premise_scored_by_correctness",
     "no_pattern",
     "no_forbidden_claims",
-    "no_labels",
 }
 
 
@@ -26,10 +26,15 @@ def encode(value) -> str:
 
 class Artifacts:
     def __init__(self, directory: Path, manifest: dict):
+        self.assessment_id = manifest.get("run_id")
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
+        if any(self.directory.iterdir()):
+            raise FileExistsError(f"Artifact directory must be empty: {self.directory}")
         with (self.directory / "manifest.json").open("x", encoding="utf-8") as stream:
             stream.write(encode(manifest) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
 
     def append(self, name: str, record: dict) -> None:
         if name not in {"results", "outputs", "judges", "assessments"}:
@@ -45,7 +50,9 @@ class Artifacts:
         temporary.replace(self.directory / "summary.json")
 
 
-def summarize_records(records: list[dict], *, assigned: int) -> dict:
+def summarize_records(
+    records: list[dict], *, assigned: int, include_paths=True
+) -> dict:
     metrics = {}
     for row in records:
         for key, result in row.get("scores", {}).items():
@@ -60,7 +67,10 @@ def summarize_records(records: list[dict], *, assigned: int) -> dict:
                     "not_applicable": 0,
                 },
             )
-            if result.get("comment", "") in NOT_APPLICABLE:
+            if (
+                result.get("applicable") is False
+                or result.get("comment", "") in NOT_APPLICABLE
+            ):
                 bucket["not_applicable"] += 1
                 continue
             bucket["eligible"] += 1
@@ -83,13 +93,18 @@ def summarize_records(records: list[dict], *, assigned: int) -> dict:
             r.get("error")
             or o.get("generation_failed")
             or o.get("technical_failure")
-            or "answer" not in o
+            or not (o.get("answer") or "").strip()
         )
         for r, o in zip(records, outputs)
     )
     costs = [o["cost_usd"] for o in outputs if "cost_usd" in o]
     unknown = sum(
-        bool(o.get("cost_incomplete") or "cost_usd" not in o) for o in outputs
+        bool(
+            o.get("cost_incomplete")
+            or o.get("untracked_cost_components")
+            or "cost_usd" not in o
+        )
+        for o in outputs
     )
     latencies = [o["elapsed_sec"] for o in outputs if "elapsed_sec" in o]
     judge_usage = [u for r in records for u in r.get("judge_usage", [])]
@@ -97,7 +112,7 @@ def summarize_records(records: list[dict], *, assigned: int) -> dict:
     judge_incomplete = any(u.get("usage_unknown") for u in judge_usage) or bool(
         judge_cost["unpriced_models"]
     )
-    return {
+    summary = {
         "assigned": assigned,
         "completed": len(records),
         "pending": assigned - len(records),
@@ -105,8 +120,8 @@ def summarize_records(records: list[dict], *, assigned: int) -> dict:
         "target_succeeded": len(records) - failed,
         "metrics": metrics,
         "latency_sec": {
-            "p50": percentile(latencies, 0.50),
-            "p95": percentile(latencies, 0.95),
+            "p50": percentile(latencies, 50),
+            "p95": percentile(latencies, 95),
         },
         "pipeline_cost": {
             "total_usd": sum(costs),
@@ -114,8 +129,46 @@ def summarize_records(records: list[dict], *, assigned: int) -> dict:
             "unpriced_models": sorted(
                 {m for o in outputs for m in o.get("unpriced_models", [])}
             ),
+            "untracked_components": sorted(
+                {c for o in outputs for c in o.get("untracked_cost_components", [])}
+            ),
         },
         "judge_cost": {**judge_cost, "incomplete": judge_incomplete},
         "total_cost_usd": sum(costs) + judge_cost["cost_usd"],
         "cost_incomplete": bool(unknown or judge_incomplete or len(records) < assigned),
+        "path_counts": dict(Counter(o.get("path", "unknown") for o in outputs)),
+        "route_reasons": dict(
+            Counter(o.get("route_reason") for o in outputs if o.get("route_reason"))
+        ),
+        "abstain_reasons": dict(
+            Counter(o.get("abstain_reason") for o in outputs if o.get("abstain_reason"))
+        ),
+        "parent_context": {
+            f"parent_{key}_total": sum(o.get(f"parent_{key}", 0) for o in outputs)
+            for key in (
+                "replaced",
+                "children_kept",
+                "deduplicated",
+                "truncated",
+                "slots_lost",
+            )
+        },
+        "parent_unavailable": sorted(
+            {reason for o in outputs for reason in o.get("parent_unavailable", [])}
+        ),
     }
+    if include_paths:
+        summary["by_path"] = {}
+        for path in summary["path_counts"]:
+            rows = [
+                r
+                for r in records
+                if (r.get("outputs") or {}).get("path", "unknown") == path
+            ]
+            block = summarize_records(rows, assigned=len(rows), include_paths=False)
+            summary["by_path"][path] = {
+                "queries": len(rows),
+                "pipeline_cost": block["pipeline_cost"],
+                "latency_sec": block["latency_sec"],
+            }
+    return summary

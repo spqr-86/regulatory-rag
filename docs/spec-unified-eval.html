@@ -16,7 +16,7 @@
     <div class="eyebrow">Regulatory RAG · Спецификация фичи · 18 октября 2026</div>
     <h1>Единый eval.<br>Качество и работа системы связаны.</h1>
     <p class="lead">Один запуск RAG, один набор правил оценки и один воспроизводимый результат. LangSmith хранит эксперименты, вердикты судей и ручную разметку; PostgreSQL и Grafana — телеметрию запросов и пользовательские отзывы.</p>
-    <span class="tag">Статус: вариант предложен к выбору</span><span class="tag">Рекомендуется A</span><span class="tag">Реализация ещё не начата</span>
+    <span class="tag">Статус: A согласован</span><span class="tag">Локальная реализация</span><span class="tag">Калибровка и baseline впереди</span>
   </header>
 
   <h2>Задача и согласованные границы</h2>
@@ -146,7 +146,7 @@
   <p>Локальные первоисточники: <code>eval/run_v7_eval.py</code>, <code>eval/ls/{run,target,dataset,evaluators,judge,align,pairwise}.py</code>, <code>eval/judges/citations.py</code>, <code>src/v7/{runner,telemetry}.py</code>, <code>grafana/dashboards/regulatory-rag.json</code> и <code>tests/dataset.csv</code>.</p>
   <p><a href="https://docs.langchain.com/langsmith/evaluate-rag-tutorial">Официальное руководство LangSmith по оценке RAG</a>: различает correctness относительно эталона и groundedness относительно найденных документов. Выбор архитектуры A и конкретные критерии выше — проектное предложение по результатам анализа нашего кода.</p>
   <p>План реализации в репозитории: <code>docs/design/2026-10-18-unified-eval-plan.md</code>. Этот HTML автономен: внешние стили, скрипты и шрифты не загружаются.</p>
-  <footer>Решение к принятию: A / B / C. Рекомендация — A. Публичная публикация и платные вызовы ещё не выполнены.</footer>
+  <footer>Архитектура A согласована. Локальная реализация проверяется офлайн; ручная калибровка и платный baseline ещё не проведены. Эта редакция не перепубликовывалась.</footer>
 </main>
 </body>
 </html>

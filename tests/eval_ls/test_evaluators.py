@@ -101,7 +101,9 @@ class TestOosHandled:
         assert oos_handled(out("какой-то текст", route="abstain"), OOS)["score"] == 1
 
     def test_empty_answer_from_domain_gate(self):
-        assert oos_handled(out("", route=None), OOS)["score"] == 1
+        r = oos_handled(out("", route=None), OOS)
+        assert r["score"] is None
+        assert r["comment"] == "empty_answer"
 
     def test_refusal_text(self):
         assert oos_handled(out("Не могу ответить: вопрос вне темы."), OOS)["score"] == 1
@@ -111,7 +113,8 @@ class TestOosHandled:
 
     def test_false_premise_refuted(self):
         r = oos_handled(out("Это неверно: не реже раза в 3 года."), FALSE_PREMISE)
-        assert r["score"] == 1
+        assert r["score"] is None
+        assert r["comment"] == "false_premise_scored_by_correctness"
 
     def test_not_applicable_to_in_scope(self):
         assert oos_handled(out("ответ"), IN_SCOPE)["score"] is None

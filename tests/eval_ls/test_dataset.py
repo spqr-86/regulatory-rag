@@ -90,9 +90,15 @@ def test_shape_and_split(files):
         "oos_type",
         "corpus_support",
         "csv_sha256",
+        "labels_sha256",
+        "case_type",
+        "retrieval_labelled",
         "split",
     }
     assert e["metadata"]["split"] == "verified"
+    assert e["metadata"]["case_type"] == "regular"
+    assert e["metadata"]["retrieval_labelled"] is True
+    assert len(e["metadata"]["labels_sha256"]) == 64
 
 
 def test_supplementary_facts_pass_through(tmp_path, files):

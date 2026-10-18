@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import importlib.resources
 import json
 from pathlib import Path
 from typing import Literal
@@ -67,7 +68,11 @@ def parse_groundedness(raw: str, answer: str, context: str) -> dict:
 def make_groundedness_evaluator(llm):
     from langchain_core.prompts import ChatPromptTemplate
 
-    template = ChatPromptTemplate.from_template(PROMPT_PATH.read_text(encoding="utf-8"))
+    template = ChatPromptTemplate.from_template(
+        importlib.resources.files("eval")
+        .joinpath("prompts/judge_groundedness.md")
+        .read_text(encoding="utf-8")
+    )
 
     def groundedness(inputs, outputs, reference_outputs):
         if _target_failed(outputs):

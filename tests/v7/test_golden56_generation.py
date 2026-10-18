@@ -37,44 +37,50 @@ def test_provider_exception_does_not_return_raw_context():
     assert usage["error_type"] == "TimeoutError"
 
 
-def test_empty_and_failed_eval_records_keep_accounting(tmp_path, monkeypatch):
+def test_empty_and_failed_eval_records_keep_accounting(tmp_path):
     import json
+    from types import SimpleNamespace as NS
 
-    import eval.run_v7_eval as runner
+    from eval.ls.artifacts import Artifacts
+    from eval.ls.run import consume_results
 
-    rows = runner.load_dataset(runner.DATASET_PATH)[:2]
-    monkeypatch.setattr(runner, "load_dataset", lambda _: rows)
-    monkeypatch.setattr(runner, "get_vector_store_backend", lambda **_: None)
-    monkeypatch.setattr(runner, "build_full_v7_runtime", lambda _: None)
-    monkeypatch.setattr(runner, "build_graph", lambda **_: Mock())
-    monkeypatch.setattr(runner, "default_writer", lambda: None)
-    base = runner.run_query(Mock(invoke=lambda _: {"llm_usage": []}), "q")
-    base.update(
-        answer="",
-        elapsed_sec=4,
-        route_decision="abstain",
-        route_reason="complex_exhausted",
-        abstain_reason="no context",
+    references = [
+        NS(id=str(i), outputs={}, metadata={"case_id": str(i)}) for i in range(2)
+    ]
+    outputs = [
+        {"answer": "", "elapsed_sec": 4, "cost_usd": 0, "abstain_reason": "no context"},
+        {
+            "answer": "technical failure",
+            "elapsed_sec": 4,
+            "cost_usd": 0,
+            "generation_failed": True,
+            "usage_unknown": True,
+            "cost_incomplete": True,
+            "generation_error": {"error_type": "ValueError"},
+        },
+    ]
+    rows = [
+        {
+            "run": NS(id=str(i), outputs=o, error=None),
+            "example": references[i],
+            "evaluation_results": {"results": []},
+        }
+        for i, o in enumerate(outputs)
+    ]
+    summary = consume_results(
+        rows, Artifacts(tmp_path, {}), references, {}, skip_judge=True
     )
-    failed = {
-        **base,
-        "answer": "technical failure",
-        "generation_failed": True,
-        "usage_unknown": True,
-        "generation_error": {"error_type": "ValueError"},
-    }
-    monkeypatch.setattr(runner, "run_query", Mock(side_effect=[base, failed]))
-    output = tmp_path / "report.json"
-    runner.run(output=output, skip_judge=True)
-    result = json.loads(output.read_text())
-    assert len(result["results"]) == 2
-    assert result["results"][0]["elapsed_sec"] == 4
-    assert result["results"][0]["abstain_reason"] == "no context"
-    assert result["aggregate"]["failed"] == 1
-    assert result["aggregate"]["cost"]["queries"] == 2
-    assert result["valid_results"] == 0
-    assert result["aggregate"]["cost"]["cost_incomplete"] is True
-    assert result["aggregate"]["cost"]["usage_unknown_queries"] == 1
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "results.jsonl").read_text().splitlines()
+    ]
+    assert len(records) == 2
+    assert records[0]["outputs"]["elapsed_sec"] == 4
+    assert records[0]["outputs"]["abstain_reason"] == "no context"
+    assert records[1]["outputs"]["generation_error"]["error_type"] == "ValueError"
+    assert summary["target_failed"] == 2
+    assert summary["pipeline_cost"]["incomplete_examples"] == 1
+    assert summary["cost_incomplete"] is True
 
 
 def test_telemetry_records_generation_failure():

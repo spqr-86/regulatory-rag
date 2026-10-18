@@ -89,6 +89,7 @@ def make_target(run_id: str | None = None, checkpoint=None) -> Callable[[dict], 
     Exceptions are not caught: client.evaluate(error_handling="log") records
     them as an error on the row.
     """
+    from config.settings import settings
     from src.backends.vector_store import get_vector_store_backend
     from src.v7.bridge import build_full_v7_runtime
     from src.v7.graph import build_graph
@@ -121,6 +122,8 @@ def make_target(run_id: str | None = None, checkpoint=None) -> Callable[[dict], 
                         "run_id": run_id,
                         "inputs": inputs,
                         "target_error": type(exc).__name__,
+                        "cost_incomplete": True,
+                        "usage_unknown": True,
                         "elapsed_sec": time.perf_counter() - start,
                     }
                 )
@@ -128,7 +131,15 @@ def make_target(run_id: str | None = None, checkpoint=None) -> Callable[[dict], 
         outputs = state_to_outputs(state)
         outputs["query_id"] = query_id
         outputs["run_id"] = run_id
+        outputs["case_id"] = inputs.get("case_id")
+        outputs["example_id"] = inputs.get("example_id")
         outputs["elapsed_sec"] = time.perf_counter() - start
+        # Embedding calls are outside llm_usage. Never present accounted LLM cost
+        # as the full invoice when a paid embedding provider may have been used.
+        outputs["untracked_cost_components"] = (
+            [] if settings.EMBEDDING_PROVIDER == "local" else ["embedding"]
+        )
+        outputs["cost_incomplete"] |= bool(outputs["untracked_cost_components"])
         if checkpoint:
             checkpoint({"inputs": inputs, "outputs": outputs})
         return outputs

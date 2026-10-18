@@ -1,41 +1,71 @@
 # How to run an evaluation
 
-Runs the golden dataset through the V7 graph and scores it. Metric definitions and the
-report format are in [reference/evaluation](../reference/evaluation.md).
-
-The [legal reference audit](../evaluation/golden-set-audit-2026-09-28.md) found defects in
-the original key. The current dataset retains all 56 cases but only `reference_status=verified`
-in-scope answers contribute to normative correctness (currently 12 of 43). The output
-records the eligible denominator and dataset SHA-256. `needs_clarification` cases still
-run through the graph for inspection but are not correctness-scored. Rows G057+ with
-`reference_status=expert_candidate` are unreviewed expert answers imported by
-`scripts/import_golden_expert.py`; `run_v7_eval.py` skips them until a person verifies the
-norm. A full-set baseline
-requires source verification and a refreshed index.
+The generic normative evaluator is `eval/ls/run.py`, built on the existing LangSmith
+executor. It selects only `reference_status=verified` from `tests/dataset.csv`;
+`needs_clarification` and `expert_candidate` never enter the benchmark. Counts are computed
+on each launch. The [legal reference audit](../evaluation/golden-set-audit-2026-09-28.md)
+explains why the original key cannot establish legal accuracy. Metric definitions and
+the new artifact format are in [reference/evaluation](../reference/evaluation.md).
 
 ```bash
 source .venv/bin/activate
 
-python eval/run_v7_eval.py                              # full dataset, with LLM judge
-python eval/run_v7_eval.py --skip-judge                 # pipeline only, no judge (~$0)
-python eval/run_v7_eval.py --limit 5                    # quick smoke test
-python eval/run_v7_eval.py --output benchmarks/eval_v7_custom.jsonl
+python -m eval.ls.run --dry-run --output-dir /tmp/regrag-plan  # local files only
+python -m eval.ls.run --prefix unified --output-dir eval/runs/my-run  # paid
+python -m eval.ls.run --prefix smoke --cases G001,G005 --limit 1   # paid; select before limit
+python -m eval.ls.run --prefix pipeline --skip-judge             # paid RAG, no judges
 ```
 
-**Flags:** `--limit N` (cap questions), `--skip-judge` (no LLM scoring),
-`--output PATH` (default `benchmarks/eval_v7_{date}.jsonl`).
+Run from the worktree root. `--dry-run` constructs no LangSmith client, model or vector
+store; it writes a manifest with selected cases, hashes, configuration and label coverage.
+Each `--output-dir` must be new: an existing manifest is never overwritten.
 
-**Cost:** the judge issues separate LLM calls for faithfulness and relevance, plus
-correctness only for eligible in-scope questions. The historical full run cost ≈ $0.25
-(pipeline + judge combined; measured 2026-09-08). `--skip-judge` disables judge calls,
-but the RAG pipeline still calls its generation model and incurs its cost.
+Before paid execution, configure `CHROMA_DB_PATH` to the reviewed snapshot matching the
+labels. The default labels target `build-j7ceu4r4`; another set needs matching `--labels`
+and `--labels-snapshot`. An incompatible snapshot or a missing snapshot report stops the
+run before graph construction. The selected LangSmith examples must match the local
+questions and references; review and upsert separately with `python -m eval.ls.dataset`
+if they are stale. The runner does not change the dataset. It does not copy `.env`
+between worktrees.
 
-**Output:** a JSONL report under `benchmarks/`. The judge model is set by
-`JUDGE_MODEL_NAME` (see [FACTS](../reference/FACTS.md#models)).
+**Costs and readiness:** ordinary runs pay for generation/embeddings and three separate
+judges: correctness, citations and groundedness. `--skip-judge` still pays for RAG.
+Judge usage is reported separately, with bounded output, 300s timeout and no automatic
+paid retries. Missing usage or unknown rates make the cost incomplete. Embedding usage
+is not in the pipeline's `llm_usage`: with a paid embedding provider, accounted cost is
+explicitly a lower bound. Groundedness requires manual alignment on saved real answers
+before a paid baseline or quality decisions; offline tests establish its contract only.
 
-**Re-judging without re-running the pipeline:** `scripts/rejudge.py` re-scores saved
-answers with a judge — cheap A/B of judge prompts or models without paying for retrieval
-and generation again.
+**Artifacts:** `manifest.json` freezes references, versions and allowlisted configuration;
+`outputs.jsonl` checkpoints the target before judges; `judges.jsonl` stores verdicts/usage;
+`assessments.jsonl` stores per-evaluator results; `results.jsonl` checkpoints completed
+examples; `summary.json` updates after each result. Ctrl+C preserves these files and
+stops subsequent target/judge calls; an already running provider call can still finish.
+Automatic resumption is outside this release.
+
+**Rejudge (paid judges, no RAG or telemetry queries):**
+
+```bash
+python -m eval.ls.run --rejudge EXPERIMENT --output-dir eval/runs/rejudge-original
+python -m eval.ls.run --rejudge EXPERIMENT --current-references --output-dir eval/runs/rejudge-updated
+```
+
+Default references come from the experiment's original `dataset_version`. The explicit
+flag selects current references by stable example UUID, even if the question changed.
+Each assessment has a new manifest/assessment ID and retains the source run IDs. Missing
+original versions, missing IDs and repeated examples fail clearly. Old runs without
+generator context remain unscored for citations/groundedness. Retrieval is not rejudged
+against a different snapshot. Source pipeline costs are shown as reused, excluded from
+the new evaluation's total.
+
+`eval/run_v7_eval.py` delegates to this executor (`--limit`, `--skip-judge`, `--dry-run`,
+`--output-dir`). Its old `--output` report contract is rejected before execution with a
+migration hint. Historical helpers and reports remain readable; old scripts below are
+for historical report formats, not a second end-to-end normative runner.
+
+Align and pairwise remain `eval.ls.align` and `eval.ls.pairwise`. Comparison must identify
+dataset/reference hashes, judge prompts/models and index snapshot changes rather than
+pooling incompatible metric series.
 
 For the revised legal key, use `scripts/rejudge_golden.py INPUT --dry-run` to inspect
 eligible saved cases, then `scripts/rejudge_golden.py INPUT --output OUTPUT` after

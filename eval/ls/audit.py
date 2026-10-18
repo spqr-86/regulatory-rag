@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import contextvars
+import inspect
 import json
 
 from eval.ls.evaluators import _result
@@ -42,10 +43,11 @@ class AuditedModel:
             or (getattr(reply, "response_metadata", None) or {}).get("token_usage")
             or {}
         )
-        usage["usage_unknown"] = not (
-            ("input_tokens" in metadata or "prompt_tokens" in metadata)
-            and ("output_tokens" in metadata or "completion_tokens" in metadata)
-        )
+        counters = [
+            metadata.get("input_tokens", metadata.get("prompt_tokens")),
+            metadata.get("output_tokens", metadata.get("completion_tokens")),
+        ]
+        usage["usage_unknown"] = not all(type(v) is int and v >= 0 for v in counters)
         if context is not None:
             context["usage"].append(usage)
             content = reply.content
@@ -70,7 +72,9 @@ class AuditedModel:
         return reply
 
 
-def audited(evaluator, keys: tuple[str, ...], sink, usages: dict):
+def audited(evaluator, keys: tuple[str, ...], sink, usages: dict, cancelled=None):
+    parameters = inspect.signature(evaluator).parameters
+
     def evaluate(run, example):
         identity = {
             "case_id": (example.metadata or {}).get("case_id"),
@@ -83,8 +87,15 @@ def audited(evaluator, keys: tuple[str, ...], sink, usages: dict):
         token = _CONTEXT.set({"identity": identity, "sink": sink, "usage": usage})
         try:
             try:
+                if cancelled is not None and cancelled.is_set():
+                    raise InterruptedError("Evaluation cancelled")
+                arguments = {
+                    "inputs": run.inputs or {},
+                    "outputs": run.outputs or {},
+                    "reference_outputs": example.outputs or {},
+                }
                 result = evaluator(
-                    run.inputs or {}, run.outputs or {}, example.outputs or {}
+                    **{k: v for k, v in arguments.items() if k in parameters}
                 )
                 scores = result if isinstance(result, list) else [result]
             except Exception as exc:
@@ -108,6 +119,8 @@ def audited(evaluator, keys: tuple[str, ...], sink, usages: dict):
                 if correction:
                     scores.append({**correction, "key": "premise_corrected"})
             sink.append("assessments", {**identity, "scores": scores})
+            for score in scores:
+                score["evaluator_info"] = {"assessment_id": sink.assessment_id}
             usages.setdefault(str(run.id), []).extend(usage)
             return {"results": scores}
         finally:

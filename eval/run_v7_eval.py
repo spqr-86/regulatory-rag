@@ -1,24 +1,11 @@
-"""Evaluation runner for V7 RAG pipeline.
+"""Historical V7 report helpers and a compatibility CLI for eval.ls.run.
 
-Runs the golden dataset through the V7 graph and measures:
-  - faithfulness       — are claims grounded in retrieved context?
-  - answer_relevance   — does the answer address the question?
-  - correctness        — does the answer match the ground truth? (LLM-judge, 0-10)
-  - false_sufficiency_rate — % of simple-path answers that scored badly (< threshold)
-
-Usage:
-    cd /home/petr/projects/ai/regulatory-rag
-    source .venv/bin/activate
-    python eval/run_v7_eval.py
-    python eval/run_v7_eval.py --limit 5          # quick smoke test
-    python eval/run_v7_eval.py --skip-judge       # pipeline only, no LLM judge (~$0)
-    python eval/run_v7_eval.py --output benchmarks/eval_v7_custom.jsonl
+Only --dry-run is free. --skip-judge still pays for RAG. --output is retired;
+--output-dir selects the new manifest/JSONL/summary artifact directory.
+Historical helper functions retain their original metric definitions.
 """
 
-# ANCHOR: Run the golden cases, keep reference-review status with each result,
-# and aggregate normative correctness only from verified in-scope references.
-# Input: versioned CSV, current RAG graph and judge. Output: JSON report with
-# dataset hash, score denominator, per-case telemetry and judge findings.
+# ANCHOR: CLI → unified executor; historical helpers remain for saved report tools.
 
 from __future__ import annotations
 
@@ -46,22 +33,12 @@ load_dotenv()
 
 from src.infra.llm_factory import (  # noqa: E402
     apply_ipv6_patch_for_googleapis,
-    get_judge_llm,
 )
 
 apply_ipv6_patch_for_googleapis()
 
-from config.settings import settings  # noqa: E402
-from eval.advanced_generation_metrics import (  # noqa: E402
-    evaluate_answer_relevance,
-    evaluate_faithfulness,
-)
 from eval.pricing import cost_for_usages, percentile  # noqa: E402
-from src.backends.vector_store import get_vector_store_backend  # noqa: E402
-from src.v7.bridge import build_full_v7_runtime  # noqa: E402
 from src.v7.config import v7_config  # noqa: E402
-from src.v7.graph import build_graph  # noqa: E402
-from src.v7.runner import default_writer  # noqa: E402
 from src.v7.runner import run_query as run_with_telemetry  # noqa: E402
 from utils.logging import configure_logging  # noqa: E402
 
@@ -431,368 +408,48 @@ def evaluate_correctness(
 
 def run(
     limit: int | None = None,
-    output: Path = DEFAULT_OUTPUT,
+    output: Path | None = None,
     skip_judge: bool = False,
-) -> None:
-    print("Loading dataset...")
-    dataset = load_dataset(DATASET_PATH)
-    if limit:
-        dataset = dataset[:limit]
-    print(f"  {len(dataset)} questions")
+    *,
+    dry_run: bool = False,
+    output_dir: Path | None = None,
+) -> str:
+    """Compatibility entry to eval.ls.run; historical helpers remain importable."""
+    from eval.ls.run import run_experiment
 
-    print("Initializing V7 graph...")
-    vector_store = get_vector_store_backend(load_existing=True)
-    runtime = build_full_v7_runtime(vector_store)
-    graph = build_graph(runtime=runtime).compile()
-    telemetry_writer = default_writer()
-    # One id for the whole run: it ties the rows in the journal to this file.
-    run_id = new_run_id()
-    print("  Graph ready.")
-
-    judge_llm = None
-    if skip_judge:
-        print(
-            "  [--skip-judge] LLM judge disabled; generation and embeddings may still incur cost.\n"
+    if output is not None:
+        raise ValueError(
+            "Legacy --output JSON format is retired. Use --output-dir DIR for "
+            "manifest.json, results.jsonl and summary.json; historical files stay unchanged."
         )
-    else:
-        print("Loading judge LLM...")
-        # seed makes OpenAI judging best-effort reproducible (cuts run-to-run noise).
-        judge_llm = get_judge_llm(temperature=0.0, seed=12345)
-        print("  Judge ready.\n")
-
-    results = []
-    for i, item in enumerate(dataset, 1):
-        question = item["question"]
-        case_id = item["case_id"]
-        ground_truth = item["ground_truth"]
-        oos_type = item.get("oos_type", "")
-        reference_status = item["reference_status"]
-        print(f"[{i}/{len(dataset)}] {case_id}: {question[:70]}...")
-
-        # Run graph
-        started = time.perf_counter()
-        try:
-            run_result = run_query(
-                graph, question, writer=telemetry_writer, run_id=run_id
-            )
-        except Exception as e:
-            print(f"  ERROR running graph: {e}")
-            results.append(
-                {
-                    "case_id": case_id,
-                    "question": question,
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "elapsed_sec": round(time.perf_counter() - started, 2),
-                    "path": "unknown",
-                    "route_reason": "graph_error",
-                    "usage_unknown": True,
-                    "oos_type": oos_type,
-                    "reference_status": reference_status,
-                }
-            )
-            continue
-
-        answer = run_result["answer"]
-        context = run_result["context"]
-        path = run_result["path"]
-
-        if not answer or run_result.get("generation_failed"):
-            print(f"  WARNING: empty answer (path={path})")
-            results.append(
-                {
-                    "case_id": case_id,
-                    "question": question,
-                    "ground_truth": ground_truth,
-                    "answer": answer,
-                    "path": path,
-                    **record_fields(run_result),
-                    "oos_type": oos_type,
-                    "reference_status": reference_status,
-                    "legal_as_of": item["legal_as_of"],
-                    "corpus_support": item["corpus_support"],
-                    "error": (
-                        "generation_failed"
-                        if run_result.get("generation_failed")
-                        else "empty answer"
-                    ),
-                }
-            )
-            continue
-
-        if skip_judge:
-            record = {
-                "case_id": case_id,
-                "question": question,
-                "ground_truth": ground_truth,
-                "answer": answer,
-                "path": path,
-                "oos_type": oos_type,
-                "reference_status": reference_status,
-                "legal_as_of": item["legal_as_of"],
-                "corpus_support": item["corpus_support"],
-                **record_fields(run_result),
-            }
-            results.append(record)
-            print(
-                f"  path={path} | elapsed={run_result['elapsed_sec']:.1f}s | "
-                f"${run_result['cost_usd']:.5f}"
-            )
-            continue
-
-        # Evaluate with LLM judge
-        try:
-            faithfulness = evaluate_faithfulness(question, context, answer, judge_llm)
-        except Exception as e:
-            faithfulness = {"faithfulness_score": 0.0, "faithfulness_reasoning": str(e)}
-
-        try:
-            relevance = evaluate_answer_relevance(question, answer, judge_llm)
-        except Exception as e:
-            print(f"  WARNING: relevance eval failed: {e}")
-            relevance = {"answer_relevance_score": 0.0}
-
-        if reference_status == "verified" and not oos_type:
-            try:
-                correctness = evaluate_correctness(
-                    question,
-                    ground_truth,
-                    answer,
-                    judge_llm,
-                    item["forbidden_claims"],
-                    item["legal_as_of"],
-                )
-            except Exception as e:
-                correctness = {
-                    "correctness_score": None,
-                    "correctness_reasoning": str(e),
-                }
-        else:
-            correctness = {
-                "correctness_score": None,
-                "correctness_reasoning": "reference not eligible for normative scoring",
-            }
-
-        record = {
-            "case_id": case_id,
-            "question": question,
-            "ground_truth": ground_truth,
-            "answer": answer,
-            "path": path,
-            **record_fields(run_result),
-            "oos_type": oos_type,
-            "reference_status": reference_status,
-            "legal_as_of": item["legal_as_of"],
-            "corpus_support": item["corpus_support"],
-            "forbidden_claims": item["forbidden_claims"],
-            **faithfulness,
-            **relevance,
-            **correctness,
-        }
-        results.append(record)
-
-        print(
-            f"  path={path} | "
-            f"faith={faithfulness.get('faithfulness_score', 0):.2f} | "
-            f"rel={relevance.get('answer_relevance_score', 0):.2f} | "
-            f"correct={correctness['correctness_score'] if correctness['correctness_score'] is not None else 'unscored'}"
-        )
-
-    # Aggregate
-    valid = [
-        r
-        for r in results
-        if "error" not in r and not r.get("generation_failed") and r.get("answer")
-    ]
-    n = len(valid)
-
-    measured = [r for r in results if "elapsed_sec" in r]
-    avg_elapsed = (
-        sum(r["elapsed_sec"] for r in measured) / len(measured) if measured else 0.0
+    print("Deprecated entry point: use python -m eval.ls.run")
+    return run_experiment(
+        split="verified",
+        prefix="unified",
+        limit=limit,
+        skip_judge=skip_judge,
+        dry_run=dry_run,
+        output_dir=output_dir,
     )
-    complex_rate = (
-        sum(r.get("path") == "complex" for r in measured) / len(measured)
-        if measured
-        else 0.0
-    )
-    abstain_count = sum(
-        1
-        for r in results
-        if r.get("route_decision") == "abstain" or r.get("abstain_reason")
-    )
-
-    cost_summary = summarize_cost(measured)
-
-    aggregate: dict[str, Any] = {
-        "complex_path_rate": round(complex_rate, 3),
-        "mean_elapsed_sec": round(avg_elapsed, 2),
-        "answered": n,
-        "failed": sum(
-            bool(r.get("generation_failed"))
-            or ("error" in r and r.get("error") != "empty answer")
-            for r in results
-        ),
-        "usage_unknown": sum(bool(r.get("usage_unknown")) for r in measured),
-        "abstained": abstain_count,
-        "cost": cost_summary,
-    }
-
-    if not skip_judge:
-        # Split: in-scope vs OOS
-        in_scope = scorable_in_scope(valid)
-        n_in_scope = len(in_scope)
-        scored = [r for r in valid if r.get("correctness_score") is not None]
-
-        avg_faith = sum(r.get("faithfulness_score", 0) for r in valid) / n if n else 0.0
-        avg_rel = (
-            sum(r.get("answer_relevance_score", 0) for r in valid) / n if n else 0.0
-        )
-        avg_correct = (
-            sum(r["correctness_score"] for r in scored) / len(scored)
-            if scored
-            else None
-        )
-        # In-scope only correctness (excludes OOS noise)
-        avg_correct_inscope = (
-            sum(r["correctness_score"] for r in in_scope) / n_in_scope
-            if in_scope
-            else None
-        )
-
-        simple_path = [r for r in in_scope if r.get("path") == "simple"]
-        false_sufficiency_cases = [
-            r
-            for r in simple_path
-            if r["correctness_score"] < FALSE_SUFFICIENCY_THRESHOLD
-        ]
-        false_sufficiency_rate = (
-            len(false_sufficiency_cases) / len(simple_path) if simple_path else 0.0
-        )
-        aggregate.update(
-            {
-                "faithfulness": round(avg_faith, 3),
-                "answer_relevance": round(avg_rel, 3),
-                "correctness_mean": (
-                    round(avg_correct, 2) if avg_correct is not None else None
-                ),
-                "correctness_inscope": (
-                    round(avg_correct_inscope, 2)
-                    if avg_correct_inscope is not None
-                    else None
-                ),
-                "correctness_scored": n_in_scope,
-                "correctness_in_scope_total": sum(
-                    1 for r in valid if not r.get("oos_type")
-                ),
-                "oos_rejection_rate": round(
-                    oos_rejection_rate(
-                        [r for r in results if r.get("reference_status") == "verified"]
-                    ),
-                    3,
-                ),
-                "false_sufficiency_rate": round(false_sufficiency_rate, 3),
-            }
-        )
-
-    if v7_config.PARENT_CONTEXT_ENABLE:
-        aggregate.update(summarize_parents(results))
-        if aggregate["parent_replaced_total"] == 0:
-            raise RuntimeError(
-                "V7_PARENT_CONTEXT_ENABLE is enabled but parent_replaced_total == 0; "
-                "eval is invalid: проверьте или пересоберите sidecar. "
-                f"Reasons: {aggregate['parent_unavailable_reasons']}"
-            )
-
-    summary = {
-        "timestamp": datetime.now().isoformat(),
-        "run_id": run_id,
-        "skip_judge": skip_judge,
-        "dataset": str(DATASET_PATH),
-        "dataset_sha256": hashlib.sha256(DATASET_PATH.read_bytes()).hexdigest(),
-        "correctness_prompt_sha256": correctness_prompt_sha256(),
-        "judge_provider": settings.JUDGE_LLM_PROVIDER,
-        "judge_model": settings.JUDGE_MODEL_NAME,
-        "judge_temperature": 0.0,
-        "judge_seed": 12345,
-        "dataset_size": len(dataset),
-        "valid_results": n,
-        "aggregate": aggregate,
-        "false_sufficiency_threshold": FALSE_SUFFICIENCY_THRESHOLD,
-        "results": results,
-    }
-
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with open(output, "w", encoding="utf-8") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=2)
-
-    print(f"\n{'=' * 55}")
-    print(f"Results ({n}/{len(dataset)} valid)")
-    if not skip_judge:
-        print(
-            f"  Faithfulness:          {aggregate['faithfulness']:.3f}  (target >0.85)"
-        )
-        print(
-            f"  Answer Relevance:      {aggregate['answer_relevance']:.3f}  (target >0.85)"
-        )
-        if aggregate["correctness_inscope"] is not None:
-            print(
-                f"  Correctness (reviewed): {aggregate['correctness_inscope']:.1f}/10  (n={n_in_scope})"
-            )
-        else:
-            print("  Correctness (reviewed): n/a (no eligible answers)")
-        print(
-            f"  Reference coverage:    {n_in_scope}/{aggregate['correctness_in_scope_total']} in-scope answers"
-        )
-        print(
-            f"  OOS rejection rate:    {aggregate['oos_rejection_rate']:.1%}  (target >90%)"
-        )
-        print(
-            f"  False-sufficiency:     {aggregate['false_sufficiency_rate']:.1%}  (target <10%)"
-        )
-        if false_sufficiency_cases:
-            print(f"\nFalse-sufficiency cases ({len(false_sufficiency_cases)}):")
-            for r in false_sufficiency_cases:
-                print(
-                    f"  - [{r.get('correctness_score', 0):.1f}] {r['question'][:60]}..."
-                )
-    else:
-        print("  [skip-judge mode] Quality metrics not computed.")
-    print(f"  Complex path rate:     {complex_rate:.1%}")
-    print(
-        f"  Latency p50 / p95:     {cost_summary['latency_p50_sec']:.1f}s / "
-        f"{cost_summary['latency_p95_sec']:.1f}s  (mean {avg_elapsed:.1f}s)"
-    )
-    print(
-        f"  Cost per query:        ${cost_summary['mean_cost_usd']:.5f}  "
-        f"(run total ${cost_summary['total_cost_usd']:.4f})"
-    )
-    for path_name, block in cost_summary["by_path"].items():
-        print(
-            f"    {path_name:<8} n={block['queries']:<4} "
-            f"${block['mean_cost_usd']:.5f}/query | "
-            f"p50 {block['latency_p50_sec']:.1f}s / p95 {block['latency_p95_sec']:.1f}s"
-        )
-    if cost_summary["unpriced_models"]:
-        print(
-            "  WARNING: no rate card for "
-            + ", ".join(cost_summary["unpriced_models"])
-            + " — their tokens are priced at $0. Add them to eval/pricing.py."
-        )
-    print(f"\nSaved → {output}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate V7 RAG pipeline")
-    parser.add_argument(
-        "--limit", type=int, default=None, help="Limit number of questions"
+    parser = argparse.ArgumentParser(
+        description="Compatibility CLI for unified evaluation"
     )
+    parser.add_argument("--limit", type=int)
+    parser.add_argument("--output", type=Path, help="retired format; use --output-dir")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument(
-        "--output", type=Path, default=DEFAULT_OUTPUT, help="Output JSONL path"
+        "--skip-judge", action="store_true", help="skip judges; RAG still incurs cost"
     )
-    parser.add_argument(
-        "--skip-judge",
-        action="store_true",
-        help="Skip LLM judge (no faithfulness/correctness scoring). Pipeline runs only. Cost ~$0.",
-    )
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    run(limit=args.limit, output=args.output, skip_judge=args.skip_judge)
+    if args.output is not None:
+        parser.error("--output format is retired; use --output-dir DIR")
+    run(
+        limit=args.limit,
+        skip_judge=args.skip_judge,
+        dry_run=args.dry_run,
+        output_dir=args.output_dir,
+    )

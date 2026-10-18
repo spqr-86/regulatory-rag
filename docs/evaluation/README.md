@@ -10,6 +10,9 @@ evidence is weak. Current production values live in
 - **Per-experiment decision memos:** [experiments/](./experiments/)
 - **How to reproduce a run:** [how-to/run-evaluation.md](../how-to/run-evaluation.md)
 - **Metric definitions and report format:** [reference/evaluation.md](../reference/evaluation.md)
+- **Unified normative eval (18.10.2026):** [approved design](../spec-unified-eval.html),
+  [implementation and validation](../design/2026-10-18-unified-eval-plan.md). The new
+  binary metrics form a separate series; groundedness alignment/baseline remain pending.
 
 ## What is measured
 
@@ -19,7 +22,7 @@ a missing chunk or from a bad decision over a good chunk.
 
 | Layer | Question | Dataset | Metrics | Runner |
 |---|---|---|---|---|
-| Generation | Is the answer correct, grounded, and does it refuse when it should? | 56-question golden set | correctness, faithfulness, relevance, OOS abstain, false-sufficiency, cost, latency | `eval/run_v7_eval.py` |
+| Generic normative Q&A | Is the answer correct, grounded, and does it refuse when it should? | Verified rows of the golden CSV | binary correctness, groundedness, citations, premise correction, OOS, retrieval coverage, reliability/cost/latency | `eval/ls/run.py` (legacy CLI delegates) |
 | Retrieval | Is the right chunk in the top-k? | 90 practitioner questions (headline), 133 dev questions | Hit Rate@k, MRR, p50/p95 latency | `eval/run_retrieval_eval.py` |
 | Routing | Are escalate/answer decisions safe? | 43 reviewed questions, no judge | escalation rate, coverage, critical misses | `eval/triage_calibration.py` |
 | Unit-scoped Q&A | Are object facts applied correctly, or is a norm's threshold used on the wrong quantity? | 9-question pair set, 4-question trap set | expected status match, required sub-answers, forbidden conclusions | `eval/run_object_profile_pair.py` + `eval/score_object_profile_run.py` |

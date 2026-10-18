@@ -1,12 +1,39 @@
 # Unified eval — implementation plan
 
-Status: architecture A approved by Petr on 2026-10-18; implementation WIP, paused on
-“сохранись”. [The specification](../spec-unified-eval.html) is accepted. No paid calls.
+Status: architecture A approved by Petr on 2026-10-18; local implementation ready
+for review. [The specification](../spec-unified-eval.html) is accepted. No paid calls.
 
-Checkpoint: `~/assistant-core/handoffs/2026-10-18-13.md`. Case policy, target outputs,
-groundedness, artifacts and audit have initial code; `run.py`, old-runner migration,
-rejudge and Grafana filters are not implemented. Existing tests require contract updates;
-G043 has no retrieval labels. Review percentile units in `artifacts.py` before resuming.
+## Implementation checkpoint (18.10)
+
+- Shared runner, audited groundedness/correctness/citations, frozen allowlisted manifest,
+  target and completed-result checkpoints, explicit denominators and separate costs are wired.
+  Legacy CLI delegates; incompatible `--output` fails before execution. Historical helpers
+  stay available to existing report tools.
+- Rejudge defaults to the original dataset version, joins by UUID and records an assessment
+  ID. Current references are explicit. Retrieval is not rescored across snapshots; reused
+  pipeline cost is excluded from the new total. Source runs with repetitions are rejected
+  until explicit per-repetition selection exists.
+- All seven Grafana panels filter source/run_id, including feedback joins and NULL live
+  rows. Defaults are ui/api/mcp. SQL predicate behavior is tested offline; live panels have
+  not been verified and production was not restarted.
+- Both real CLI dry-runs selected the same 82 cases: 66 regular, 9 false-premise, 7 OOS.
+  All nine false-premise cases lack retrieval labels, explicitly reported as unscored
+  coverage. No chunk IDs were invented. Offline contract fixtures test preservation of
+  supplied labels. The worktree has no `.env`: its default snapshot is incompatible, and
+  paid execution correctly requires explicit matching snapshot configuration.
+- Original five failures and percentile units fixed. Existing parent-context effectiveness
+  gate moved to the shared runner, retaining invalid-run diagnostics and partial artifacts.
+- Full offline gate outside sandbox: 1799 passed, 3 xfailed, 5 deselected. Sandbox stalls
+  even a minimal Starlette TestClient; the same health test passes outside it. Targeted
+  eval/judge/dashboard/legacy checks: 272 passed. Final artifact overwrite regression passed; final eval/dashboard/parent checks: 178 passed.
+  `check_docs --ci`, formatting, lint and `git diff --check` are part of the final gate.
+- Embedding usage remains outside pipeline `llm_usage`; possible paid embedding cost is
+  explicitly untracked/incomplete rather than silently included in a full-cost claim.
+  No new dependencies or changes to production graph/PostgreSQL schema.
+
+Next: manually align groundedness on saved real answers, review labels for the nine
+false-premise cases, and only then request a paid baseline with a cost estimate. LangSmith
+dataset updates, push, merge, publication and production restarts were not performed.
 
 ## Objective
 

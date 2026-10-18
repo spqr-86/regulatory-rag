@@ -7,11 +7,39 @@ methodology, headline tables, dataset cards and threats to validity:
 
 ## Components
 
-1. **Dataset** — `tests/dataset.csv`. Golden set, columns `question` and `ground_truth` (56 questions: in-scope + OOS + false-premise).
-2. **Runner** — `eval/run_v7_eval.py`. Runs the dataset through the compiled V7 graph, computes metrics, writes a JSONL report.
-3. **Judge metrics** — `eval/advanced_generation_metrics.py` (`evaluate_faithfulness`, `evaluate_answer_relevance`) + `evaluate_correctness` in the runner. All LLM-as-judge via `get_judge_llm()`; judge model in [FACTS](FACTS.md#models).
+1. **Dataset** — `tests/dataset.csv`, verified cases only. Case identity is `case_id` / UUID;
+   references and retrieval labels are frozen for each run. OOS and false premises are
+   distinct types. Missing labels are unscored coverage, not retrieval misses.
+2. **Runner** — `eval/ls/run.py`, using LangSmith's executor. `eval/run_v7_eval.py` delegates
+   to it. Narrow retrieval-only, Department and ObjectProfile checks remain separate.
+3. **Judges** — fact-based correctness and normative citations (`eval/ls/judge.py`), plus
+   independent evidence-checked groundedness (`eval/ls/groundedness.py`). All use the
+   existing model factory. Groundedness alignment and the first unified baseline are pending.
 
-## Metrics
+## Unified metrics
+
+| Metric | Meaning | Eligible cases |
+|---|---|---|
+| correctness | All required reference facts are correct; supplemental facts are optional | Regular and false-premise |
+| premise_corrected | Same substantive verdict on the correction; refusal keywords give no credit | False-premise only |
+| groundedness | Material claims supported by exact generator context; quotes validated in code | Regular and false-premise; missing context unresolved |
+| citations / citations_complete | Accurate normative addresses / sufficient references, assessed separately | Regular and false-premise |
+| retrieval_hit / MRR | First matching labelled chunk / reciprocal rank, miss = 0 | Matching snapshot; missing labels are unresolved |
+| oos_handled | Explicit refusal; failed or empty output earns no credit | Out-of-scope only |
+
+For each metric: `eligible`, `scored`, `passed`, `failed`, `unresolved`, `not_applicable`,
+`pass_rate=passed/scored`, `coverage=scored/eligible`. Zero denominators yield null. Assigned
+pending cases stay in eligible denominators. `target_failed` is separate from judged
+answer quality; provider/format errors are unresolved, never zeros. Missing context is
+unscored, not a fabricated pass. There is no composite quality score or conversion from
+the historical scale. The verified set is a development benchmark, not held-out evidence.
+
+Summary also records assigned/completed/pending, target reliability, p50/p95 seconds,
+accounted RAG cost, separate judge usage/cost and incompleteness. Paid embeddings are
+untracked in `llm_usage`, so complete billing is not claimed. Rejudge excludes reused
+pipeline expenses from its new total and preserves the source assessments/version IDs.
+
+## Historical metrics (retained report series)
 
 | Metric | What it checks | Target |
 | :--- | :--- | :--- |
@@ -39,9 +67,20 @@ measured negative result, not a missing tuning step.
 > than the earlier one (see [FACTS](FACTS.md#models)), so absolute numbers are lower than
 > historical runs but better calibrated. Compare runs only under the same judge.
 
-## Report format
+## Unified report format
 
-JSONL: each line is `{aggregate, results, dataset_size, valid_results, timestamp}`.
+`manifest.json` is created before execution: frozen selected references, case IDs and
+versions, CSV/label/prompt hashes, snapshot identity/report hash, git SHA/dirty flag,
+models and allowlisted effective settings (no credentials). `outputs.jsonl` records
+targets, including query/run IDs and failures before any judge. `judges.jsonl` stores raw
+structured verdicts and usage; `assessments.jsonl` records isolated evaluator outcomes.
+`results.jsonl` appends one completed case per line and `summary.json` updates atomically.
+Interruption preserves readable partial results. An output directory is never overwritten.
+
+## Historical report format
+
+Despite its `.jsonl` extension, the old runner wrote a single JSON object:
+`{aggregate, results, dataset_size, valid_results, timestamp}`.
 `aggregate` holds the metrics above; `results` is a list of per-question records
 (`question`, `ground_truth`, `answer`, `path`, `*_score`, `*_reasoning`, `elapsed_sec`).
 The judge's `reasoning` is saved per call — this makes score drops diagnosable

@@ -12,6 +12,7 @@
 | 0a | Судьи correctness/citations в LangSmith (задачи 4, 4a.3) | `eval/ls/judge.py` | `tests/eval_ls/test_judge.py` | ассистент, 15.10 (`1eb6807`) |
 | 0b | Согласие судьи с разметкой (задача 5) | `eval/ls/align.py` | `tests/eval_ls/test_align.py` | ассистент, 15.10 (`60d89db`) |
 | 3 | Pairwise-судья: `parse_preference`, `make_pairwise_evaluator`, CLI | `eval/ls/pairwise.py`, `eval/prompts/judge_pairwise.md` | `tests/eval_ls/test_pairwise.py` (шаг 1 задачи 6 плана) | Codex, 16.10 |
+| 4 | Единый eval: verified policy, false-premise correctness, отдельный groundedness, frozen manifest, checkpoints, учёт ошибок/расходов, rejudge по UUID и совместимый CLI | `eval/ls/{policy,dataset,target,judge,groundedness,artifacts,audit,manifest,run}.py`, `eval/run_v7_eval.py` | `tests/eval_ls/test_unified_{contract,runner,execution}.py`, остальные `tests/eval_ls/`, `tests/test_parent_eval.py` | Codex, 18.10; ручная калибровка и baseline ещё не проведены |
 
 ## Что потренировать на каждом
 
