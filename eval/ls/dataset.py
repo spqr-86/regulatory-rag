@@ -32,6 +32,19 @@ DEFAULT_CSV = Path("tests/dataset.csv")
 DEFAULT_LABELS = Path(
     "eval/runs/gt_label_j7ceu4r4_2026-10-18/golden_retrieval_labeled.jsonl"
 )
+LABELS_MANIFEST = "labels_manifest.json"
+
+
+def labels_index_snapshot(labels_path: Path) -> str | None:
+    """Snapshot the labels' chunk ids belong to, from labels_manifest.json beside them.
+
+    Chunk ids are positional per snapshot, so labels without a manifest cannot be
+    trusted for retrieval metrics on any index.
+    """
+    manifest = Path(labels_path).parent / LABELS_MANIFEST
+    if not manifest.exists():
+        return None
+    return json.loads(manifest.read_text(encoding="utf-8"))["index_snapshot"]
 
 
 def build_examples(

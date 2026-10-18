@@ -251,3 +251,32 @@ def test_cli_paid_flag_reaches_run(monkeypatch):
     run.main(["--paid", "--prefix", "x"])
     run.main(["--dry-run"])
     assert [k["dry_run"] for k in seen] == [False, True]
+
+
+def test_labels_snapshot_comes_from_labels_manifest(tmp_path):
+    from eval.ls.dataset import DEFAULT_LABELS, labels_index_snapshot
+
+    assert labels_index_snapshot(ROOT / DEFAULT_LABELS) == "build-j7ceu4r4"
+    labels = tmp_path / "labels.jsonl"
+    labels.write_text("")
+    assert labels_index_snapshot(labels) is None
+    (tmp_path / "labels_manifest.json").write_text('{"index_snapshot": "build-old"}')
+    assert labels_index_snapshot(labels) == "build-old"
+
+
+def test_paid_run_refuses_labels_from_another_snapshot(tmp_path, monkeypatch):
+    import shutil
+
+    import eval.ls.run as run
+    from config.settings import settings
+    from eval.ls.dataset import DEFAULT_LABELS
+
+    snapshot = tmp_path / run.LABELS_SNAPSHOT
+    snapshot.mkdir()
+    (snapshot / "snapshot-report.json").write_text("{}")
+    monkeypatch.setattr(settings, "CHROMA_DB_PATH", str(snapshot))
+    old = tmp_path / "old" / "labels.jsonl"
+    old.parent.mkdir()
+    shutil.copy(ROOT / DEFAULT_LABELS, old)
+    with pytest.raises(ValueError, match="labels_manifest"):
+        run.run_experiment(cases=["G001"], labels_path=old)

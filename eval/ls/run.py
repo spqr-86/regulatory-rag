@@ -23,6 +23,7 @@ from eval.ls.dataset import (
     DEFAULT_LABELS,
     SPLIT_VERIFIED,
     build_examples,
+    labels_index_snapshot,
 )
 from eval.ls.evaluators import CODE_EVALUATORS, summarize
 from eval.ls.groundedness import make_groundedness_evaluator
@@ -320,7 +321,8 @@ def run_experiment(
                     "case_counts": manifest["case_counts"],
                     "unlabelled_case_ids": manifest["unlabelled_case_ids"],
                     "snapshot_compatible": manifest["index_snapshot"]
-                    == labels_snapshot,
+                    == labels_snapshot
+                    == labels_index_snapshot(labels_path),
                     "artifacts": str(sink.directory),
                 },
                 ensure_ascii=False,
@@ -328,6 +330,12 @@ def run_experiment(
             )
         )
         return "dry-run"
+    declared = labels_index_snapshot(labels_path)
+    if declared != labels_snapshot:
+        raise ValueError(
+            f"{labels_path}: labels_manifest declares {declared!r}, expected "
+            f"{labels_snapshot!r}; labels must be built on the indexed snapshot"
+        )
     if (
         manifest["index_snapshot"] != labels_snapshot
         or not manifest["snapshot_report_sha256"]
