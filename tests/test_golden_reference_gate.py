@@ -155,3 +155,31 @@ def test_saved_answers_align_only_with_eligible_current_references() -> None:
     saved[0]["case_id"] = "G999"
     with pytest.raises(ValueError, match="case_id"):
         selected_cases(saved, key)
+
+
+def test_load_dataset_skips_expert_candidates(tmp_path: Path) -> None:
+    """Unreviewed expert answers stay in the CSV but never reach a paid run."""
+    path = tmp_path / "golden.csv"
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "case_id",
+                "question",
+                "ground_truth",
+                "reference_status",
+                "legal_as_of",
+            ],
+        )
+        writer.writeheader()
+        for case_id, status in (("G001", "verified"), ("G057", "expert_candidate")):
+            writer.writerow(
+                {
+                    "case_id": case_id,
+                    "question": "Вопрос?",
+                    "ground_truth": "Ответ",
+                    "reference_status": status,
+                    "legal_as_of": "2026-10-18",
+                }
+            )
+    assert [row["case_id"] for row in load_dataset(path)] == ["G001"]
