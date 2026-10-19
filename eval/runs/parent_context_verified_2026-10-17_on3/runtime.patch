@@ -1,0 +1,56 @@
+diff --git a/src/indexing/parent_context.py b/src/indexing/parent_context.py
+index 1b3a201..d824388 100644
+--- a/src/indexing/parent_context.py
++++ b/src/indexing/parent_context.py
+@@ -2,7 +2,8 @@
+ 
+ from __future__ import annotations
+ 
+-# ANCHOR: snapshot sidecar + child passages → stable, source-local parent dedup.
++# ANCHOR: snapshot sidecar + child passages → source-local dedup of equal windows.
++# Different windows of one norm retain their text and separate child provenance.
+ # Invalid/missing sidecars preserve children. Cache identity includes file revisions.
+ # Alignment is offline; request handling never reads source documents or calls models.
+ import copy
+@@ -94,7 +95,7 @@ class SidecarLoad:
+ @dataclass
+ class ParentStats:
+     # Replacement counts precede pack limits; slots_lost is set after packing.
+-    # truncated counts emitted parent windows, once per source/parent, including
++    # truncated counts emitted distinct windows, once per source/parent/text, including
+     # known build-time clipping. Legacy sidecars expose only runtime clipping.
+     replaced: int = 0
+     children: int = 0
+@@ -135,7 +136,7 @@ def _load_sidecar(identity: tuple) -> SidecarLoad:
+ 
+ 
+ def parent_cache_version(max_chars: int) -> str:
+-    return repr(("parent-context-v2", max_chars, _identity()))
++    return repr(("parent-context-v3-window-dedup", max_chars, _identity()))
+ 
+ 
+ def replace_parents(
+@@ -159,7 +160,11 @@ def replace_parents(
+             stats.children += 1
+             result.append(passage)
+             continue
+-        key = (source, entry.parent_id)
++        cap = min(max_chars, 3000)
++        text = entry.text[:cap]
++        # One norm may have several child-centered windows. Only equal emitted
++        # text is redundant; parent_id alone discards evidence from later windows.
++        key = (source, entry.parent_id, text)
+         if key in seen:
+             stats.deduplicated += 1
+             children = seen[key]["metadata"]["child_chunk_ids"]
+@@ -168,9 +173,8 @@ def replace_parents(
+             continue
+         stats.replaced += 1
+         parent = copy.deepcopy(passage)
+-        cap = min(max_chars, 3000)
+         stats.truncated += int(entry.truncated or len(entry.text) > cap)
+-        parent["text"] = entry.text[:cap]
++        parent["text"] = text
+         parent["metadata"] = {
+             **meta,
+             "child_chunk_id": cid,

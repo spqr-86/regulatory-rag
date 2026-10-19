@@ -1,0 +1,413 @@
+{
+  "arms": {
+    "off": {
+      "name": "v8-parent-full-off-0ce61ed7",
+      "id": "5743cb08-fe82-436e-b808-8fdd73481f30",
+      "metadata": {
+        "dataset_version": "2026-10-17T18:34:35.480208+00:00",
+        "dataset_splits": [
+          "verified"
+        ],
+        "effort": "low",
+        "simple_effort": "low",
+        "index_snapshot": "build-8cs1plb3",
+        "git_sha": "06c5ddf"
+      },
+      "n": 26,
+      "errors": [],
+      "metrics": {
+        "correctness": {
+          "successes": 10.0,
+          "n": 15
+        },
+        "citations": {
+          "successes": 12.0,
+          "n": 12
+        },
+        "citations_complete": {
+          "successes": 11.0,
+          "n": 15
+        },
+        "retrieval_hit": {
+          "successes": 16.0,
+          "n": 16
+        },
+        "oos_handled": {
+          "successes": 10.0,
+          "n": 10
+        }
+      },
+      "mrr": 0.5652777777777778,
+      "pipeline_cost_usd": 0.03726075,
+      "formatted_context_chars": 264839,
+      "context_fragments": 567,
+      "mean_elapsed_sec": 10.30823348388255,
+      "parent_rows": 0,
+      "nonempty_context_rows": 19,
+      "judge_errors": {
+        "G027": {
+          "correctness": "judge_format_error: answer_quote must appear in the answer: '«порядок содержания территории, зданий, сооружений и помещений, эвакуационных путей и выходов, в том числе аварийных, а также путей доступа подразделений пожарной охраны на объекты защиы (на этажи, кровлю (покрытие) и др.)»'",
+          "citations": "judge_format_error: Judge reply truncated (finish_reason=length): raise CITATION_JUDGE_MAX_TOKENS",
+          "citations_complete": "judge_format_error: Judge reply truncated (finish_reason=length): raise CITATION_JUDGE_MAX_TOKENS"
+        }
+      },
+      "parent_replaced": 0,
+      "parent_deduplicated": 0,
+      "parent_children_kept": 0,
+      "parent_truncated": 0,
+      "parent_slots_lost": 0
+    },
+    "on2": {
+      "name": "v8-parent-full-on2-3e647fed",
+      "id": "15e003d2-19c5-44ea-8a80-070e884db88a",
+      "metadata": {
+        "dataset_version": "2026-10-17T18:34:35.480208+00:00",
+        "dataset_splits": [
+          "verified"
+        ],
+        "effort": "low",
+        "simple_effort": "low",
+        "index_snapshot": "build-8cs1plb3",
+        "git_sha": "1cc4d0e"
+      },
+      "n": 26,
+      "errors": [],
+      "metrics": {
+        "correctness": {
+          "successes": 13.0,
+          "n": 16
+        },
+        "citations": {
+          "successes": 14.0,
+          "n": 14
+        },
+        "citations_complete": {
+          "successes": 10.0,
+          "n": 14
+        },
+        "retrieval_hit": {
+          "successes": 16.0,
+          "n": 16
+        },
+        "oos_handled": {
+          "successes": 10.0,
+          "n": 10
+        }
+      },
+      "mrr": 0.6309027777777778,
+      "pipeline_cost_usd": 0.04715415,
+      "formatted_context_chars": 645248,
+      "context_fragments": 525,
+      "mean_elapsed_sec": 10.593646559300115,
+      "parent_rows": 19,
+      "nonempty_context_rows": 19,
+      "judge_errors": {
+        "G017": {
+          "citations": "judge_format_error: answer_quote must appear in response: 'статья 209 ТК РФ «Основные понятия»'",
+          "citations_complete": "judge_format_error: answer_quote must appear in response: 'статья 209 ТК РФ «Основные понятия»'"
+        },
+        "G001": {
+          "citations": "judge_format_error: Judge reply truncated (finish_reason=length): raise CITATION_JUDGE_MAX_TOKENS",
+          "citations_complete": "judge_format_error: Judge reply truncated (finish_reason=length): raise CITATION_JUDGE_MAX_TOKENS"
+        }
+      },
+      "parent_replaced": 1216,
+      "parent_deduplicated": 1483,
+      "parent_children_kept": 47,
+      "parent_truncated": 0,
+      "parent_slots_lost": 124
+    },
+    "on3": {
+      "name": "v8-parent-full-on3-0bb8da21",
+      "id": "b8e967d7-5cfa-4486-9dd0-91f6258efc2e",
+      "metadata": {
+        "__ls_runner": "py_sdk_evaluate",
+        "baseline_experiment": "v8-parent-full-on2-3e647fed",
+        "dataset_splits": [
+          "verified"
+        ],
+        "dataset_version": "2026-10-17T18:34:35.480208+00:00",
+        "effort": "low",
+        "git": {
+          "author_email": "petr.baldaev.86@gmail.com",
+          "author_name": "Petr",
+          "branch": "docs/parent-context-verified-on2",
+          "commit": "42a29ce0dd9655bec56a83129dcd10676a8976ee",
+          "commit_time": "1792272692",
+          "dirty": true,
+          "remote_url": "git@github.com:spqr-86/regulatory-rag.git",
+          "repo_name": "regulatory-rag",
+          "tags": null
+        },
+        "git_sha": "42a29ce",
+        "index_snapshot": "build-8cs1plb3",
+        "num_repetitions": 1,
+        "parent_context_sha256": "2a44af4dbae8a41c0ef7144bb7312d099175416e12aba4e6fd124942eaa56f6e",
+        "parent_dedup_policy": "source,parent_id,emitted_text",
+        "parent_enabled": true,
+        "parent_max_chars": 3000,
+        "revision_id": "sprint-baseline-119-g42a29ce-dirty",
+        "runtime_patch_sha256": "2509b0135347e9a7d558a6f1a63daec97bdd6de60a976db0714b9ffc77aa502c",
+        "simple_effort": "low"
+      },
+      "n": 26,
+      "errors": [],
+      "metrics": {
+        "correctness": {
+          "successes": 11.0,
+          "n": 15
+        },
+        "citations": {
+          "successes": 14.0,
+          "n": 14
+        },
+        "citations_complete": {
+          "successes": 9.0,
+          "n": 14
+        },
+        "retrieval_hit": {
+          "successes": 16.0,
+          "n": 16
+        },
+        "oos_handled": {
+          "successes": 10.0,
+          "n": 10
+        }
+      },
+      "mrr": 0.7541666666666667,
+      "pipeline_cost_usd": 0.051888449999999996,
+      "formatted_context_chars": 759592,
+      "context_fragments": 551,
+      "mean_elapsed_sec": 10.252844851365527,
+      "parent_rows": 19,
+      "nonempty_context_rows": 19,
+      "judge_errors": {
+        "G022": {
+          "correctness": "judge_format_error: answer_quote must appear in the answer: 'Сама специальная оценка условий труда проводится совместно работодателем и организацией или организациями, соответствующими требованиями статьи 19 Федерального закона № 426-ФЗ'"
+        },
+        "G052": {
+          "citations": "judge_format_error: Judge reply truncated (finish_reason=length): raise CITATION_JUDGE_MAX_TOKENS",
+          "citations_complete": "judge_format_error: Judge reply truncated (finish_reason=length): raise CITATION_JUDGE_MAX_TOKENS"
+        },
+        "G028": {
+          "citations": "judge_format_error: answer_quote must appear in response: '426-ФЗ ст.14 ч.2'",
+          "citations_complete": "judge_format_error: answer_quote must appear in response: '426-ФЗ ст.14 ч.2'"
+        }
+      },
+      "parent_replaced": 1335,
+      "parent_deduplicated": 1283,
+      "parent_children_kept": 53,
+      "parent_truncated": 0,
+      "parent_slots_lost": 43
+    }
+  },
+  "paired": {
+    "off->on3": {
+      "correctness": {
+        "n": 14,
+        "before_successes": 9.0,
+        "after_successes": 11.0,
+        "improved": [
+          "G020",
+          "G028"
+        ],
+        "regressed": [],
+        "unpaired": [
+          {
+            "case_id": "G022",
+            "before": 1.0,
+            "after": null
+          },
+          {
+            "case_id": "G027",
+            "before": null,
+            "after": 0.0
+          }
+        ]
+      },
+      "citations": {
+        "n": 10,
+        "before_successes": 10.0,
+        "after_successes": 10.0,
+        "improved": [],
+        "regressed": [],
+        "unpaired": [
+          {
+            "case_id": "G008",
+            "before": null,
+            "after": 1.0
+          },
+          {
+            "case_id": "G015",
+            "before": null,
+            "after": 1.0
+          },
+          {
+            "case_id": "G022",
+            "before": null,
+            "after": 1.0
+          },
+          {
+            "case_id": "G027",
+            "before": null,
+            "after": 1.0
+          },
+          {
+            "case_id": "G028",
+            "before": 1.0,
+            "after": null
+          },
+          {
+            "case_id": "G052",
+            "before": 1.0,
+            "after": null
+          }
+        ]
+      },
+      "citations_complete": {
+        "n": 13,
+        "before_successes": 9.0,
+        "after_successes": 8.0,
+        "improved": [
+          "G006",
+          "G013"
+        ],
+        "regressed": [
+          "G005",
+          "G015",
+          "G020"
+        ],
+        "unpaired": [
+          {
+            "case_id": "G027",
+            "before": null,
+            "after": 1.0
+          },
+          {
+            "case_id": "G028",
+            "before": 1.0,
+            "after": null
+          },
+          {
+            "case_id": "G052",
+            "before": 1.0,
+            "after": null
+          }
+        ]
+      },
+      "retrieval_hit": {
+        "n": 16,
+        "before_successes": 16.0,
+        "after_successes": 16.0,
+        "improved": [],
+        "regressed": [],
+        "unpaired": []
+      },
+      "oos_handled": {
+        "n": 10,
+        "before_successes": 10.0,
+        "after_successes": 10.0,
+        "improved": [],
+        "regressed": [],
+        "unpaired": []
+      }
+    },
+    "on2->on3": {
+      "correctness": {
+        "n": 15,
+        "before_successes": 12.0,
+        "after_successes": 11.0,
+        "improved": [
+          "G052"
+        ],
+        "regressed": [
+          "G001",
+          "G027"
+        ],
+        "unpaired": [
+          {
+            "case_id": "G022",
+            "before": 1.0,
+            "after": null
+          }
+        ]
+      },
+      "citations": {
+        "n": 12,
+        "before_successes": 12.0,
+        "after_successes": 12.0,
+        "improved": [],
+        "regressed": [],
+        "unpaired": [
+          {
+            "case_id": "G001",
+            "before": null,
+            "after": 1.0
+          },
+          {
+            "case_id": "G017",
+            "before": null,
+            "after": 1.0
+          },
+          {
+            "case_id": "G028",
+            "before": 1.0,
+            "after": null
+          },
+          {
+            "case_id": "G052",
+            "before": 1.0,
+            "after": null
+          }
+        ]
+      },
+      "citations_complete": {
+        "n": 12,
+        "before_successes": 8.0,
+        "after_successes": 7.0,
+        "improved": [],
+        "regressed": [
+          "G020"
+        ],
+        "unpaired": [
+          {
+            "case_id": "G001",
+            "before": null,
+            "after": 1.0
+          },
+          {
+            "case_id": "G017",
+            "before": null,
+            "after": 1.0
+          },
+          {
+            "case_id": "G028",
+            "before": 1.0,
+            "after": null
+          },
+          {
+            "case_id": "G052",
+            "before": 1.0,
+            "after": null
+          }
+        ]
+      },
+      "retrieval_hit": {
+        "n": 16,
+        "before_successes": 16.0,
+        "after_successes": 16.0,
+        "improved": [],
+        "regressed": [],
+        "unpaired": []
+      },
+      "oos_handled": {
+        "n": 10,
+        "before_successes": 10.0,
+        "after_successes": 10.0,
+        "improved": [],
+        "regressed": [],
+        "unpaired": []
+      }
+    }
+  }
+}

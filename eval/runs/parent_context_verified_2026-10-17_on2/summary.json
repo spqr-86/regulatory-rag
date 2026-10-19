@@ -1,0 +1,231 @@
+{
+  "arms": {
+    "off": {
+      "experiment": "v8-parent-full-off-0ce61ed7",
+      "project_id": "5743cb08-fe82-436e-b808-8fdd73481f30",
+      "metadata": {
+        "dataset_version": "2026-10-17T18:34:35.480208+00:00",
+        "dataset_splits": [
+          "verified"
+        ],
+        "effort": "low",
+        "simple_effort": "low",
+        "index_snapshot": "build-8cs1plb3",
+        "git_sha": "06c5ddf"
+      },
+      "n": 26,
+      "errors": 0,
+      "metrics": {
+        "retrieval_hit": {
+          "successes": 16.0,
+          "n": 16,
+          "rate": 1.0
+        },
+        "doc_cited": {
+          "successes": 16.0,
+          "n": 16,
+          "rate": 1.0
+        },
+        "oos_handled": {
+          "successes": 10.0,
+          "n": 10,
+          "rate": 1.0
+        },
+        "correctness": {
+          "successes": 10.0,
+          "n": 15,
+          "rate": 0.6666666666666666
+        },
+        "citations_complete": {
+          "successes": 11.0,
+          "n": 15,
+          "rate": 0.7333333333333333
+        },
+        "citations": {
+          "successes": 12.0,
+          "n": 12,
+          "rate": 1.0
+        },
+        "forbidden_claim": {
+          "successes": 8.0,
+          "n": 8,
+          "rate": 1.0
+        }
+      },
+      "mrr": 0.5652777777777778,
+      "pipeline_cost_usd": 0.03726075,
+      "mean_elapsed_sec": 10.30823348388255,
+      "median_elapsed_sec": 8.547552875475958,
+      "formatted_context_chars": 264839,
+      "completion_tokens": 31723,
+      "reasoning_tokens": 23260,
+      "parent_rows": 0,
+      "parent_stats": {
+        "parent_replaced": 0,
+        "parent_children_kept": 0,
+        "parent_deduplicated": 0,
+        "parent_truncated": 0,
+        "parent_slots_lost": 0
+      }
+    },
+    "on2": {
+      "experiment": "v8-parent-full-on2-3e647fed",
+      "project_id": "15e003d2-19c5-44ea-8a80-070e884db88a",
+      "metadata": {
+        "dataset_version": "2026-10-17T18:34:35.480208+00:00",
+        "dataset_splits": [
+          "verified"
+        ],
+        "effort": "low",
+        "simple_effort": "low",
+        "index_snapshot": "build-8cs1plb3",
+        "git_sha": "1cc4d0e"
+      },
+      "n": 26,
+      "errors": 0,
+      "metrics": {
+        "retrieval_hit": {
+          "successes": 16.0,
+          "n": 16,
+          "rate": 1.0
+        },
+        "doc_cited": {
+          "successes": 16.0,
+          "n": 16,
+          "rate": 1.0
+        },
+        "correctness": {
+          "successes": 13.0,
+          "n": 16,
+          "rate": 0.8125
+        },
+        "citations": {
+          "successes": 14.0,
+          "n": 14,
+          "rate": 1.0
+        },
+        "citations_complete": {
+          "successes": 10.0,
+          "n": 14,
+          "rate": 0.7142857142857143
+        },
+        "oos_handled": {
+          "successes": 10.0,
+          "n": 10,
+          "rate": 1.0
+        },
+        "forbidden_claim": {
+          "successes": 8.0,
+          "n": 8,
+          "rate": 1.0
+        }
+      },
+      "mrr": 0.6309027777777778,
+      "pipeline_cost_usd": 0.04715415,
+      "mean_elapsed_sec": 10.593646559300115,
+      "median_elapsed_sec": 10.989788334001787,
+      "formatted_context_chars": 645248,
+      "completion_tokens": 24930,
+      "reasoning_tokens": 16230,
+      "parent_rows": 19,
+      "parent_stats": {
+        "parent_replaced": 1216,
+        "parent_children_kept": 47,
+        "parent_deduplicated": 1483,
+        "parent_truncated": 0,
+        "parent_slots_lost": 124
+      }
+    }
+  },
+  "paired": {
+    "correctness": {
+      "n": 15,
+      "off_successes": 10.0,
+      "on2_successes": 12.0,
+      "improved": [
+        "G001",
+        "G020",
+        "G028"
+      ],
+      "regressed": [
+        "G052"
+      ],
+      "unpaired": [
+        {
+          "case_id": "G027",
+          "off": null,
+          "on2": 1.0
+        }
+      ]
+    },
+    "citations": {
+      "n": 10,
+      "off_successes": 10.0,
+      "on2_successes": 10.0,
+      "improved": [],
+      "regressed": [],
+      "unpaired": [
+        {
+          "case_id": "G001",
+          "off": 1.0,
+          "on2": null
+        },
+        {
+          "case_id": "G008",
+          "off": null,
+          "on2": 1.0
+        },
+        {
+          "case_id": "G015",
+          "off": null,
+          "on2": 1.0
+        },
+        {
+          "case_id": "G017",
+          "off": 1.0,
+          "on2": null
+        },
+        {
+          "case_id": "G022",
+          "off": null,
+          "on2": 1.0
+        },
+        {
+          "case_id": "G027",
+          "off": null,
+          "on2": 1.0
+        }
+      ]
+    },
+    "citations_complete": {
+      "n": 13,
+      "off_successes": 9.0,
+      "on2_successes": 9.0,
+      "improved": [
+        "G006",
+        "G013"
+      ],
+      "regressed": [
+        "G005",
+        "G015"
+      ],
+      "unpaired": [
+        {
+          "case_id": "G001",
+          "off": 1.0,
+          "on2": null
+        },
+        {
+          "case_id": "G017",
+          "off": 1.0,
+          "on2": null
+        },
+        {
+          "case_id": "G027",
+          "off": null,
+          "on2": 1.0
+        }
+      ]
+    }
+  }
+}
