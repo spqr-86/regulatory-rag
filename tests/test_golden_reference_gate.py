@@ -75,7 +75,8 @@ def test_only_verified_in_scope_answers_are_scorable() -> None:
 
 def test_known_false_legal_claims_are_not_in_the_revised_key() -> None:
     rows = {row["case_id"]: row for row in load_dataset(DATASET_PATH)}
-    assert len(rows) == 56
+    # G001–G056 always load; expert candidates join only once verified.
+    assert {f"G{n:03d}" for n in range(1, 57)} <= rows.keys()
     assert "не реже одного раза в год" not in rows["G011"]["ground_truth"]
     assert "256 часов минимум" not in rows["G025"]["ground_truth"]
     assert "более 5%" not in rows["G029"]["ground_truth"]
@@ -155,3 +156,31 @@ def test_saved_answers_align_only_with_eligible_current_references() -> None:
     saved[0]["case_id"] = "G999"
     with pytest.raises(ValueError, match="case_id"):
         selected_cases(saved, key)
+
+
+def test_load_dataset_skips_expert_candidates(tmp_path: Path) -> None:
+    """Unreviewed expert answers stay in the CSV but never reach a paid run."""
+    path = tmp_path / "golden.csv"
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "case_id",
+                "question",
+                "ground_truth",
+                "reference_status",
+                "legal_as_of",
+            ],
+        )
+        writer.writeheader()
+        for case_id, status in (("G001", "verified"), ("G057", "expert_candidate")):
+            writer.writerow(
+                {
+                    "case_id": case_id,
+                    "question": "Вопрос?",
+                    "ground_truth": "Ответ",
+                    "reference_status": status,
+                    "legal_as_of": "2026-10-18",
+                }
+            )
+    assert [row["case_id"] for row in load_dataset(path)] == ["G001"]

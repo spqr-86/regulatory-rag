@@ -7,7 +7,10 @@ The [legal reference audit](../evaluation/golden-set-audit-2026-09-28.md) found 
 the original key. The current dataset retains all 56 cases but only `reference_status=verified`
 in-scope answers contribute to normative correctness (currently 12 of 43). The output
 records the eligible denominator and dataset SHA-256. `needs_clarification` cases still
-run through the graph for inspection but are not correctness-scored. A full-set baseline
+run through the graph for inspection but are not correctness-scored. Rows G057+ with
+`reference_status=expert_candidate` are unreviewed expert answers imported by
+`scripts/import_golden_expert.py`; `run_v7_eval.py` skips them until a person verifies the
+norm. A full-set baseline
 requires source verification and a refreshed index.
 
 ```bash

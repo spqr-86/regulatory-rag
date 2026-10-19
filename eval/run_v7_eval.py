@@ -132,10 +132,19 @@ def load_dataset(path: Path) -> list[dict[str, str]]:
                     raise ValueError(
                         f"Missing or duplicate golden case_id: {case_id!r}"
                     )
-                if status not in {"verified", "incorrect", "needs_clarification"}:
+                if status not in {
+                    "verified",
+                    "incorrect",
+                    "needs_clarification",
+                    "expert_candidate",
+                }:
                     raise ValueError(
                         f"Invalid reference_status for {case_id}: {status!r}"
                     )
+                seen_ids.add(case_id)
+                # Unreviewed expert answers are kept for review, not for paid runs.
+                if status == "expert_candidate":
+                    continue
                 legal_as_of = (row.get("legal_as_of") or "").strip()
                 if not legal_as_of:
                     raise ValueError(f"Missing legal_as_of for {case_id}")
