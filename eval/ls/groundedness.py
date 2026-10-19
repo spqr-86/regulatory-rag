@@ -1,8 +1,8 @@
 """Evidence-checked groundedness evaluator over the generator's exact context."""
 
-# ANCHOR: answer/context → validated claim checks → 1/0 (None: no checks); no reference.
-# Quotes match fuzzily: QUOTE_ERROR_RATE edits per "..." piece, numbers and
-# negations exact.
+# ANCHOR: v2 claims → individually copied evidence with fragment IDs → 1/0/None.
+# Live evaluation requires v2. The legacy fuzzy parser remains for historical
+# replies; v2 quotes are continuous, typography-normalized substrings only.
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ from eval.ls.judge import _reply_text
 from eval.ls.policy import is_oos
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts/judge_groundedness.md"
+CONTRACT_VERSION = 2
 # One check per claim with verbatim quotes: a long list answer overflowed 16000.
 MAX_TOKENS = 32000
 # deepseek-v4-pro drops letters copying Cyrillic (run3: "созаются", "результы"
@@ -51,6 +52,85 @@ class Check(BaseModel):
 class Verdict(BaseModel):
     model_config = ConfigDict(extra="forbid")
     checks: list[Check]
+
+
+class Evidence(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    fragment_id: int = Field(strict=True, ge=1)
+    quote: str = Field(min_length=1)
+
+
+class CheckV2(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    answer_quote: str = Field(min_length=1)
+    evidence: list[Evidence]
+    status: Literal["supported", "unsupported", "unverifiable"]
+    reason: str = Field(min_length=1)
+
+
+class VerdictV2(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    contract_version: Literal[2]
+    checks: list[CheckV2]
+
+
+_CONTEXT_HEADER = re.compile(
+    r"^\[(\d+)\] \((?:HIGH|MED|LOW)\) \[Источник: [^\r\n]*\]\r?\n", re.MULTILINE
+)
+
+
+def _context_fragments(context: str) -> dict[int, str]:
+    """Use the generator's numbered headers; plain text is implicit fragment 1."""
+    headers = list(_CONTEXT_HEADER.finditer(context))
+    header_starts = {header.start() for header in headers}
+    if any(
+        marker.start() not in header_starts
+        for marker in re.finditer(r"^\[\d+\] \(", context, re.MULTILINE)
+    ):
+        raise JudgeFormatError("Malformed context evidence fragment headers")
+    if not headers:
+        return {1: context}
+    if context[: headers[0].start()].strip():
+        raise JudgeFormatError("Unnumbered text before context evidence fragments")
+    fragments = {}
+    for i, header in enumerate(headers):
+        fragment_id = int(header[1])
+        if fragment_id in fragments:
+            raise JudgeFormatError("Duplicate context evidence fragment_id")
+        end = headers[i + 1].start() if i + 1 < len(headers) else len(context)
+        fragments[fragment_id] = context[header.start() : end]
+    return fragments
+
+
+def _parse_v2(data: dict, answer: str, context: str) -> dict:
+    try:
+        verdict = VerdictV2.model_validate(data)
+    except ValidationError as exc:
+        raise JudgeFormatError("Invalid groundedness v2 JSON contract") from exc
+    fragments = _context_fragments(context)
+    for check in verdict.checks:
+        quote = _quote_text(check.answer_quote)
+        if not quote or quote not in _quote_text(answer):
+            raise JudgeFormatError("answer_quote must appear continuously in answer")
+        if check.status == "supported" and not check.evidence:
+            raise JudgeFormatError("supported requires evidence")
+        for evidence in check.evidence:
+            fragment = fragments.get(evidence.fragment_id)
+            quote = _normalize(evidence.quote).translate(_HOMOGLYPHS)
+            if (
+                fragment is None
+                or not quote
+                or quote not in _normalize(fragment).translate(_HOMOGLYPHS)
+            ):
+                raise JudgeFormatError(
+                    "evidence quote must appear continuously in its declared fragment"
+                )
+    statuses = {check.status for check in verdict.checks}
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "score": (int(statuses == {"supported"}) if statuses else None),
+        "checks": [check.model_dump() for check in verdict.checks],
+    }
 
 
 def _quote_text(text: str) -> str:
@@ -146,13 +226,30 @@ def _repair_keys(data):
     return data
 
 
-def parse_groundedness(raw: str, answer: str, context: str) -> dict:
+def parse_groundedness(
+    raw: str, answer: str, context: str, *, expected_version: int | None = None
+) -> dict:
     try:
         raw = raw.strip()
         if raw.startswith("```"):
             raw = raw.partition("\n")[2].removesuffix("```")
-        verdict = Verdict.model_validate(_repair_keys(json.loads(raw)))
+        data = json.loads(raw)
     except (ValueError, TypeError, AttributeError, ValidationError) as exc:
+        raise JudgeFormatError("Invalid groundedness JSON contract") from exc
+    if not isinstance(data, dict):
+        raise JudgeFormatError("Invalid groundedness JSON contract")
+    version = data.get("contract_version", 1)
+    if type(version) is not int or version not in (1, CONTRACT_VERSION):
+        raise JudgeFormatError("Invalid groundedness contract_version")
+    if expected_version is not None and version != expected_version:
+        raise JudgeFormatError(
+            f"Expected groundedness contract_version={expected_version}"
+        )
+    if version == CONTRACT_VERSION:
+        return _parse_v2(data, answer, context)
+    try:
+        verdict = Verdict.model_validate(_repair_keys(data))
+    except ValidationError as exc:
         raise JudgeFormatError("Invalid groundedness JSON contract") from exc
     for check in verdict.checks:
         if not _quote_found(check.answer_quote, answer):
@@ -181,14 +278,21 @@ def make_groundedness_evaluator(llm, keep_raw: bool = False):
     )
 
     def groundedness(inputs, outputs, reference_outputs):
+        version_info = {"groundedness_contract_version": CONTRACT_VERSION}
+
+        def result(score, comment):
+            return _result("groundedness", score, comment) | {
+                "evaluator_info": version_info
+            }
+
         if _target_failed(outputs):
-            return _result("groundedness", None, "target_error")
+            return result(None, "target_error")
         if is_oos(reference_outputs):
-            return _result("groundedness", None, "oos")
+            return result(None, "oos")
         if not (outputs.get("answer") or "").strip():
-            return _result("groundedness", None, "empty_answer")
+            return result(None, "empty_answer")
         if not (outputs.get("context") or "").strip():
-            return _result("groundedness", None, "no_context")
+            return result(None, "no_context")
         variables = Variables(
             question=inputs["question"],
             answer=outputs["answer"],
@@ -198,18 +302,20 @@ def make_groundedness_evaluator(llm, keep_raw: bool = False):
         extra = {"raw": getattr(reply, "content", None)} if keep_raw else {}
         try:
             verdict = parse_groundedness(
-                _reply_text(reply), variables.answer, variables.context
+                _reply_text(reply),
+                variables.answer,
+                variables.context,
+                expected_version=CONTRACT_VERSION,
             )
         except JudgeFormatError as exc:
-            return _result("groundedness", None, f"judge_format_error: {exc}") | extra
+            return result(None, f"judge_format_error: {exc}") | extra
         problems = [
             f"{c['status']}: {c['answer_quote']} — {c['reason']}"
             for c in verdict["checks"]
             if c["status"] != "supported"
         ]
         return (
-            _result(
-                "groundedness",
+            result(
                 verdict["score"],
                 "; ".join(problems)
                 or ("supported" if verdict["checks"] else "needs_review: no_checks"),

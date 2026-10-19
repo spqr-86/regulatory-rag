@@ -120,7 +120,10 @@ def audited(evaluator, keys: tuple[str, ...], sink, usages: dict, cancelled=None
                     scores.append({**correction, "key": "premise_corrected"})
             sink.append("assessments", {**identity, "scores": scores})
             for score in scores:
-                score["evaluator_info"] = {"assessment_id": sink.assessment_id}
+                score["evaluator_info"] = {
+                    **score.get("evaluator_info", {}),
+                    "assessment_id": sink.assessment_id,
+                }
             usages.setdefault(str(run.id), []).extend(usage)
             return {"results": scores}
         finally:

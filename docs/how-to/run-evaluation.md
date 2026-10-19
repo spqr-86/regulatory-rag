@@ -35,6 +35,10 @@ paid retries. Missing usage or unknown rates make the cost incomplete. Embedding
 is not in the pipeline's `llm_usage`: with a paid embedding provider, accounted cost is
 explicitly a lower bound. Groundedness requires manual alignment on saved real answers
 before a paid baseline or quality decisions; offline tests establish its contract only.
+The current groundedness contract is v2 (per-fragment evidence lists), which has not
+yet been aligned with human labels. The prior 19/19 alignment applies to v1 and
+does not validate v2. Retain prior assessments when comparing versions; do not merge
+the two versions into one metric series.
 
 **Artifacts:** `manifest.json` freezes references, versions and allowlisted configuration;
 `outputs.jsonl` checkpoints the target before judges; `judges.jsonl` stores verdicts/usage;

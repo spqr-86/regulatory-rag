@@ -1,0 +1,9 @@
+{
+  "target_checkpoints": 82,
+  "judge_checkpoints": 64,
+  "completed": 28,
+  "accounted_cost_usd": 0.4306032930000001,
+  "process_alive": true,
+  "budget_stop_sent": false,
+  "timestamp": 1792393870.0300028
+}

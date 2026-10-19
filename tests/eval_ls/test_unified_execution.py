@@ -165,7 +165,8 @@ def test_groundedness_prompt_contract_and_provider_usage(tmp_path):
     ) == set(Variables.model_fields)
     llm = Mock()
     llm.invoke.return_value = AIMessage(
-        content='{"checks":[{"answer_quote":"ok","context_quote":"ok","status":"supported","reason":"same"}]}',
+        # Proposed v2 shape for the same parser-only usage fixture, not alignment data.
+        content='{"contract_version":2,"checks":[{"answer_quote":"ok","evidence":[{"fragment_id":1,"quote":"ok"}],"status":"supported","reason":"same"}]}',
         usage_metadata={"input_tokens": 10, "output_tokens": 10, "total_tokens": 20},
     )
     usages = {}

@@ -14,7 +14,10 @@ methodology, headline tables, dataset cards and threats to validity:
    to it. Narrow retrieval-only, Department and ObjectProfile checks remain separate.
 3. **Judges** — fact-based correctness and normative citations (`eval/ls/judge.py`), plus
    independent evidence-checked groundedness (`eval/ls/groundedness.py`). All use the
-   existing model factory. Groundedness alignment and the first unified baseline are pending.
+   existing model factory. Groundedness v1 achieved 19/19 agreement on the biased
+   development alignment batches; its 82-case baseline stopped after 28 completed
+   assessments. The current v2 evidence contract needs fresh independent alignment.
+   Offline parser regressions do not validate model judgments.
 
 ## Unified metrics
 
@@ -38,6 +41,33 @@ Summary also records assigned/completed/pending, target reliability, p50/p95 sec
 accounted RAG cost, separate judge usage/cost and incompleteness. Paid embeddings are
 untracked in `llm_usage`, so complete billing is not claimed. Rejudge excludes reused
 pipeline expenses from its new total and preserves the source assessments/version IDs.
+
+## Groundedness evidence contract v2
+
+Live groundedness calls require `contract_version: 2`. Each claim has an
+`answer_quote`, `status`, `reason` and `evidence` list. Each evidence item has an
+integer `fragment_id` from the generator's numbered context headers and a short
+continuous `quote` copied from that fragment. Multiple excerpts can jointly support
+a claim; each must independently match its declared fragment. Unnumbered plain text
+is implicit fragment 1. Duplicate or malformed numbered headers are rejected.
+
+The v2 evidence matcher normalizes whitespace, case, Unicode NFC, `ё/е` and the
+existing Cyrillic copying homoglyph; it does not perform fuzzy edits or interpret
+ellipses as gaps. Answer quotes can also omit Markdown bold and inline fragment
+markers. A supported claim needs nonempty evidence; invalid quotes remain unscored
+and are never discarded just to produce a pass. Unsupported or unverifiable claims
+yield zero; no checkable claims yields an unresolved score. Statements solely about
+missing information are excluded by the prompt, not silently removed by the parser.
+
+The legacy single-`context_quote` parser remains available for historical replies
+without `contract_version`. Live calls reject that shape. Old scores and v1 alignment
+results are retained, not migrated to v2. Changed judge versions need a separate
+assessment series and fresh independent alignment before quality comparisons.
+Run manifests record the groundedness contract, effective token cap and quote
+normalization version; alignment results and assessment metadata retain the contract.
+
+The shared correctness/citation quote normalizer now accepts `ё/е` spelling variants
+under `quote_normalization_version: 2`, preserving numbers, word endings and negations.
 
 ## Historical metrics (retained report series)
 

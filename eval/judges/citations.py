@@ -9,11 +9,13 @@ the status (pass / fail / needs_review). Contract and status rules — README.md
 # error. Scoring is pure; judge_citations marks contract violations on its own copy.
 
 import json
+import unicodedata
 from typing import Literal
 
 from langchain.messages import HumanMessage
 
 Status = Literal["pass", "fail", "needs_review"]
+QUOTE_NORMALIZATION_VERSION = 2
 
 FIELDS = ("document", "section", "provision", "part")
 # Document and provision find the norm; a missing section or law part
@@ -32,8 +34,13 @@ class JudgeFormatError(ValueError):
 
 
 def _normalize(text: str) -> str:
-    # The judge may re-wrap lines or change case when quoting; compare text only.
-    return " ".join(text.split()).casefold()
+    # Typography only: no stemming, dropped punctuation, number or negation edits.
+    # G052 baseline: the judge copied "статьёй 7" as "статьей 7".
+    return (
+        " ".join(unicodedata.normalize("NFC", text).split())
+        .casefold()
+        .replace("ё", "е")
+    )
 
 
 def parse_verdict(raw: str) -> dict:

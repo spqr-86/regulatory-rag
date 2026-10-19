@@ -1,0 +1,23 @@
+{
+  "run_kind": "baseline",
+  "repetitions_authorized": 1,
+  "authorized_external_services": [
+    "LangSmith",
+    "OpenRouter"
+  ],
+  "approved_estimate_usd": 0.8,
+  "estimated_range_usd": [
+    0.5,
+    1.2
+  ],
+  "accounted_cost_stop_threshold_usd": 1.2,
+  "minimum_metric_coverage": 0.95,
+  "maximum_target_failure_fraction": 0.05,
+  "thresholds_declared_before_paid_execution": true,
+  "limitations": [
+    "development dataset; not independent legal accuracy",
+    "one repetition; variance unknown",
+    "paid embeddings not included in llm_usage",
+    "in-flight usage may arrive after stop threshold"
+  ]
+}

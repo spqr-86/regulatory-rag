@@ -89,6 +89,10 @@ def judge_rows(rows: list[dict], evaluator, on_result=None) -> list[dict]:
             "judge": verdict["score"],
             "comment": verdict["comment"],
         } | ({"raw": verdict["raw"]} if "raw" in verdict else {})
+        if "groundedness_contract_version" in verdict.get("evaluator_info", {}):
+            result["groundedness_contract_version"] = verdict["evaluator_info"][
+                "groundedness_contract_version"
+            ]
         if on_result is not None:
             on_result(result)
         results.append(result)

@@ -1,0 +1,1657 @@
+{
+  "source_run": "eval/runs/baseline_verified82_2026-10-19",
+  "source_git_sha": "8b5f1b88d89933a94649f7bc37257e2a22ec6d11",
+  "source_sha256": {
+    "manifest.json": "13e197704f48bf37662b8e9b49d177e4f5930167df9ea7a018d2b7eddf154cde",
+    "outputs.jsonl": "e99a03ed7015bbf756aab8a218cec78794d64a83b9bd4689ddf4d66770ffe579",
+    "judges.jsonl": "b9dabaace36156816c61c4ad8dbc0263871cb1b5feb8171daa7c7b52f62749f5",
+    "assessments.jsonl": "db8bdf243d909d4a4dc31693db784fd7cdc1bc4310b5810e70098c4b6b5cd72d",
+    "results.jsonl": "6d5b2bab4d7813d1080b180840fc24b22239b7240ff640ba0957c958765980bc",
+    "summary.json": "824bd783268ee3bc02fa4b3bbfa908e2a5a25032182d75b55f426a536d8a760d"
+  },
+  "paid_calls": 0,
+  "raw_judge_calls": 64,
+  "source_target_checkpoints": 82,
+  "original_replay_mismatches": [],
+  "changes": {
+    "nfc_yo": [
+      {
+        "case_id": "G052",
+        "evaluator": "citations",
+        "before": {
+          "case_id": "G052",
+          "evaluator": "citations",
+          "scores": null,
+          "error": "answer_quote must appear in response: 'статьей 7'"
+        },
+        "after": {
+          "case_id": "G052",
+          "evaluator": "citations",
+          "scores": {
+            "citations": 1,
+            "citations_complete": 1
+          },
+          "error": null
+        }
+      }
+    ],
+    "nfc_yo_quotes": [
+      {
+        "case_id": "G052",
+        "evaluator": "citations",
+        "before": {
+          "case_id": "G052",
+          "evaluator": "citations",
+          "scores": null,
+          "error": "answer_quote must appear in response: 'статьей 7'"
+        },
+        "after": {
+          "case_id": "G052",
+          "evaluator": "citations",
+          "scores": {
+            "citations": 1,
+            "citations_complete": 1
+          },
+          "error": null
+        }
+      }
+    ]
+  },
+  "boundary_checks": [
+    {
+      "quote": "статьей 7",
+      "answer": "статьёй 7",
+      "expected_accept": true,
+      "actual_accept": true
+    },
+    {
+      "quote": "статьей 8",
+      "answer": "статьёй 7",
+      "expected_accept": false,
+      "actual_accept": false
+    },
+    {
+      "quote": "не проводится",
+      "answer": "проводится",
+      "expected_accept": false,
+      "actual_accept": false
+    },
+    {
+      "quote": "не менее 5 лет",
+      "answer": "не менее 3 лет",
+      "expected_accept": false,
+      "actual_accept": false
+    }
+  ],
+  "error_counts": {
+    "original": {
+      "correctness": 1,
+      "citations": 2,
+      "groundedness": 6
+    },
+    "nfc_yo": {
+      "correctness": 1,
+      "citations": 1,
+      "groundedness": 6
+    },
+    "nfc_yo_quotes": {
+      "correctness": 1,
+      "citations": 1,
+      "groundedness": 6
+    }
+  },
+  "replays": {
+    "original": [
+      {
+        "case_id": "G001",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G001",
+        "evaluator": "citations",
+        "scores": {
+          "citations": null,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G001",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G002",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G002",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G002",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G005",
+        "evaluator": "correctness",
+        "scores": null,
+        "error": "answer_quote must appear in the answer: 'в случае проведения внепланового обучения по основанию, предусмотренному подпункту «а» пункта 50, внеплановый инструктаж по основанию подпункта «в» пункта 16 «может не проводиться»'"
+      },
+      {
+        "case_id": "G005",
+        "evaluator": "citations",
+        "scores": null,
+        "error": "answer_quote must appear in response: 'подпункта «а» пункта 50'"
+      },
+      {
+        "case_id": "G005",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G006",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G006",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G006",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G008",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G008",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G008",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G009",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G009",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G009",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G010",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G010",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G010",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G013",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G013",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G013",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G015",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G015",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G015",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G017",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G017",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G017",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G019",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G019",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G019",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G020",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G020",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G020",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G022",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G022",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G022",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G027",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G027",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 0,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G027",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G028",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G028",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G028",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G043",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G043",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G043",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G044",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G044",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G044",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G046",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G046",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G046",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G052",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G052",
+        "evaluator": "citations",
+        "scores": null,
+        "error": "answer_quote must appear in response: 'статьей 7'"
+      },
+      {
+        "case_id": "G052",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G057",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G057",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G057",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G058",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G058",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G058",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "supported requires context_quote"
+      },
+      {
+        "case_id": "G059",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      }
+    ],
+    "nfc_yo": [
+      {
+        "case_id": "G001",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G001",
+        "evaluator": "citations",
+        "scores": {
+          "citations": null,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G001",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G002",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G002",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G002",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G005",
+        "evaluator": "correctness",
+        "scores": null,
+        "error": "answer_quote must appear in the answer: 'в случае проведения внепланового обучения по основанию, предусмотренному подпункту «а» пункта 50, внеплановый инструктаж по основанию подпункта «в» пункта 16 «может не проводиться»'"
+      },
+      {
+        "case_id": "G005",
+        "evaluator": "citations",
+        "scores": null,
+        "error": "answer_quote must appear in response: 'подпункта «а» пункта 50'"
+      },
+      {
+        "case_id": "G005",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G006",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G006",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G006",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G008",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G008",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G008",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G009",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G009",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G009",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G010",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G010",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G010",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G013",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G013",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G013",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G015",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G015",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G015",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G017",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G017",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G017",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G019",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G019",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G019",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G020",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G020",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G020",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G022",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G022",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G022",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G027",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G027",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 0,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G027",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G028",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G028",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G028",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G043",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G043",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G043",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G044",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G044",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G044",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G046",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G046",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G046",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G052",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G052",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G052",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G057",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G057",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G057",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G058",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G058",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G058",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "supported requires context_quote"
+      },
+      {
+        "case_id": "G059",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      }
+    ],
+    "nfc_yo_quotes": [
+      {
+        "case_id": "G001",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G001",
+        "evaluator": "citations",
+        "scores": {
+          "citations": null,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G001",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G002",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G002",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G002",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G005",
+        "evaluator": "correctness",
+        "scores": null,
+        "error": "answer_quote must appear in the answer: 'в случае проведения внепланового обучения по основанию, предусмотренному подпункту «а» пункта 50, внеплановый инструктаж по основанию подпункта «в» пункта 16 «может не проводиться»'"
+      },
+      {
+        "case_id": "G005",
+        "evaluator": "citations",
+        "scores": null,
+        "error": "answer_quote must appear in response: 'подпункта «а» пункта 50'"
+      },
+      {
+        "case_id": "G005",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G006",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G006",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G006",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G008",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G008",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G008",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G009",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G009",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G009",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G010",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G010",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G010",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G013",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G013",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G013",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G015",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G015",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G015",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G017",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G017",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G017",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G019",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G019",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G019",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G020",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G020",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G020",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G022",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G022",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G022",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G027",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G027",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 0,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G027",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G028",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G028",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G028",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G043",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G043",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G043",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G044",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G044",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G044",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G046",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G046",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G046",
+        "evaluator": "groundedness",
+        "scores": {
+          "groundedness": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G052",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G052",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G052",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G057",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G057",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G057",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "context_quote must appear in generator context"
+      },
+      {
+        "case_id": "G058",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      },
+      {
+        "case_id": "G058",
+        "evaluator": "citations",
+        "scores": {
+          "citations": 1,
+          "citations_complete": 1
+        },
+        "error": null
+      },
+      {
+        "case_id": "G058",
+        "evaluator": "groundedness",
+        "scores": null,
+        "error": "supported requires context_quote"
+      },
+      {
+        "case_id": "G059",
+        "evaluator": "correctness",
+        "scores": {
+          "correctness": 0
+        },
+        "error": null
+      }
+    ]
+  },
+  "note": "Diagnostic only. Production parser, source results and LangSmith feedback unchanged. NFC/yo and quote folding are candidate policies, not validated judge quality."
+}

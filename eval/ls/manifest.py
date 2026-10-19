@@ -10,6 +10,9 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+from eval.judges.citations import QUOTE_NORMALIZATION_VERSION
+from eval.ls.groundedness import CONTRACT_VERSION as GROUNDEDNESS_CONTRACT_VERSION
+from eval.ls.groundedness import MAX_TOKENS as GROUNDEDNESS_MAX_TOKENS
 from eval.ls.policy import case_type
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -189,6 +192,8 @@ def make_manifest(
             "max_retries": 0,
             "timeout_sec": 300,
             "correctness_max_tokens": 16000,
-            "groundedness_max_tokens": 16000,
+            "groundedness_max_tokens": GROUNDEDNESS_MAX_TOKENS,
+            "groundedness_contract_version": GROUNDEDNESS_CONTRACT_VERSION,
+            "quote_normalization_version": QUOTE_NORMALIZATION_VERSION,
         },
     }
