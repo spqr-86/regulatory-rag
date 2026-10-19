@@ -122,12 +122,36 @@ def _quote_found(quote: str, text: str) -> bool:
     return bool(pieces)
 
 
+def _within_one_edit(a: str, b: str) -> bool:
+    if abs(len(a) - len(b)) > 1:
+        return False
+    i = 0
+    while i < min(len(a), len(b)) and a[i] == b[i]:
+        i += 1
+    return a[i + 1 :] == b[i + 1 :] or a[i + 1 :] == b[i:] or a[i:] == b[i + 1 :]
+
+
+def _repair_keys(data):
+    """Map one-edit typos of Check field names back (run3 GR09: "st tus")."""
+    if not isinstance(data, dict) or not isinstance(data.get("checks"), list):
+        return data
+    fields = set(Check.model_fields)
+    for check in data["checks"]:
+        if not isinstance(check, dict):
+            continue
+        for key in [k for k in check if k not in fields]:
+            known = [f for f in fields - check.keys() if _within_one_edit(key, f)]
+            if len(known) == 1:
+                check[known[0]] = check.pop(key)
+    return data
+
+
 def parse_groundedness(raw: str, answer: str, context: str) -> dict:
     try:
         raw = raw.strip()
         if raw.startswith("```"):
             raw = raw.partition("\n")[2].removesuffix("```")
-        verdict = Verdict.model_validate(json.loads(raw))
+        verdict = Verdict.model_validate(_repair_keys(json.loads(raw)))
     except (ValueError, TypeError, AttributeError, ValidationError) as exc:
         raise JudgeFormatError("Invalid groundedness JSON contract") from exc
     for check in verdict.checks:
