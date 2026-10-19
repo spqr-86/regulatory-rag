@@ -339,7 +339,10 @@ def test_groundedness_quote_tolerates_judge_copy_noise(quote):
     from eval.ls.groundedness import parse_groundedness
 
     answer = "Не менее 3 человек [Фрагмент 1]."
-    assert parse_groundedness(_context_check(quote), answer, GROUNDED_CONTEXT)["score"] == 1
+    assert (
+        parse_groundedness(_context_check(quote), answer, GROUNDED_CONTEXT)["score"]
+        == 1
+    )
 
 
 @pytest.mark.parametrize(
@@ -366,8 +369,12 @@ def test_groundedness_answer_quote_skips_fragment_markers():
 
     answer = "1. Оптимальные (1 класс) [Фрагмент 1, 426-ФЗ ст.14 ч.2].\n2. Допустимые (2 класс)"
     payload = json.loads(_context_check("не менее 3 человек"))
-    payload["checks"][0]["answer_quote"] = "1. Оптимальные (1 класс). 2. Допустимые (2 класс)"
-    assert parse_groundedness(json.dumps(payload), answer, GROUNDED_CONTEXT)["score"] == 1
+    payload["checks"][0]["answer_quote"] = (
+        "1. Оптимальные (1 класс). 2. Допустимые (2 класс)"
+    )
+    assert (
+        parse_groundedness(json.dumps(payload), answer, GROUNDED_CONTEXT)["score"] == 1
+    )
 
 
 def test_groundedness_repairs_one_edit_typo_in_check_keys():
@@ -378,7 +385,9 @@ def test_groundedness_repairs_one_edit_typo_in_check_keys():
     # run3 GR09: the judge wrote "st tus" in one of 28 checks.
     check["st tus"] = check.pop("status")
     answer = "Не менее 3 человек."
-    assert parse_groundedness(json.dumps(payload), answer, GROUNDED_CONTEXT)["score"] == 1
+    assert (
+        parse_groundedness(json.dumps(payload), answer, GROUNDED_CONTEXT)["score"] == 1
+    )
     # Two edits away is not a typo of a known key: the contract still fails.
     check["sts"] = check.pop("st tus")
     with pytest.raises(ValueError, match="JSON contract"):
